@@ -6,7 +6,7 @@ from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnima
 from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
-    QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect
+    QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect, QStackedWidget
 )
 
 # Import our custom modules
@@ -141,6 +141,7 @@ class NestKiosk(QMainWindow):
 
         self.drag_start_pos = None
         self.active_gesture = None  
+        self.running_apps = {} # Memory pool for background apps!
 
         # -------------------------------------------------------------
         # 1. MAIN SCREEN CAROUSEL
@@ -220,12 +221,27 @@ class NestKiosk(QMainWindow):
         cc_layout.addWidget(close_sys_btn)
 
         # -------------------------------------------------------------
-        # 3. RESPONSIVE APP DRAWER (Swipe Up)
+        # 3. RESPONSIVE APP DRAWER & MULTITASKING SIDEBAR
         # -------------------------------------------------------------
         self.app_drawer = SlidingPanel(self, QRect(0, 600, 1024, 600), QRect(0, 0, 1024, 600))
         self.app_drawer.setStyleSheet("background-color: #121215;")
         
-        drawer_main_layout = QVBoxLayout(self.app_drawer)
+        drawer_base_layout = QHBoxLayout(self.app_drawer)
+        drawer_base_layout.setContentsMargins(0, 0, 0, 0)
+        drawer_base_layout.setSpacing(0)
+
+        # 3A. The New Background Task Manager Sidebar!
+        self.task_sidebar = QFrame()
+        self.task_sidebar.setFixedWidth(280)
+        self.task_sidebar.setStyleSheet("background-color: #16161A; border-right: 1px solid #282830;")
+        self.task_sidebar_layout = QVBoxLayout(self.task_sidebar)
+        self.task_sidebar_layout.setContentsMargins(20, 40, 20, 20)
+        self.task_sidebar.hide() # Hidden completely if no apps are running
+        drawer_base_layout.addWidget(self.task_sidebar)
+
+        # 3B. Main App Grid Area
+        self.drawer_main_area = QWidget()
+        drawer_main_layout = QVBoxLayout(self.drawer_main_area)
         drawer_main_layout.setContentsMargins(0, 40, 0, 0)
         drawer_main_layout.setSpacing(10)
 
@@ -250,11 +266,12 @@ class NestKiosk(QMainWindow):
 
         self.drawer_scroll.setWidget(self.drawer_container)
         drawer_main_layout.addWidget(self.drawer_scroll)
+        drawer_base_layout.addWidget(self.drawer_main_area)
 
         self.rebuild_app_drawer()
 
         # -------------------------------------------------------------
-        # 4. ACTIVE APP VIEW CONTAINER (With Opacity Fade!)
+        # 4. ACTIVE APP VIEW CONTAINER (Now uses a Stacked Widget!)
         # -------------------------------------------------------------
         self.app_view = QWidget(self)
         self.app_view.setGeometry(0, 0, 1024, 600)
@@ -266,6 +283,10 @@ class NestKiosk(QMainWindow):
         self.app_view_layout = QVBoxLayout(self.app_view)
         self.app_view_layout.setContentsMargins(0, 0, 0, 0)
         self.app_view_layout.setSpacing(0)
+        
+        # This keeps our background apps neatly stacked memory
+        self.app_stack = QStackedWidget()
+        self.app_view_layout.addWidget(self.app_stack)
 
         self.anim_app_group = QParallelAnimationGroup()
         self.anim_app_geom = QPropertyAnimation(self.app_view, b"geometry")
@@ -277,6 +298,93 @@ class NestKiosk(QMainWindow):
         self.edge_interceptor.setGeometry(0, 0, 25, 600)
         self.edge_interceptor.setStyleSheet("background-color: transparent;")
         self.edge_interceptor.raise_() 
+
+    # =================================================================
+    # TASK SWITCHER MANAGER
+    # =================================================================
+    def update_task_switcher(self):
+        """Dynamically populates the left sidebar with running background apps."""
+        # Clear existing buttons
+        for i in reversed(range(self.task_sidebar_layout.count())):
+            item = self.task_sidebar_layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not self.running_apps:
+            self.task_sidebar.hide()
+            return
+            
+        self.task_sidebar.show()
+        
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        # Header with Close All button
+        header = QHBoxLayout()
+        title = QLabel("Running")
+        title.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        title.setStyleSheet("color: white;")
+        
+        btn_close_all = QPushButton("Close All")
+        btn_close_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close_all.setStyleSheet("""
+            QPushButton { background: transparent; color: #E24A4A; font-weight: bold; font-size: 14px; }
+            QPushButton:hover { color: #C0392B; }
+        """)
+        btn_close_all.clicked.connect(self.kill_all_apps)
+        
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(btn_close_all)
+        layout.addLayout(header)
+        layout.addSpacing(15)
+        
+        # Generate list of running apps
+        for app_name in list(self.running_apps.keys()):
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            
+            btn_switch = QPushButton(app_name)
+            btn_switch.setFixedHeight(50)
+            btn_switch.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_switch.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+            btn_switch.setStyleSheet("""
+                QPushButton { background-color: #2C2C35; color: white; border-radius: 8px; text-align: left; padding-left: 15px; }
+                QPushButton:hover { background-color: #3C3C45; }
+            """)
+            btn_switch.clicked.connect(lambda checked, a=app_name: self.launch_app(a))
+            
+            btn_kill = QPushButton("✕")
+            btn_kill.setFixedSize(50, 50)
+            btn_kill.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_kill.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+            btn_kill.setStyleSheet("""
+                QPushButton { background-color: rgba(226, 74, 74, 40); color: #E24A4A; border-radius: 8px; }
+                QPushButton:hover { background-color: rgba(226, 74, 74, 80); color: white;}
+            """)
+            btn_kill.clicked.connect(lambda checked, a=app_name: self.kill_app(a))
+            
+            row.addWidget(btn_switch, stretch=1)
+            row.addWidget(btn_kill)
+            layout.addLayout(row)
+            
+        self.task_sidebar_layout.addWidget(container)
+
+    def kill_app(self, app_name):
+        """Force quits a background app and frees its memory."""
+        if app_name in self.running_apps:
+            widget = self.running_apps.pop(app_name)
+            self.app_stack.removeWidget(widget)
+            widget.deleteLater()
+            self.update_task_switcher()
+
+    def kill_all_apps(self):
+        """Quits all background apps."""
+        for app_name in list(self.running_apps.keys()):
+            self.kill_app(app_name)
+
 
     # =================================================================
     # DYNAMIC APP CATALOG SCANNER & RESPONSIVE GRID
@@ -482,53 +590,68 @@ class NestKiosk(QMainWindow):
         self.lbl_date.setText(QDate.currentDate().toString("dddd, MMMM d"))
 
     def launch_app(self, app_name):
+        """Launches an app or seamlessly resumes it from the background pool."""
         self.app_drawer.slide_out()
         
-        for i in reversed(range(self.app_view_layout.count())): 
-            item = self.app_view_layout.itemAt(i)
-            if item and item.widget():
-                item.widget().deleteLater() 
-
-        if app_name == "Character.ai":
-            self.app_view_layout.addWidget(create_web_app_view("https://character.ai", app_name, self.close_app))
-        elif app_name == "Local Music":
-            self.app_view_layout.addWidget(LocalMusicPage())
-        elif app_name == "App Store":
-            self.app_view_layout.addWidget(AppStorePage())
+        # If the app is already running, just switch to it!
+        if app_name in self.running_apps:
+            self.app_stack.setCurrentWidget(self.running_apps[app_name])
         else:
-            loaded_successfully = False
-            try:
-                module_name = app_name.lower().replace(" ", "_")
-                if os.path.exists(os.path.join("apps", f"{module_name}.py")):
-                    mod = importlib.import_module(f"apps.{module_name}")
-                    importlib.reload(mod) 
+            # Otherwise, instantiate it and store it in memory.
+            page_instance = None
+            if app_name == "Character.ai":
+                page_instance = create_web_app_view("https://character.ai", app_name, self.minimize_app)
+            elif app_name == "Local Music":
+                page_instance = LocalMusicPage()
+            elif app_name == "App Store":
+                page_instance = AppStorePage()
+            else:
+                loaded_successfully = False
+                try:
+                    module_name = app_name.lower().replace(" ", "_")
+                    if os.path.exists(os.path.join("apps", f"{module_name}.py")):
+                        mod = importlib.import_module(f"apps.{module_name}")
+                        importlib.reload(mod) 
+                        
+                        for attr_name in dir(mod):
+                            if attr_name.endswith("Page") and attr_name not in ["AppStorePage", "LocalMusicPage"]:
+                                page_class = getattr(mod, attr_name)
+                                try:
+                                    page_instance = page_class(on_close=self.minimize_app)
+                                except TypeError:
+                                    page_instance = page_class()  
+                                    
+                                loaded_successfully = True
+                                break
+                except Exception as e:
+                    print(f"Error launching dynamic app '{app_name}': {e}")
+
+                if not loaded_successfully:
+                    app_box = QWidget()
+                    layout = QVBoxLayout(app_box)
+                    layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    app_title = QLabel(f"{app_name} Module")
+                    app_title.setFont(QFont("Google Sans", 32, QFont.Weight.Bold))
+                    desc = QLabel("Swipe from the far left edge of the screen to return home.")
+                    desc.setStyleSheet("color: #888888; font-size: 16px; margin-top: 10px;")
+                    layout.addWidget(app_title, alignment=Qt.AlignmentFlag.AlignCenter)
+                    layout.addWidget(desc, alignment=Qt.AlignmentFlag.AlignCenter)
                     
-                    for attr_name in dir(mod):
-                        if attr_name.endswith("Page") and attr_name not in ["AppStorePage", "LocalMusicPage"]:
-                            page_class = getattr(mod, attr_name)
-                            try:
-                                page_instance = page_class(on_close=self.close_app)
-                            except TypeError:
-                                page_instance = page_class()  
-                                
-                            self.app_view_layout.addWidget(page_instance)
-                            loaded_successfully = True
-                            break
-            except Exception as e:
-                print(f"Error launching dynamic app '{app_name}': {e}")
+                    # Fallback home button for dummy apps
+                    btn_close = QPushButton("Return Home")
+                    btn_close.setFixedSize(200, 50)
+                    btn_close.setStyleSheet("background-color: #E24A4A; border-radius: 10px; color: white;")
+                    btn_close.clicked.connect(self.minimize_app)
+                    layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignCenter)
+                    
+                    page_instance = app_box
 
-            if not loaded_successfully:
-                app_box = QWidget()
-                layout = QVBoxLayout(app_box)
-                layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                app_title = QLabel(f"{app_name} Module")
-                app_title.setFont(QFont("Google Sans", 32, QFont.Weight.Bold))
-                desc = QLabel("Swipe from the far left edge of the screen to return home.")
-                desc.setStyleSheet("color: #888888; font-size: 16px; margin-top: 10px;")
-                layout.addWidget(app_title, alignment=Qt.AlignmentFlag.AlignCenter)
-                layout.addWidget(desc, alignment=Qt.AlignmentFlag.AlignCenter)
-                self.app_view_layout.addWidget(app_box)
+            self.app_stack.addWidget(page_instance)
+            self.running_apps[app_name] = page_instance
+            self.app_stack.setCurrentWidget(page_instance)
+            self.update_task_switcher() # Refresh the sidebar!
 
+        # Tizen style zoom-in animation
         start_rect = QRect(int(1024 * 0.075), int(600 * 0.075), int(1024 * 0.85), int(600 * 0.85))
         self.app_view.setGeometry(start_rect) 
         self.app_opacity.setOpacity(0.0)
@@ -590,7 +713,8 @@ class NestKiosk(QMainWindow):
         self.app_view.hide()
         self.app_opacity.setOpacity(1.0) 
         self.app_view.move(0, 0)
-        self.rebuild_app_drawer()  
+        # Note: We NO LONGER delete the app layout. It rests in background memory.
 
-    def close_app(self):
+    def minimize_app(self):
+        """Minimizes the app (called by swiping or hitting home buttons)."""
         self.animate_app_close()
