@@ -1,2 +1,4 @@
 PyQt6>=6.6.0
 PyQt6-WebEngine>=6.6.0
+spotipy>=2.23.0
+requests>=2.31.0
