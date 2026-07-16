@@ -21,6 +21,7 @@ except ImportError:
 
 # Import our custom modules
 from components import SlidingPanel
+from components.clockfaces import CLOCKFACE_CLASSES, ClockSelectorOverlay
 from apps.local_music import LocalMusicPage
 from apps.web_app import create_web_app_view
 from apps.app_store import AppStorePage
@@ -36,6 +37,23 @@ def get_system_setting(key, default=None):
     except Exception:
         pass
     return default
+
+
+def save_system_setting(key, value):
+    """Fast, global helper to permanently save user preferences."""
+    config = {}
+    if os.path.exists("config.json"):
+        try:
+            with open("config.json", "r") as f:
+                config = json.load(f)
+        except Exception:
+            pass
+    config[key] = value
+    try:
+        with open("config.json", "w") as f:
+            json.dump(config, f)
+    except Exception as e:
+        print(f"Failed to save setting: {e}")
 
 
 class SystemUpdateCheckThread(QThread):
@@ -185,7 +203,6 @@ class ToastNotification(QFrame):
         self.pos_anim.start()
 
     def swipe_dismiss(self, to_right):
-        """Flings the notification off the screen horizontally."""
         target_x = 1200 if to_right else -500
         self.pos_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.pos_anim.setDuration(300)
@@ -355,6 +372,10 @@ class NestKiosk(QMainWindow):
         self.running_apps = {} 
         self.current_toast = None
         self.empty_label = None
+        
+        self.long_press_timer = QTimer(self)
+        self.long_press_timer.setSingleShot(True)
+        self.long_press_timer.timeout.connect(self.open_clockface_selector)
 
         # Setup Notification Audio
         self.notif_sound = None
@@ -365,7 +386,7 @@ class NestKiosk(QMainWindow):
                 self.notif_sound.setSource(QUrl.fromLocalFile(sound_path))
 
         # -------------------------------------------------------------
-        # 1. MAIN SCREEN CAROUSEL
+        # 1. MAIN SCREEN CAROUSEL & CLOCKFACE INJECTION
         # -------------------------------------------------------------
         self.main_carousel = QWidget(self)
         self.main_carousel.setGeometry(0, 0, 1024, 600)
@@ -375,17 +396,11 @@ class NestKiosk(QMainWindow):
         
         self.page_clock = QWidget(self.main_carousel)
         self.page_clock.setGeometry(0, 0, 1024, 600)
-        clock_layout = QVBoxLayout(self.page_clock)
-        clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_time = QLabel()
-        self.lbl_time.setFont(QFont("Google Sans", 95, QFont.Weight.Bold))
-        self.lbl_time.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_date = QLabel()
-        self.lbl_date.setFont(QFont("Google Sans", 24))
-        self.lbl_date.setStyleSheet("color: #888888;")
-        self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        clock_layout.addWidget(self.lbl_time)
-        clock_layout.addWidget(self.lbl_date)
+        self.clock_layout = QVBoxLayout(self.page_clock)
+        self.clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.active_clock_widget = None
+        self.apply_clockface(get_system_setting("clockface_index", 0))
         
         self.page_media = QWidget(self.main_carousel)
         self.page_media.setGeometry(1024, 0, 1024, 600)
@@ -613,6 +628,8 @@ class NestKiosk(QMainWindow):
         self.edge_interceptor.setGeometry(0, 0, 25, 600)
         self.edge_interceptor.setStyleSheet("background-color: transparent;")
         self.edge_interceptor.raise_() 
+        
+        self.selector_overlay = ClockSelectorOverlay(self, self.apply_clockface)
 
         # -------------------------------------------------------------
         # 5. DUAL BACKGROUND RECURRING ENGINE UPDATERS
@@ -628,16 +645,13 @@ class NestKiosk(QMainWindow):
         QTimer.singleShot(8000, self.check_for_app_updates)
 
     def show_toast(self, app_name, title, desc, icon):
-        """Creates and fires a One UI system-wide pop-up notification with sound, respecting DND/Silent."""
         dnd_mode = get_system_setting("dnd_mode", False)
-        if dnd_mode:
-            return  # Suppress heads-up toast entirely
+        if dnd_mode: return  
             
         try:
             if getattr(self, 'current_toast', None):
                 self.current_toast.deleteLater()
-        except RuntimeError:
-            pass
+        except RuntimeError: pass
             
         silent_mode = get_system_setting("silent_mode", False)
         if self.notif_sound and not silent_mode:
@@ -648,17 +662,37 @@ class NestKiosk(QMainWindow):
         self.current_toast = ToastNotification(self, app_name, title, desc, icon, self.launch_app)
         self.current_toast.show_toast()
 
+    def update_clock(self):
+        t = QTime.currentTime()
+        d = QDate.currentDate()
+        if self.active_clock_widget:
+            self.active_clock_widget.update_time(t, d)
+        self.selector_overlay.update_time(t, d)
+
+    def apply_clockface(self, idx):
+        if self.active_clock_widget:
+            self.active_clock_widget.setParent(None)
+            self.active_clock_widget.deleteLater()
+            
+        self.active_clock_widget = CLOCKFACE_CLASSES[idx]()
+        self.clock_layout.addWidget(self.active_clock_widget)
+        save_system_setting("clockface_index", idx)
+        self.update_clock()
+
+    def open_clockface_selector(self):
+        self.long_press_timer.stop()
+        current_idx = get_system_setting("clockface_index", 0)
+        self.selector_overlay.show_selector(current_idx)
+
     # =================================================================
     # KEYBOARD & DEBUG EVENTS
     # =================================================================
     def keyPressEvent(self, event):
-        """Intercepts keyboard events for debug actions."""
         if event.key() == Qt.Key.Key_Backslash:
             self.take_screenshot()
         super().keyPressEvent(event)
 
     def take_screenshot(self):
-        """Captures the current application state to a PNG file."""
         try:
             os.makedirs("screenshots", exist_ok=True)
             timestamp = int(time.time())
@@ -956,6 +990,9 @@ class NestKiosk(QMainWindow):
             self.drag_start_pos = event.position().toPoint()
             self.active_gesture = None
 
+            if self.home_index == 0 and self.app_view.isHidden() and not self.control_center.is_visible and not self.app_drawer.is_visible:
+                self.long_press_timer.start(700) 
+
             if not self.app_view.isHidden() and self.drag_start_pos.x() <= 50:
                 self.active_gesture = 'edge_swipe_back'
 
@@ -966,6 +1003,9 @@ class NestKiosk(QMainWindow):
         current_pos = event.position().toPoint()
         dx = current_pos.x() - self.drag_start_pos.x()
         dy = current_pos.y() - self.drag_start_pos.y()
+
+        if abs(dx) > 10 or abs(dy) > 10:
+            self.long_press_timer.stop()
 
         if self.active_gesture is None and (abs(dx) > 15 or abs(dy) > 15):
             if abs(dy) > abs(dx):
@@ -1012,6 +1052,8 @@ class NestKiosk(QMainWindow):
                 prev_page.move(-1024 + dx, 0)
 
     def mouseReleaseEvent(self, event):
+        self.long_press_timer.stop()
+        
         if not self.drag_start_pos or not self.active_gesture:
             self.drag_start_pos = None
             return
@@ -1075,11 +1117,6 @@ class NestKiosk(QMainWindow):
     # =================================================================
     # APP LAUNCHING & ROUTING
     # =================================================================
-    def update_clock(self):
-        """Updates the home screen clock and date every second."""
-        self.lbl_time.setText(QTime.currentTime().toString("HH:mm"))
-        self.lbl_date.setText(QDate.currentDate().toString("dddd, MMMM d"))
-
     def launch_app(self, app_name):
         self.app_drawer.slide_out()
         self.task_ribbon.hide()
