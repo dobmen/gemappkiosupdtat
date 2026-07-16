@@ -1,4 +1,5 @@
 import os
+import ssl
 import urllib.request
 import json
 import time  
@@ -70,6 +71,51 @@ class DownloadAppThread(QThread):
             self.on_error.emit(f"Failed to install {self.app_data.get('name')}: {str(e)}")
 
 
+class NetworkImageThread(QThread):
+    """Asynchronously fetches and crops remote screenshots/icons without stuttering the GUI."""
+    on_image_ready = pyqtSignal(object, QPixmap)
+    
+    def __init__(self, url, target_widget, width, height, radius=8):
+        super().__init__()
+        self.url = url
+        self.target_widget = target_widget
+        self.width = width
+        self.height = height
+        self.radius = radius
+
+    def run(self):
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            req = urllib.request.Request(self.url, headers={'User-Agent': 'KioskOS'})
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
+                data = response.read()
+                pixmap = QPixmap()
+                pixmap.loadFromData(data)
+
+                scaled = pixmap.scaled(self.width, self.height, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                out_pix = QPixmap(self.width, self.height)
+                out_pix.fill(Qt.GlobalColor.transparent)
+
+                p = QPainter(out_pix)
+                p.setRenderHint(QPainter.RenderHint.Antialiasing)
+                p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                clip = QPainterPath()
+                clip.addRoundedRect(0, 0, self.width, self.height, self.radius, self.radius)
+                p.setClipPath(clip)
+                
+                x = (self.width - scaled.width()) // 2
+                y = (self.height - scaled.height()) // 2
+                p.drawPixmap(x, y, scaled)
+                p.end()
+                
+                self.on_image_ready.emit(self.target_widget, out_pix)
+        except Exception:
+            pass
+
+
 class AppCard(QFrame):
     """A Google Play style card representing a single app from GitHub."""
     def __init__(self, app_data, install_callback, open_details_callback):
@@ -88,7 +134,6 @@ class AppCard(QFrame):
         layout.setContentsMargins(20, 18, 20, 18)
         layout.setSpacing(15)
 
-        # App Info Column
         info_layout = QVBoxLayout()
         info_layout.setSpacing(6)
         
@@ -109,7 +154,6 @@ class AppCard(QFrame):
         info_layout.addWidget(lbl_author)
         info_layout.addWidget(lbl_desc)
 
-        # Determine version & install state
         local_script = os.path.join("apps", app_data["filename"])
         ver_path = local_script.replace(".py", ".ver")
         
@@ -157,9 +201,7 @@ class AppCard(QFrame):
         self.install_callback(self.app_data, self)
 
     def mouseReleaseEvent(self, event):
-        # Intercept card background taps to launch deep detail sub-section view
         if event.button() == Qt.MouseButton.LeftButton:
-            # Don't trigger details if the user explicitly clicked the action button bounds
             if not self.btn_install.geometry().contains(event.position().toPoint()):
                 self.open_details_callback(self.app_data, self)
         super().mouseReleaseEvent(event)
@@ -172,6 +214,7 @@ class AppDetailsSection(QWidget):
         self.install_callback = install_callback
         self.active_card = None
         self.app_data = None
+        self.active_threads = []
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 10, 0, 0)
@@ -203,7 +246,7 @@ class AppDetailsSection(QWidget):
         self.content_layout.setSpacing(25)
         self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # 1. Identity Box Card (Icon, Title, Category, Action Button)
+        # 1. Identity Box Card
         self.identity_card = QFrame()
         self.identity_card.setStyleSheet("background-color: #1C1C22; border: 1px solid #2C2C35; border-radius: 16px;")
         id_layout = QHBoxLayout(self.identity_card)
@@ -237,7 +280,7 @@ class AppDetailsSection(QWidget):
         id_layout.addWidget(self.btn_action)
         self.content_layout.addWidget(self.identity_card)
 
-        # 2. Screenshots Carousel Row Section
+        # 2. Screenshots Carousel
         self.scr_scroll = QScrollArea()
         self.scr_scroll.setFixedHeight(170)
         self.scr_scroll.setWidgetResizable(True)
@@ -263,7 +306,7 @@ class AppDetailsSection(QWidget):
         self.content_layout.addWidget(self.lbl_desc_title)
         self.content_layout.addWidget(self.lbl_desc)
 
-        # 4. Metadata Details Spec Table Grid Card
+        # 4. Metadata Details Spec Table
         self.spec_card = QFrame()
         self.spec_card.setStyleSheet("background-color: #14141A; border-radius: 12px; border: 1px solid #22222A;")
         spec_layout = QGridLayout(self.spec_card)
@@ -289,23 +332,38 @@ class AppDetailsSection(QWidget):
         scroll.setWidget(container)
         layout.addWidget(scroll)
 
+    def apply_downloaded_image(self, widget, pixmap):
+        """Callback to apply newly downloaded images to UI labels seamlessly."""
+        try:
+            widget.setPixmap(pixmap)
+            widget.setStyleSheet("background-color: transparent;")
+        except RuntimeError:
+            pass
+
     def populate_details(self, app_data, card_reference):
         self.app_data = app_data
         self.active_card = card_reference
 
-        # Sync header text metrics
+        # Clean up old active background threads to free memory
+        for t in self.active_threads:
+            try:
+                t.disconnect()
+                t.deleteLater()
+            except Exception:
+                pass
+        self.active_threads.clear()
+
+        # Set text metrics
         self.lbl_name.setText(app_data['name'])
         self.lbl_author_cat.setText(f"By {app_data.get('author', 'Unknown')} • {app_data.get('category', 'Utility')}")
         
-        # Pull description fields safely
         desc_text = app_data.get('expanded_description') or app_data.get('description', '')
         self.lbl_desc.setText(desc_text)
         
-        # Spec table metrics
         self.lbl_meta_ver.setText(str(app_data['version']))
         self.lbl_meta_size.setText(app_data.get('storage_needed', 'Unknown Size'))
 
-        # Mock Rounded Mock App Icon
+        # Set temporary mock icon while downloading
         icon_pix = QPixmap(80, 80)
         icon_pix.fill(Qt.GlobalColor.transparent)
         p = QPainter(icon_pix)
@@ -319,7 +377,14 @@ class AppDetailsSection(QWidget):
         p.end()
         self.lbl_icon.setPixmap(icon_pix)
 
-        # Rebuild screenshot layout elements dynamically
+        # Trigger real icon download
+        if app_data.get('icon_url'):
+            icon_thread = NetworkImageThread(app_data['icon_url'], self.lbl_icon, 80, 80, radius=40)
+            icon_thread.on_image_ready.connect(self.apply_downloaded_image)
+            icon_thread.start()
+            self.active_threads.append(icon_thread)
+
+        # Rebuild screenshot layout
         for i in reversed(range(self.scr_layout.count())):
             self.scr_layout.itemAt(i).widget().setParent(None)
 
@@ -327,10 +392,17 @@ class AppDetailsSection(QWidget):
         if screenshots:
             self.scr_scroll.show()
             for s_url in screenshots:
-                mock_scr = QFrame()
-                mock_scr.setFixedSize(240, 140)
-                mock_scr.setStyleSheet("background-color: #2C2C35; border-radius: 8px; border: 1px solid #3C3C45;")
-                self.scr_layout.addWidget(mock_scr)
+                scr_lbl = QLabel()
+                scr_lbl.setFixedSize(240, 140)
+                scr_lbl.setStyleSheet("background-color: #2C2C35; border-radius: 8px; border: 1px solid #3C3C45;")
+                scr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.scr_layout.addWidget(scr_lbl)
+                
+                # Fetch and map real screenshot into the UI label dynamically
+                scr_thread = NetworkImageThread(s_url, scr_lbl, 240, 140, radius=8)
+                scr_thread.on_image_ready.connect(self.apply_downloaded_image)
+                scr_thread.start()
+                self.active_threads.append(scr_thread)
         else:
             self.scr_scroll.hide()
 
@@ -366,7 +438,6 @@ class AppStorePage(QWidget):
         layout.setContentsMargins(40, 20, 40, 30)
         layout.setSpacing(15)
 
-        # --- Top Section Header Bar Row ---
         header_layout = QHBoxLayout()
         self.title_lbl = QLabel("GitHub App Store")
         self.title_lbl.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
@@ -374,7 +445,6 @@ class AppStorePage(QWidget):
         header_layout.addWidget(self.title_lbl)
         header_layout.addStretch()
 
-        # Section Tab Switches
         self.btn_tab_all = QPushButton("Catalog")
         self.btn_tab_installed = QPushButton("Installed")
         self.btn_tab_updates = QPushButton("Need Updating")
@@ -396,7 +466,6 @@ class AppStorePage(QWidget):
         
         layout.addLayout(header_layout)
 
-        # Download Tracker Engine Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(6)
         self.progress_bar.setTextVisible(False)
@@ -404,10 +473,8 @@ class AppStorePage(QWidget):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
-        # Multi-View Display Stack Router
         self.page_stack = QStackedWidget()
         
-        # 1. Main scrollable listing widget box
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -422,7 +489,6 @@ class AppStorePage(QWidget):
         self.list_layout.setSpacing(14)
         self.scroll_area.setWidget(self.list_container)
         
-        # 2. Detailed Info Deep-Link Sub-Section
         self.details_section = AppDetailsSection(
             on_back_callback=lambda: self.page_stack.setCurrentIndex(0),
             install_callback=self.start_install
@@ -437,7 +503,7 @@ class AppStorePage(QWidget):
 
     def switch_view_filter(self, filter_mode):
         self.current_filter = filter_mode
-        self.page_stack.setCurrentIndex(0) # Route home to listing view
+        self.page_stack.setCurrentIndex(0) 
         
         self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
         self.btn_tab_installed.setStyleSheet(self.tab_active_css if filter_mode == "installed" else self.tab_inactive_css)
@@ -497,7 +563,6 @@ class AppStorePage(QWidget):
             self.list_layout.addWidget(lbl_empty)
 
     def open_app_profile_details(self, app_data, card_reference):
-        """Routes container view index to detailed sub-section profile dashboard mapping layout metrics."""
         self.page_stack.setCurrentIndex(1)
         self.details_section.populate_details(app_data, card_reference)
 
@@ -529,7 +594,6 @@ class AppStorePage(QWidget):
         card.btn_install.setEnabled(True)
         card.update_button_style()
         
-        # If deeply indexed inside details tab, loop update style back to active sub-section frame
         if self.page_stack.currentIndex() == 1:
             self.details_section.update_action_button_style()
 
@@ -538,7 +602,6 @@ class AppStorePage(QWidget):
             
         QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']} v{app_data['version']}!")
         
-        # Force active view metrics filter refresh layout loop
         if self.current_filter != "all":
             self.populate_catalog(self.full_catalog_cache)
 
