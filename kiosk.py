@@ -4,7 +4,7 @@ import json
 import ssl
 import importlib
 import urllib.request
-from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal
+from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint
 from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
@@ -47,8 +47,78 @@ class SystemUpdateCheckThread(QThread):
             pass
 
 
+class ToastNotification(QFrame):
+    """A One UI style system-wide heads-up notification pop-up."""
+    def __init__(self, parent, app_name, title, desc, icon_char, click_callback):
+        super().__init__(parent)
+        self.app_name = app_name
+        self.click_callback = click_callback
+        
+        self.setFixedSize(420, 85)
+        self.setStyleSheet("background-color: #22222B; border-radius: 42px; border: 1px solid #33333F;")
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 10, 25, 10)
+        layout.setSpacing(15)
+        
+        lbl_icon = QLabel(icon_char)
+        lbl_icon.setFont(QFont("Google Sans", 24))
+        lbl_icon.setFixedSize(54, 54)
+        lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_icon.setStyleSheet("background-color: rgba(255,255,255,10); border-radius: 27px; border: none;")
+        
+        text_box = QVBoxLayout()
+        text_box.setSpacing(2)
+        text_box.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        
+        lbl_title = QLabel(title)
+        lbl_title.setFont(QFont("Google Sans", 15, QFont.Weight.Bold))
+        lbl_title.setStyleSheet("color: white; border: none; background: transparent;")
+        
+        clean_desc = desc if len(desc) <= 35 else desc[:32] + "..."
+        lbl_desc = QLabel(clean_desc)
+        lbl_desc.setFont(QFont("Google Sans", 13))
+        lbl_desc.setStyleSheet("color: #AAAAAA; border: none; background: transparent;")
+        
+        text_box.addWidget(lbl_title)
+        text_box.addWidget(lbl_desc)
+        
+        layout.addWidget(lbl_icon)
+        layout.addLayout(text_box, stretch=1)
+        
+        self.pos_anim = QPropertyAnimation(self, b"pos")
+        self.pos_anim.setEasingCurve(QEasingCurve.Type.OutBack)
+        self.pos_anim.setDuration(450)
+        
+        self.hide_timer = QTimer(self)
+        self.hide_timer.timeout.connect(self.dismiss)
+        self.hide_timer.setSingleShot(True)
+        
+    def show_toast(self):
+        self.raise_()
+        self.show()
+        # Center horizontally: (1024 - 420) / 2 = 302
+        self.pos_anim.setStartValue(QPoint(302, -100))
+        self.pos_anim.setEndValue(QPoint(302, 25))
+        self.pos_anim.start()
+        self.hide_timer.start(4000)
+        
+    def dismiss(self):
+        self.pos_anim.setEasingCurve(QEasingCurve.Type.InBack)
+        self.pos_anim.setStartValue(self.pos())
+        self.pos_anim.setEndValue(QPoint(302, -100))
+        self.pos_anim.finished.connect(self.deleteLater)
+        self.pos_anim.start()
+        
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.hide_timer.stop()
+            self.dismiss()
+            if self.click_callback and self.app_name:
+                self.click_callback(self.app_name)
+
+
 class DynamicAppButton(QFrame):
-    """A highly responsive App Icon that supports live scaling, layouts, and prototype fallbacks."""
     def __init__(self, name, icon_path, callback, scale=100, layout_type="grid"):
         super().__init__()
         self.name = name
@@ -172,7 +242,8 @@ class NestKiosk(QMainWindow):
 
         self.drag_start_pos = None
         self.active_gesture = None  
-        self.running_apps = {} # Memory pool for background apps!
+        self.running_apps = {} 
+        self.current_toast = None
 
         # -------------------------------------------------------------
         # 1. MAIN SCREEN CAROUSEL
@@ -221,7 +292,7 @@ class NestKiosk(QMainWindow):
         self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold;")
 
         # -------------------------------------------------------------
-        # 2. CONTROL CENTER (Swipe Down - Horizontal Settings & Notifications)
+        # 2. CONTROL CENTER (Redesigned for Consistency)
         # -------------------------------------------------------------
         self.control_center = SlidingPanel(self, QRect(0, -500, 1024, 500), QRect(0, 0, 1024, 500))
         self.control_center.setStyleSheet("background-color: #16161A; border-bottom: 2px solid #282830;")
@@ -247,41 +318,48 @@ class NestKiosk(QMainWindow):
         self.btn_tab_settings.clicked.connect(lambda: self.switch_cc_page(0))
         self.btn_tab_notifs.clicked.connect(lambda: self.switch_cc_page(1))
         
+        # Tabs centered, Back button completely removed
+        header_layout.addStretch()
         header_layout.addWidget(self.btn_tab_settings)
         header_layout.addWidget(self.btn_tab_notifs)
         header_layout.addStretch()
-        
-        btn_close_cc = QPushButton("▲ Close")
-        btn_close_cc.setFixedSize(90, 36)
-        btn_close_cc.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_close_cc.setStyleSheet("background-color: rgba(255,255,255,15); color: #CCCCCC; border-radius: 8px; font-weight: bold; font-size: 13px;")
-        btn_close_cc.clicked.connect(self.control_center.slide_out)
-        header_layout.addWidget(btn_close_cc)
 
         self.cc_carousel = QWidget(self.control_center)
         self.cc_carousel.setGeometry(0, 60, 1024, 440)
         self.cc_index = 0
         self.cc_pages = []
 
-        # Page 0: Quick Settings
+        # Page 0: Quick Settings (Now housed inside a cohesive card)
         self.page_settings = QWidget(self.cc_carousel)
         self.page_settings.setGeometry(0, 0, 1024, 440)
         settings_layout = QVBoxLayout(self.page_settings)
         settings_layout.setContentsMargins(60, 20, 60, 20)
         settings_layout.setSpacing(20)
 
+        qs_card = QFrame()
+        qs_card.setStyleSheet("background-color: #22222B; border-radius: 12px; border: 1px solid #2F2F3B;")
+        qs_card_layout = QVBoxLayout(qs_card)
+        qs_card_layout.setContentsMargins(20, 20, 20, 20)
+
         slider_layout = QGridLayout()
         slider_layout.setSpacing(20)
-        slider_layout.addWidget(QLabel("☀️ Brightness"), 0, 0)
+        
+        lbl_b = QLabel("☀️ Brightness")
+        lbl_b.setStyleSheet("background: transparent; border: none;")
+        slider_layout.addWidget(lbl_b, 0, 0)
         b_slider = QSlider(Qt.Orientation.Horizontal)
         b_slider.setValue(80)
         slider_layout.addWidget(b_slider, 0, 1)
 
-        slider_layout.addWidget(QLabel("🔊 Volume"), 1, 0)
+        lbl_v = QLabel("🔊 Volume")
+        lbl_v.setStyleSheet("background: transparent; border: none;")
+        slider_layout.addWidget(lbl_v, 1, 0)
         v_slider = QSlider(Qt.Orientation.Horizontal)
         v_slider.setValue(50)
         slider_layout.addWidget(v_slider, 1, 1)
-        settings_layout.addLayout(slider_layout)
+        
+        qs_card_layout.addLayout(slider_layout)
+        settings_layout.addWidget(qs_card)
         settings_layout.addStretch()
 
         close_sys_btn = QPushButton("✕ Exit Kiosk OS")
@@ -439,16 +517,21 @@ class NestKiosk(QMainWindow):
         # -------------------------------------------------------------
         self.update_check_timer = QTimer(self)
         self.update_check_timer.timeout.connect(self.check_for_system_update)
-        self.update_check_timer.start(86400000) # 24 hours in milliseconds
-        
-        # Run an initial non-blocking check 5 seconds after system boot
+        self.update_check_timer.start(86400000) 
         QTimer.singleShot(5000, self.check_for_system_update)
+
+    def show_toast(self, app_name, title, desc, icon):
+        """Creates and fires a One UI system-wide pop-up notification."""
+        if hasattr(self, 'current_toast') and self.current_toast:
+            self.current_toast.deleteLater()
+            
+        self.current_toast = ToastNotification(self, app_name, title, desc, icon, self.launch_app)
+        self.current_toast.show_toast()
 
     # =================================================================
     # BACKGROUND SYSTEM UPDATE CHECKER
     # =================================================================
     def check_for_system_update(self):
-        """Spawns a background thread to check GitHub for OS updates without freezing the GUI."""
         if hasattr(self, 'update_thread') and self.update_thread and self.update_thread.isRunning():
             return
         self.update_thread = SystemUpdateCheckThread()
@@ -457,28 +540,27 @@ class NestKiosk(QMainWindow):
         self.update_thread.start()
 
     def on_system_update_detected(self, new_version):
-        """Called when a new OS update is found on GitHub."""
         if getattr(self, '_notified_update_version', None) == new_version:
             return
         self._notified_update_version = new_version
-        self.add_notification("Settings", "There is new update available.", "⚙️")
+        desc = "There is new update available."
+        
+        self.add_notification("Settings", desc, "⚙️")
+        self.show_toast("Settings", "System Update", desc, "⚙️")
 
     # =================================================================
     # NOTIFICATION CENTER METHODS
     # =================================================================
     def populate_initial_notifications(self):
-        """Creates dummy notifications so the feed isn't empty."""
         alerts = [
             ("System Status", "Universal Wi-Fi Mode is active and optimized for over-the-air OTA updates.", "⚙️"),
             ("Spotify Remote", "Connected to AirPlay Speaker. Ready for lossless audio playback.", "🎧"),
-            ("App Store", "2 application updates available in repository (Gemini App Store).", "📦"),
-            ("Settings", "There is new update available.", "⚙️")
+            ("App Store", "2 application updates available in repository (Gemini App Store).", "📦")
         ]
         for title, desc, icon in alerts:
             self.add_notification(title, desc, icon)
 
     def add_notification(self, title, desc, icon="🔔"):
-        """Adds a dismissible alert card to the Notification Center."""
         card = QFrame()
         card.setStyleSheet("background-color: #22222B; border-radius: 12px; border: 1px solid #2F2F3B;")
         
@@ -890,6 +972,7 @@ class NestKiosk(QMainWindow):
     def launch_app(self, app_name):
         self.app_drawer.slide_out()
         self.task_ribbon.hide()
+        self.control_center.slide_out()
         
         if app_name in self.running_apps:
             self.app_stack.setCurrentWidget(self.running_apps[app_name])

@@ -1120,6 +1120,19 @@ class SpotifyPage(QWidget):
         self.ticker.timeout.connect(self.tick_progress)
         self.ticker.start(100) 
 
+    def _clear_layout(self, layout=None):
+        """Recursively destroys all widgets and nested sub-layouts to prevent duplicate Home buttons."""
+        if layout is None:
+            layout = self.layout()
+        if not layout:
+            return
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+
     def get_icon(self, name, color_hex="#FFFFFF", size=60):
         pix = QPixmap(size, size)
         pix.fill(Qt.GlobalColor.transparent)
@@ -1199,7 +1212,10 @@ class SpotifyPage(QWidget):
         self.poller.start()
 
     def init_touch_login_ui(self):
-        layout = QVBoxLayout(self)
+        self._clear_layout()
+        if not self.layout(): layout = QVBoxLayout(self)
+        else: layout = self.layout()
+        
         layout.setContentsMargins(40, 20, 40, 20)
         layout.setSpacing(15)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1225,7 +1241,6 @@ class SpotifyPage(QWidget):
             btn_login = QPushButton("Log In on Touchscreen")
             btn_login.setFixedSize(360, 65)
             btn_login.setCursor(Qt.CursorShape.PointingHandCursor)
-            # Stripped unsupported transform property
             btn_login.setStyleSheet("""
                 QPushButton { background-color: #1ED760; color: #0E0E12; font-size: 19px; font-weight: bold; border-radius: 32px; }
                 QPushButton:hover { background-color: #1FDF64; }
@@ -1252,29 +1267,29 @@ class SpotifyPage(QWidget):
     def handle_auth_redirect(self, qurl):
         url_str = qurl.toString()
         if url_str.startswith(SPOTIFY_REDIRECT_URI) or "code=" in url_str:
-            self.auth_browser.hide()
-            self.auth_browser.deleteLater()
+            if hasattr(self, 'auth_browser') and self.auth_browser:
+                self.auth_browser.hide()
+                self.auth_browser.deleteLater()
+                self.auth_browser = None  # Prevents dead pointer crashes!
+            
             query = urllib.parse.urlparse(url_str).query
             params = urllib.parse.parse_qs(query)
             if 'code' in params:
                 try:
                     self.sp_auth.get_access_token(params['code'][0])
                     self.sp = spotipy.Spotify(auth_manager=self.sp_auth)
-                    for i in reversed(range(self.layout().count())):
-                        item = self.layout().itemAt(i)
-                        if item.widget(): item.widget().deleteLater()
+                    self._clear_layout()
                     self.init_ui()
                     self.start_polling()
                 except Exception: pass
 
     def skip_to_demo(self):
         self.is_demo_mode = True
-        for i in reversed(range(self.layout().count())):
-            item = self.layout().itemAt(i)
-            if item.widget(): item.widget().deleteLater()
+        self._clear_layout()
         self.init_ui()
 
     def init_ui(self):
+        self._clear_layout()
         if not self.layout(): layout = QVBoxLayout(self)
         else: layout = self.layout()
         layout.setContentsMargins(30, 15, 30, 20)
@@ -1735,9 +1750,7 @@ class SpotifyPage(QWidget):
             self._retire_thread(getattr(pl_panel, 'header_img_fetcher', None))
             self._retire_thread(getattr(pl_panel, 'img_fetcher', None))
 
-        for i in reversed(range(self.layout().count())):
-            item = self.layout().itemAt(i)
-            if item.widget(): item.widget().deleteLater()
+        self._clear_layout()
         self.is_demo_mode = False
         self.init_spotify()
         self.init_touch_login_ui()
@@ -1915,7 +1928,14 @@ class SpotifyPage(QWidget):
         for t in list(self._retiring_threads):
             try: t.wait(200)
             except RuntimeError: pass
-        if hasattr(self, 'auth_browser') and self.auth_browser: self.auth_browser.close()
+            
+        try:
+            if getattr(self, 'auth_browser', None):
+                self.auth_browser.close()
+                self.auth_browser = None
+        except RuntimeError:
+            pass
+
         if self.on_close: self.on_close()
 
     def load_song_lyrics(self, title, artist, duration_ms=0):
