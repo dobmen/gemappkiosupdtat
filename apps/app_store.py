@@ -3,7 +3,7 @@ import ssl
 import urllib.request
 import json
 import time  
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QTimer
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QImage
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
@@ -465,52 +465,28 @@ class AppStorePage(QWidget):
         super().__init__()
         self.on_install_success = on_install_success
         self.full_catalog_cache = []
-        self.base_pos = None
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 20, 40, 30)
         layout.setSpacing(15)
 
-        header_layout = QHBoxLayout()
-        self.title_lbl = QLabel("GitHub App Store")
+        # =============================================================
+        # 1. HEADER STACK (Transforms into Material You Search Bar)
+        # =============================================================
+        self.header_stack = QStackedWidget()
+        self.header_stack.setFixedHeight(54)
+        
+        # --- Page 0: Normal Header ---
+        header_normal = QWidget()
+        normal_layout = QHBoxLayout(header_normal)
+        normal_layout.setContentsMargins(0, 0, 0, 0)
+        normal_layout.setSpacing(10)
+
+        self.title_lbl = QLabel("App Store")  # Removed "GitHub"
         self.title_lbl.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
         self.title_lbl.setStyleSheet("color: white;")
-        header_layout.addWidget(self.title_lbl)
-        header_layout.addStretch()
-
-        search_layout = QHBoxLayout()
-        search_layout.setSpacing(5)
-
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search apps...")
-        self.search_bar.setMaximumWidth(0)
-        self.search_bar.setStyleSheet("""
-            QLineEdit {
-                background-color: #2C2C35;
-                color: white;
-                border: 1px solid #3C3C45;
-                border-radius: 18px;
-                padding: 4px 15px;
-                font-family: 'Google Sans';
-                font-size: 14px;
-            }
-            QLineEdit:focus { border-color: #5A8DEF; }
-        """)
-        self.search_bar.textChanged.connect(self.on_search_query_changed)
-
-        self.btn_search = QPushButton("🔍")
-        self.btn_search.setFixedSize(36, 36)
-        self.btn_search.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_search.setStyleSheet("""
-            QPushButton { background: transparent; color: white; border-radius: 18px; font-size: 18px; border: none;}
-            QPushButton:hover { background-color: rgba(255,255,255,20); }
-        """)
-        self.btn_search.clicked.connect(self.toggle_search)
-
-        search_layout.addWidget(self.search_bar)
-        search_layout.addWidget(self.btn_search)
-        header_layout.addLayout(search_layout)
-        header_layout.addSpacing(10)
+        normal_layout.addWidget(self.title_lbl)
+        normal_layout.addStretch()
 
         self.btn_tab_all = QPushButton("Catalog")
         self.btn_tab_installed = QPushButton("Installed")
@@ -525,14 +501,67 @@ class AppStorePage(QWidget):
 
         for btn in [self.btn_tab_all, self.btn_tab_installed, self.btn_tab_updates]:
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            header_layout.addWidget(btn)
+            normal_layout.addWidget(btn)
 
         self.btn_tab_all.clicked.connect(lambda: self.switch_view_filter("all"))
         self.btn_tab_installed.clicked.connect(lambda: self.switch_view_filter("installed"))
         self.btn_tab_updates.clicked.connect(lambda: self.switch_view_filter("updates"))
         
-        layout.addLayout(header_layout)
+        self.btn_search_open = QPushButton("🔍")
+        self.btn_search_open.setFixedSize(42, 42)
+        self.btn_search_open.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_search_open.setStyleSheet("""
+            QPushButton { background-color: #2C2C35; color: white; border-radius: 21px; font-size: 18px; border: none;}
+            QPushButton:hover { background-color: #383845; }
+        """)
+        self.btn_search_open.clicked.connect(self.open_search_bar)
+        normal_layout.addWidget(self.btn_search_open)
 
+        # --- Page 1: Material You Search Pill ---
+        self.search_pill = QFrame()
+        self.search_pill.setStyleSheet("""
+            QFrame { background-color: #22222B; border: 2px solid #5A8DEF; border-radius: 27px; }
+        """)
+        pill_layout = QHBoxLayout(self.search_pill)
+        pill_layout.setContentsMargins(10, 4, 15, 4)
+        pill_layout.setSpacing(10)
+
+        self.btn_search_back = QPushButton("←")
+        self.btn_search_back.setFixedSize(38, 38)
+        self.btn_search_back.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_search_back.setStyleSheet("""
+            QPushButton { background: transparent; color: white; border-radius: 19px; font-size: 20px; font-weight: bold; border: none; }
+            QPushButton:hover { background-color: rgba(255,255,255,15); }
+        """)
+        self.btn_search_back.clicked.connect(self.close_search_bar)
+        pill_layout.addWidget(self.btn_search_back)
+
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search apps, categories, authors...")
+        self.search_bar.setFont(QFont("Google Sans", 16))
+        self.search_bar.setStyleSheet("""
+            QLineEdit { background: transparent; color: white; border: none; padding-left: 5px; }
+        """)
+        self.search_bar.textChanged.connect(self.on_search_query_changed)
+        pill_layout.addWidget(self.search_bar, stretch=1)
+
+        self.btn_search_clear = QPushButton("✕")
+        self.btn_search_clear.setFixedSize(34, 34)
+        self.btn_search_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_search_clear.setStyleSheet("""
+            QPushButton { background: transparent; color: #AAAAAA; border-radius: 17px; font-size: 16px; border: none; }
+            QPushButton:hover { background-color: rgba(255,255,255,15); color: white; }
+        """)
+        self.btn_search_clear.clicked.connect(self.search_bar.clear)
+        pill_layout.addWidget(self.btn_search_clear)
+
+        self.header_stack.addWidget(header_normal)
+        self.header_stack.addWidget(self.search_pill)
+        layout.addWidget(self.header_stack)
+
+        # =============================================================
+        # 2. PROGRESS BAR
+        # =============================================================
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(6)
         self.progress_bar.setTextVisible(False)
@@ -540,11 +569,13 @@ class AppStorePage(QWidget):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
+        # =============================================================
+        # 3. PAGE STACK WITH BUFFERED FADE ANIMATION
+        # =============================================================
         self.page_stack = QStackedWidget()
-        
         self.page_opacity = QGraphicsOpacityEffect(self.page_stack)
         self.page_stack.setGraphicsEffect(self.page_opacity)
-        self.page_opacity.setEnabled(False)  # <-- FIX: Default opacity effect OFF
+        self.page_opacity.setEnabled(False)
         
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -561,7 +592,7 @@ class AppStorePage(QWidget):
         self.scroll_area.setWidget(self.list_container)
         
         self.details_section = AppDetailsSection(
-            on_back_callback=lambda: self.transition_to(0, slide_dir="right"),
+            on_back_callback=lambda: self.transition_to(0),
             install_callback=self.start_install,
             on_screenshot_click=self.show_fullscreen_screenshot
         )
@@ -574,32 +605,95 @@ class AppStorePage(QWidget):
         self.setup_fullscreen_overlay()
         self.load_catalog()
 
-    def toggle_search(self):
-        if not hasattr(self, 'search_anim'):
-            self.search_anim = QPropertyAnimation(self.search_bar, b"maximumWidth")
-            self.search_anim.setDuration(300)
-            self.search_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-            
-        self.search_anim.stop()
-        try:
-            self.search_anim.finished.disconnect()
-        except Exception:
-            pass
+    # =============================================================
+    # MATERIAL YOU SEARCH BAR HELPERS
+    # =============================================================
+    def open_search_bar(self):
+        """Expands the Material search pill across the header."""
+        self.header_stack.setCurrentIndex(1)
+        self.search_pill.setMinimumWidth(50)
+        self.search_pill.setMaximumWidth(50)
+        
+        self.search_anim = QPropertyAnimation(self.search_pill, b"maximumWidth")
+        self.search_anim.setDuration(250)
+        self.search_anim.setStartValue(50)
+        self.search_anim.setEndValue(3000) 
+        self.search_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.search_anim.finished.connect(lambda: self.search_pill.setMinimumWidth(0))
+        self.search_anim.start()
+        self.search_bar.setFocus()
 
-        if self.search_bar.maximumWidth() > 0:
-            self.search_anim.setStartValue(self.search_bar.maximumWidth())
-            self.search_anim.setEndValue(0)
-            self.search_anim.finished.connect(self.search_bar.clear)
-        else:
-            self.search_anim.setStartValue(0)
-            self.search_anim.setEndValue(220)
-            self.search_bar.setFocus()
-            
+    def close_search_bar(self):
+        """Collapses search pill and restores title and tabs."""
+        self.search_bar.clear()
+        self.search_anim = QPropertyAnimation(self.search_pill, b"maximumWidth")
+        self.search_anim.setDuration(200)
+        self.search_anim.setStartValue(self.search_pill.width())
+        self.search_anim.setEndValue(50)
+        self.search_anim.setEasingCurve(QEasingCurve.Type.InCubic)
+        self.search_anim.finished.connect(lambda: self.header_stack.setCurrentIndex(0))
         self.search_anim.start()
 
     def on_search_query_changed(self, text):
         self.populate_catalog(self.full_catalog_cache)
 
+    # =============================================================
+    # RELIABLE BUFFERED ANIMATIONS (App Clicks & Section Tabs)
+    # =============================================================
+    def _update_tab_styles(self, filter_mode):
+        self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
+        self.btn_tab_installed.setStyleSheet(self.tab_active_css if filter_mode == "installed" else self.tab_inactive_css)
+        self.btn_tab_updates.setStyleSheet(self.tab_active_css if filter_mode == "updates" else self.tab_inactive_css)
+
+    def transition_to(self, target_index, filter_mode=None):
+        """Smoothly fades out, changes view/filter, and fades in without layout glitches."""
+        if self.page_stack.currentIndex() == target_index and (filter_mode is None or filter_mode == self.current_filter):
+            return
+            
+        if not self.isVisible():
+            self.page_stack.setCurrentIndex(target_index)
+            if filter_mode:
+                self.current_filter = filter_mode
+                self._update_tab_styles(filter_mode)
+                self.populate_catalog(self.full_catalog_cache)
+            return
+
+        self.target_index = target_index
+        self.target_filter = filter_mode
+        
+        # Buffer tick allows Qt event loop to allocate opacity pixmap before animating
+        self.page_opacity.setEnabled(True)
+        self.page_opacity.setOpacity(1.0)
+        QTimer.singleShot(15, self._run_out_animation)
+
+    def _run_out_animation(self):
+        self.fade_out = QPropertyAnimation(self.page_opacity, b"opacity")
+        self.fade_out.setDuration(130)
+        self.fade_out.setStartValue(1.0)
+        self.fade_out.setEndValue(0.0)
+        self.fade_out.finished.connect(self._on_transition_midpoint)
+        self.fade_out.start()
+
+    def _on_transition_midpoint(self):
+        self.page_stack.setCurrentIndex(self.target_index)
+        if self.target_filter:
+            self.current_filter = self.target_filter
+            self._update_tab_styles(self.target_filter)
+            self.populate_catalog(self.full_catalog_cache)
+            
+        self.fade_in = QPropertyAnimation(self.page_opacity, b"opacity")
+        self.fade_in.setDuration(160)
+        self.fade_in.setStartValue(0.0)
+        self.fade_in.setEndValue(1.0)
+        self.fade_in.finished.connect(lambda: self.page_opacity.setEnabled(False))
+        self.fade_in.start()
+
+    def switch_view_filter(self, filter_mode):
+        self.transition_to(0, filter_mode=filter_mode)
+
+    # =============================================================
+    # OVERLAYS & CATALOG MANAGEMENT
+    # =============================================================
     def setup_fullscreen_overlay(self):
         self.fullscreen_view = QFrame(self)
         self.fullscreen_view.setStyleSheet("background-color: rgba(0, 0, 0, 240);")
@@ -639,102 +733,6 @@ class AppStorePage(QWidget):
         
     def hide_fullscreen(self):
         self.fullscreen_view.hide()
-
-    def _update_tab_styles(self, filter_mode):
-        self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
-        self.btn_tab_installed.setStyleSheet(self.tab_active_css if filter_mode == "installed" else self.tab_inactive_css)
-        self.btn_tab_updates.setStyleSheet(self.tab_active_css if filter_mode == "updates" else self.tab_inactive_css)
-
-    def transition_to(self, target_index, filter_mode=None, slide_dir="left"):
-        if self.page_stack.currentIndex() == target_index and (filter_mode is None or filter_mode == self.current_filter):
-            return
-            
-        if not self.isVisible():
-            self.page_stack.setCurrentIndex(target_index)
-            if filter_mode:
-                self.current_filter = filter_mode
-                self._update_tab_styles(filter_mode)
-                self.populate_catalog(self.full_catalog_cache)
-            return
-
-        self.target_index = target_index
-        self.target_filter = filter_mode
-        self.slide_dir = slide_dir
-        
-        self.page_opacity.setEnabled(True)  # <-- FIX: Enable opacity strictly for the animation
-        
-        if not hasattr(self, 'out_anim_group') or self.out_anim_group.state() != QPropertyAnimation.State.Running:
-            self.base_pos = self.page_stack.pos()
-            
-        self.out_anim_group = QParallelAnimationGroup()
-        
-        self.fade_out = QPropertyAnimation(self.page_opacity, b"opacity")
-        self.fade_out.setDuration(150)
-        self.fade_out.setStartValue(self.page_opacity.opacity())
-        self.fade_out.setEndValue(0.0)
-        
-        self.slide_out = QPropertyAnimation(self.page_stack, b"pos")
-        self.slide_out.setDuration(150)
-        self.slide_out.setStartValue(self.base_pos)
-        offset = QPoint(-40 if slide_dir == "left" else 40, 0)
-        self.slide_out.setEndValue(self.base_pos + offset)
-        self.slide_out.setEasingCurve(QEasingCurve.Type.InCubic)
-        
-        self.out_anim_group.addAnimation(self.fade_out)
-        self.out_anim_group.addAnimation(self.slide_out)
-        self.out_anim_group.finished.connect(self._on_transition_midpoint)
-        self.out_anim_group.start()
-
-    def _on_transition_midpoint(self):
-        try:
-            self.out_anim_group.finished.disconnect(self._on_transition_midpoint)
-        except Exception:
-            pass
-            
-        self.page_stack.setCurrentIndex(self.target_index)
-        if self.target_filter:
-            self.current_filter = self.target_filter
-            self._update_tab_styles(self.target_filter)
-            self.populate_catalog(self.full_catalog_cache)
-            
-        self.in_anim_group = QParallelAnimationGroup()
-        
-        self.fade_in = QPropertyAnimation(self.page_opacity, b"opacity")
-        self.fade_in.setDuration(200)
-        self.fade_in.setStartValue(0.0)
-        self.fade_in.setEndValue(1.0)
-        
-        self.slide_in = QPropertyAnimation(self.page_stack, b"pos")
-        self.slide_in.setDuration(200)
-        offset = QPoint(40 if self.slide_dir == "left" else -40, 0)
-        self.slide_in.setStartValue(self.base_pos + offset)
-        self.slide_in.setEndValue(self.base_pos)
-        self.slide_in.setEasingCurve(QEasingCurve.Type.OutCubic)
-        
-        self.in_anim_group.addAnimation(self.fade_in)
-        self.in_anim_group.addAnimation(self.slide_in)
-        self.in_anim_group.finished.connect(self._on_transition_finished)
-        self.in_anim_group.start()
-
-    def _on_transition_finished(self):
-        try:
-            self.in_anim_group.finished.disconnect(self._on_transition_finished)
-        except Exception:
-            pass
-        self.page_opacity.setEnabled(False)  # <-- FIX: Disable completely when done
-
-    def switch_view_filter(self, filter_mode):
-        tab_indices = {"all": 0, "installed": 1, "updates": 2}
-        curr_idx = tab_indices.get(self.current_filter, 0)
-        targ_idx = tab_indices.get(filter_mode, 0)
-        
-        if targ_idx == curr_idx:
-            if self.page_stack.currentIndex() == 1:
-                self.transition_to(0, filter_mode=filter_mode, slide_dir="right")
-            return
-            
-        slide_dir = "left" if targ_idx > curr_idx else "right"
-        self.transition_to(0, filter_mode=filter_mode, slide_dir=slide_dir)
 
     def load_catalog(self):
         for i in reversed(range(self.list_layout.count())):
@@ -800,7 +798,7 @@ class AppStorePage(QWidget):
 
     def open_app_profile_details(self, app_data, card_reference):
         self.details_section.populate_details(app_data, card_reference)
-        self.transition_to(1, slide_dir="left")
+        self.transition_to(1)
 
     def show_error(self, error_msg):
         for i in reversed(range(self.list_layout.count())):

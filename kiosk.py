@@ -904,7 +904,6 @@ class NestKiosk(QMainWindow):
 
         core_apps = [
             ("App Store", "icons/appstore.png"),
-            ("Character.ai", "icons/character_ai.svg"),
             ("Local Music", "icons/music.svg")
         ]
 
@@ -923,8 +922,6 @@ class NestKiosk(QMainWindow):
                     downloaded_apps.append((clean_name, icon_path))
 
         system_apps = [
-            ("Games", "icons/games.svg"),
-            ("Clockfaces", "icons/clock.svg"),
             ("Settings", "icons/settings.svg")
         ]
 
@@ -1092,9 +1089,7 @@ class NestKiosk(QMainWindow):
             self.app_stack.setCurrentWidget(self.running_apps[app_name])
         else:
             page_instance = None
-            if app_name == "Character.ai":
-                page_instance = create_web_app_view("https://character.ai", app_name, self.minimize_app)
-            elif app_name == "Local Music":
+            if app_name == "Local Music":
                 page_instance = LocalMusicPage()
             elif app_name == "App Store":
                 page_instance = AppStorePage()

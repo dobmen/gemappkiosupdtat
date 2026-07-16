@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QSlider, QMessageBox, QStackedWidget, QScroller, QSizePolicy, QProgressBar
+    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog
 )
 
 # =================================================================
@@ -31,6 +31,71 @@ class CheckUpdateThread(QThread):
                 self.on_success.emit(data)
         except Exception as e:
             self.on_error.emit(str(e))
+
+
+class ModernDialog(QDialog):
+    """A sleek, Android/One UI style popup dialog."""
+    def __init__(self, parent, title, message, accept_text="OK", cancel_text="Cancel"):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        self.setFixedSize(400, 220)
+
+        # Main Layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Background Frame
+        bg_frame = QFrame(self)
+        bg_frame.setStyleSheet("background-color: #22222B; border-radius: 20px; border: 1px solid #33333F;")
+        bg_layout = QVBoxLayout(bg_frame)
+        bg_layout.setContentsMargins(25, 25, 25, 20)
+        bg_layout.setSpacing(15)
+
+        # Title
+        lbl_title = QLabel(title)
+        lbl_title.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_title.setStyleSheet("color: white; border: none;")
+
+        # Message
+        lbl_msg = QLabel(message)
+        lbl_msg.setFont(QFont("Google Sans", 14))
+        lbl_msg.setStyleSheet("color: #AAAAAA; border: none;")
+        lbl_msg.setWordWrap(True)
+
+        bg_layout.addWidget(lbl_title)
+        bg_layout.addWidget(lbl_msg)
+        bg_layout.addStretch()
+
+        # Buttons Setup
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(15)
+        btn_layout.addStretch()
+
+        if cancel_text:
+            btn_cancel = QPushButton(cancel_text)
+            btn_cancel.setFixedHeight(40)
+            btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_cancel.setStyleSheet("""
+                QPushButton { background: transparent; color: white; border-radius: 8px; font-size: 15px; font-weight: bold; padding: 0 15px; }
+                QPushButton:hover { background-color: rgba(255,255,255,10); }
+            """)
+            btn_cancel.clicked.connect(self.reject)
+            btn_layout.addWidget(btn_cancel)
+
+        btn_accept = QPushButton(accept_text)
+        btn_accept.setFixedHeight(40)
+        btn_accept.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_accept.setStyleSheet("""
+            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-size: 15px; font-weight: bold; border: none; padding: 0 20px; }
+            QPushButton:hover { background-color: #4A7DDF; }
+        """)
+        btn_accept.clicked.connect(self.accept)
+        btn_layout.addWidget(btn_accept)
+
+        bg_layout.addLayout(btn_layout)
+        layout.addWidget(bg_frame)
 
 
 class CategoryButton(QPushButton):
@@ -114,6 +179,7 @@ class SettingsPage(QWidget):
             ("Display", "☀️"),
             ("Audio & Sound", "🔊"),
             ("Customize", "🎨"),
+            ("Installed Apps", "📱"),
             ("System Storage", "💾"),
             ("Software Update", "🔄"),
             ("Power", "⚡")
@@ -138,6 +204,7 @@ class SettingsPage(QWidget):
         self.right_stack.addWidget(self.create_display_page())
         self.right_stack.addWidget(self.create_audio_page())
         self.right_stack.addWidget(self.create_customize_page())
+        self.right_stack.addWidget(self.create_apps_page())
         self.right_stack.addWidget(self.create_storage_page())
         self.right_stack.addWidget(self.create_update_page()) 
         self.right_stack.addWidget(self.create_power_page())
@@ -151,6 +218,9 @@ class SettingsPage(QWidget):
         self.right_stack.setCurrentIndex(index)
         for i, btn in enumerate(self.category_buttons):
             btn.set_active(i == index)
+        # Refresh apps list dynamically if the Apps tab is opened
+        if index == 4:
+            self.refresh_apps_list()
 
     def get_saved_setting(self, key, default):
         try:
@@ -277,7 +347,6 @@ class SettingsPage(QWidget):
         layout.addWidget(title)
         layout.addSpacing(20)
 
-        # Make content scrollable for small displays
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -297,34 +366,41 @@ class SettingsPage(QWidget):
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(15)
         
-        # 1. System Sounds Volume Slider
+        vol_header = QHBoxLayout()
         lbl_vol = QLabel("System Sounds Volume")
         lbl_vol.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
         lbl_vol.setStyleSheet("color: white; border: none;")
-        card_layout.addWidget(lbl_vol)
+        
+        saved_vol = self.get_saved_setting("system_volume", 80)
+        self.lbl_vol_val = QLabel(f"{saved_vol}%")
+        self.lbl_vol_val.setFont(QFont("Google Sans", 16))
+        self.lbl_vol_val.setStyleSheet("color: #5A8DEF; border: none;")
+        
+        vol_header.addWidget(lbl_vol)
+        vol_header.addStretch()
+        vol_header.addWidget(self.lbl_vol_val)
+        card_layout.addLayout(vol_header)
         
         self.sys_vol_slider = QSlider(Qt.Orientation.Horizontal)
         self.sys_vol_slider.setRange(0, 100)
-        self.sys_vol_slider.setValue(self.get_saved_setting("system_volume", 80))
+        self.sys_vol_slider.setValue(saved_vol)
         self.sys_vol_slider.setStyleSheet("""
             QSlider { background: transparent; height: 50px; }
             QSlider::groove:horizontal { height: 8px; background: rgba(255, 255, 255, 30); border-radius: 4px; }
             QSlider::sub-page:horizontal { background: #5A8DEF; border-radius: 4px; }
             QSlider::handle:horizontal { width: 24px; margin: -8px 0; background: white; border-radius: 12px; }
         """)
-        self.sys_vol_slider.valueChanged.connect(lambda v: self.save_setting("system_volume", v))
+        self.sys_vol_slider.valueChanged.connect(self.update_volume_val)
         card_layout.addWidget(self.sys_vol_slider)
 
         card_layout.addSpacing(10)
 
-        # 2. Silent Mode Toggle
         self.is_silent = self.get_saved_setting("silent_mode", False)
         self.btn_silent = QPushButton()
         self.update_toggle_btn(self.btn_silent, "Silent Mode (Mute System Sounds)", self.is_silent)
         self.btn_silent.clicked.connect(self.toggle_silent)
         card_layout.addWidget(self.btn_silent)
 
-        # 3. Do Not Disturb Toggle
         self.is_dnd = self.get_saved_setting("dnd_mode", False)
         self.btn_dnd = QPushButton()
         self.update_toggle_btn(self.btn_dnd, "Do Not Disturb (Hide Pop-up Notifications)", self.is_dnd)
@@ -338,8 +414,11 @@ class SettingsPage(QWidget):
         layout.addWidget(scroll)
         return page
 
+    def update_volume_val(self, val):
+        self.lbl_vol_val.setText(f"{val}%")
+        self.save_setting("system_volume", val)
+
     def update_toggle_btn(self, btn, text, state):
-        """Helper to style toggle buttons beautifully."""
         btn.setFixedHeight(60)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
@@ -438,6 +517,168 @@ class SettingsPage(QWidget):
         self.set_app_layout(saved_layout, save=False)
         return page
 
+    # =================================================================
+    # INSTALLED APPS PAGE & UNINSTALLER
+    # =================================================================
+    def create_apps_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        title = QLabel("Installed Applications")
+        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setStyleSheet("color: white;")
+        layout.addWidget(title)
+        layout.addSpacing(20)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        
+        self.apps_container = QWidget()
+        self.apps_container.setStyleSheet("background: transparent;")
+        self.apps_layout = QVBoxLayout(self.apps_container)
+        self.apps_layout.setContentsMargins(0, 0, 0, 0)
+        self.apps_layout.setSpacing(14)
+        self.apps_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        scroll.setWidget(self.apps_container)
+        layout.addWidget(scroll)
+
+        self.refresh_apps_list()
+        return page
+
+    def refresh_apps_list(self):
+        """Scans the filesystem and dynamically populates the installed apps list."""
+        while self.apps_layout.count():
+            item = self.apps_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        core_apps = ["settings.py", "app_store.py", "__init__.py", "kiosk.py"]
+        
+        try:
+            if not os.path.exists("apps"):
+                os.makedirs("apps", exist_ok=True)
+            
+            files = [f for f in os.listdir("apps") if f.endswith(".py") and not f.startswith("__")]
+            # Sort system apps to top, then alphabetical
+            files.sort(key=lambda x: (x not in core_apps, x.lower()))
+        except Exception as e:
+            lbl_err = QLabel(f"Error loading apps: {e}")
+            lbl_err.setStyleSheet("color: #E24A4A; font-size: 16px;")
+            self.apps_layout.addWidget(lbl_err)
+            return
+
+        if not files:
+            lbl_empty = QLabel("No applications installed.")
+            lbl_empty.setFont(QFont("Google Sans", 16))
+            lbl_empty.setStyleSheet("color: #AAAAAA; margin-top: 40px;")
+            lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.apps_layout.addWidget(lbl_empty)
+            return
+
+        for filename in files:
+            card = QFrame()
+            card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 16px 20px;")
+            card_layout = QHBoxLayout(card)
+            card_layout.setContentsMargins(0, 0, 0, 0)
+            card_layout.setSpacing(15)
+
+            app_id = filename[:-3] 
+            app_name = app_id.replace("_", " ").title()
+
+            ver_file = os.path.join("apps", f"{app_id}.ver")
+            version_str = ""
+            if os.path.exists(ver_file):
+                try:
+                    with open(ver_file, "r") as f:
+                        version_str = f"v{f.read().strip()}"
+                except Exception:
+                    pass
+            
+            is_core = filename in core_apps
+
+            info_box = QVBoxLayout()
+            info_box.setSpacing(4)
+            
+            lbl_name = QLabel(app_name)
+            lbl_name.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+            lbl_name.setStyleSheet("color: white; border: none; background: transparent;")
+            
+            status_text = "System OS Application" if is_core else f"App Store Download • {version_str if version_str else 'Installed'}"
+            lbl_status = QLabel(status_text)
+            lbl_status.setFont(QFont("Google Sans", 13))
+            lbl_status.setStyleSheet(f"color: {'#5A8DEF' if is_core else '#888888'}; border: none; background: transparent;")
+            
+            info_box.addWidget(lbl_name)
+            info_box.addWidget(lbl_status)
+            card_layout.addLayout(info_box)
+            card_layout.addStretch()
+
+            if is_core:
+                btn_lock = QPushButton("🔒 System App")
+                btn_lock.setFixedSize(140, 42)
+                btn_lock.setEnabled(False)
+                btn_lock.setStyleSheet("""
+                    QPushButton { background-color: #2C2C35; color: #666670; border-radius: 8px; font-weight: bold; font-size: 14px; border: none; }
+                """)
+                card_layout.addWidget(btn_lock)
+            else:
+                btn_uninstall = QPushButton("🗑️ Uninstall")
+                btn_uninstall.setFixedSize(130, 42)
+                btn_uninstall.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_uninstall.setStyleSheet("""
+                    QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border: 1px solid #E24A4A; border-radius: 8px; font-weight: bold; font-size: 14px; }
+                    QPushButton:hover { background-color: #E24A4A; color: white; }
+                """)
+                btn_uninstall.clicked.connect(lambda checked, fname=filename, name=app_name: self.uninstall_app(fname, name))
+                card_layout.addWidget(btn_uninstall)
+
+            self.apps_layout.addWidget(card)
+
+    def uninstall_app(self, filename, app_name):
+        """Triggers confirmation popup and cleans up script, version, and icon files."""
+        dialog = ModernDialog(
+            self,
+            "Uninstall Application",
+            f"Are you sure you want to completely uninstall {app_name} from Kiosk OS?",
+            "Uninstall"
+        )
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                app_id = filename[:-3]
+                script_path = os.path.join("apps", filename)
+                ver_path = os.path.join("apps", f"{app_id}.ver")
+                
+                if os.path.exists(script_path):
+                    os.remove(script_path)
+                if os.path.exists(ver_path):
+                    os.remove(ver_path)
+                    
+                # Clean up orphaned icons
+                if os.path.exists("icons"):
+                    for icon_file in os.listdir("icons"):
+                        if os.path.splitext(icon_file)[0] == app_id:
+                            try:
+                                os.remove(os.path.join("icons", icon_file))
+                            except Exception:
+                                pass
+                                
+                self.refresh_apps_list()
+            except Exception as e:
+                err_dialog = ModernDialog(self, "Uninstall Failed", f"Could not remove {app_name}: {str(e)}", "OK", "")
+                err_dialog.exec()
+
+    # =================================================================
+    # REMAINING CATEGORY PAGES
+    # =================================================================
     def create_storage_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -558,14 +799,21 @@ class SettingsPage(QWidget):
         self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Update failed.\nError: {err_msg}")
 
     def install_update(self, new_version):
-        self.btn_check_update.setEnabled(False)
-        self.btn_check_update.setText("Installing...")
-        self.update_progress.show()
-        self.lbl_update_status.setText(f"Status: Pulling latest code from GitHub...\nPlease do not turn off the device.")
+        dialog = ModernDialog(
+            self, 
+            "Confirm Update", 
+            f"Installing version {new_version} will automatically reboot the Kiosk system.\n\nDo you want to proceed?",
+            "Install & Reboot"
+        )
         
-        self.save_setting("os_version", new_version)
-        QTimer.singleShot(1500, lambda: os.system("git fetch origin && git reset --hard origin/main && sudo reboot"))
-
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.btn_check_update.setEnabled(False)
+            self.btn_check_update.setText("Installing...")
+            self.update_progress.show()
+            self.lbl_update_status.setText(f"Status: Pulling latest code from GitHub...\nPlease do not turn off the device.")
+            
+            self.save_setting("os_version", new_version)
+            QTimer.singleShot(1500, lambda: os.system("git fetch origin && git reset --hard origin/main && sudo reboot"))
 
     def create_power_page(self):
         page = QWidget()
@@ -651,17 +899,11 @@ class SettingsPage(QWidget):
             return "Storage information unavailable."
 
     def reboot_system(self):
-        reply = QMessageBox.question(
-            self, 'Reboot System', 'Are you sure you want to reboot the kiosk?',
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
+        dialog = ModernDialog(self, "Reboot System", "Are you sure you want to reboot the kiosk?", "Reboot")
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             os.system("sudo reboot")
 
     def shutdown_system(self):
-        reply = QMessageBox.question(
-            self, 'Shutdown System', 'Are you sure you want to completely shut down?',
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
+        dialog = ModernDialog(self, "Shutdown System", "Are you sure you want to completely shut down?", "Shutdown")
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             os.system("sudo shutdown now")
