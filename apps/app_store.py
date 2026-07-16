@@ -3,15 +3,39 @@ import ssl
 import urllib.request
 import json
 import time  
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QTimer
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QTimer, pyqtProperty
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QImage
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout, QGraphicsOpacityEffect, QLineEdit
+    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout, QLineEdit
 )
 
 # Raw GitHub URL of your store manifest
 MANIFEST_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosstor/main/store_manifest.json"
+
+
+class FadeOverlay(QWidget):
+    """A completely thread-safe fade overlay to replace buggy QGraphicsOpacityEffect."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self._alpha = 0
+        self.hide()
+
+    @pyqtProperty(int)
+    def alpha(self):
+        return self._alpha
+
+    @alpha.setter
+    def alpha(self, value):
+        self._alpha = value
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        # Using the exact background color of the App Store for a seamless blend
+        painter.fillRect(self.rect(), QColor(12, 12, 14, self._alpha))
 
 
 class FetchManifestThread(QThread):
@@ -482,7 +506,7 @@ class AppStorePage(QWidget):
         normal_layout.setContentsMargins(0, 0, 0, 0)
         normal_layout.setSpacing(10)
 
-        self.title_lbl = QLabel("App Store")  # Removed "GitHub"
+        self.title_lbl = QLabel("App Store")
         self.title_lbl.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
         self.title_lbl.setStyleSheet("color: white;")
         normal_layout.addWidget(self.title_lbl)
@@ -570,12 +594,9 @@ class AppStorePage(QWidget):
         layout.addWidget(self.progress_bar)
 
         # =============================================================
-        # 3. PAGE STACK WITH BUFFERED FADE ANIMATION
+        # 3. PAGE STACK
         # =============================================================
         self.page_stack = QStackedWidget()
-        self.page_opacity = QGraphicsOpacityEffect(self.page_stack)
-        self.page_stack.setGraphicsEffect(self.page_opacity)
-        self.page_opacity.setEnabled(False)
         
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -601,9 +622,20 @@ class AppStorePage(QWidget):
         self.page_stack.addWidget(self.details_section)
         layout.addWidget(self.page_stack)
 
+        # 100% hardware-safe fade overlay overlay to prevent QPainter crashes
+        self.fade_overlay = FadeOverlay(self)
+
         self.current_filter = "all"
         self.setup_fullscreen_overlay()
         self.load_catalog()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'fullscreen_view'):
+            self.fullscreen_view.setGeometry(self.rect())
+        if hasattr(self, 'fade_overlay'):
+            # The fade overlay sits directly over the content stack
+            self.fade_overlay.setGeometry(self.page_stack.geometry())
 
     # =============================================================
     # MATERIAL YOU SEARCH BAR HELPERS
@@ -638,7 +670,7 @@ class AppStorePage(QWidget):
         self.populate_catalog(self.full_catalog_cache)
 
     # =============================================================
-    # RELIABLE BUFFERED ANIMATIONS (App Clicks & Section Tabs)
+    # HARDWARE-SAFE BUFFERED ANIMATIONS
     # =============================================================
     def _update_tab_styles(self, filter_mode):
         self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
@@ -646,7 +678,6 @@ class AppStorePage(QWidget):
         self.btn_tab_updates.setStyleSheet(self.tab_active_css if filter_mode == "updates" else self.tab_inactive_css)
 
     def transition_to(self, target_index, filter_mode=None):
-        """Smoothly fades out, changes view/filter, and fades in without layout glitches."""
         if self.page_stack.currentIndex() == target_index and (filter_mode is None or filter_mode == self.current_filter):
             return
             
@@ -661,32 +692,35 @@ class AppStorePage(QWidget):
         self.target_index = target_index
         self.target_filter = filter_mode
         
-        # Buffer tick allows Qt event loop to allocate opacity pixmap before animating
-        self.page_opacity.setEnabled(True)
-        self.page_opacity.setOpacity(1.0)
-        QTimer.singleShot(15, self._run_out_animation)
-
-    def _run_out_animation(self):
-        self.fade_out = QPropertyAnimation(self.page_opacity, b"opacity")
-        self.fade_out.setDuration(130)
-        self.fade_out.setStartValue(1.0)
-        self.fade_out.setEndValue(0.0)
-        self.fade_out.finished.connect(self._on_transition_midpoint)
-        self.fade_out.start()
+        self.fade_overlay.setGeometry(self.page_stack.geometry())
+        self.fade_overlay.show()
+        self.fade_overlay.raise_()
+        
+        self.fade_anim = QPropertyAnimation(self.fade_overlay, b"alpha")
+        self.fade_anim.setDuration(150)
+        self.fade_anim.setStartValue(0)
+        self.fade_anim.setEndValue(255)
+        self.fade_anim.finished.connect(self._on_transition_midpoint)
+        self.fade_anim.start()
 
     def _on_transition_midpoint(self):
+        try:
+            self.fade_anim.finished.disconnect(self._on_transition_midpoint)
+        except Exception:
+            pass
+            
         self.page_stack.setCurrentIndex(self.target_index)
         if self.target_filter:
             self.current_filter = self.target_filter
             self._update_tab_styles(self.target_filter)
             self.populate_catalog(self.full_catalog_cache)
             
-        self.fade_in = QPropertyAnimation(self.page_opacity, b"opacity")
-        self.fade_in.setDuration(160)
-        self.fade_in.setStartValue(0.0)
-        self.fade_in.setEndValue(1.0)
-        self.fade_in.finished.connect(lambda: self.page_opacity.setEnabled(False))
-        self.fade_in.start()
+        self.fade_anim = QPropertyAnimation(self.fade_overlay, b"alpha")
+        self.fade_anim.setDuration(150)
+        self.fade_anim.setStartValue(255)
+        self.fade_anim.setEndValue(0)
+        self.fade_anim.finished.connect(self.fade_overlay.hide)
+        self.fade_anim.start()
 
     def switch_view_filter(self, filter_mode):
         self.transition_to(0, filter_mode=filter_mode)
@@ -718,11 +752,6 @@ class AppStorePage(QWidget):
         
         fs_layout.addLayout(top_fs)
         fs_layout.addWidget(self.fs_image, stretch=1)
-        
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if hasattr(self, 'fullscreen_view'):
-            self.fullscreen_view.setGeometry(self.rect())
             
     def show_fullscreen_screenshot(self, pixmap):
         if not pixmap.isNull():

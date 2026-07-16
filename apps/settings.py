@@ -559,7 +559,8 @@ class SettingsPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        core_apps = ["settings.py", "app_store.py", "__init__.py", "kiosk.py"]
+        # Added web_app.py, spotify.py, and local_music.py as protected core apps
+        core_apps = ["settings.py", "app_store.py", "__init__.py", "kiosk.py", "local_music.py", "spotify.py", "web_app.py"]
         
         try:
             if not os.path.exists("apps"):
@@ -591,7 +592,12 @@ class SettingsPage(QWidget):
             card_layout.setSpacing(15)
 
             app_id = filename[:-3] 
-            app_name = app_id.replace("_", " ").title()
+            
+            # Custom name overrides for specific modules
+            if app_id == "local_music":
+                app_name = "Music"
+            else:
+                app_name = app_id.replace("_", " ").title()
 
             ver_file = os.path.join("apps", f"{app_id}.ver")
             version_str = ""
