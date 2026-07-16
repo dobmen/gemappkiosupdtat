@@ -3,11 +3,11 @@ import ssl
 import urllib.request
 import json
 import time  
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout
+    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout, QGraphicsOpacityEffect, QLineEdit
 )
 
 # Raw GitHub URL of your store manifest
@@ -26,7 +26,11 @@ class FetchManifestThread(QThread):
                 cache_busting_url, 
                 headers={'User-Agent': 'Mozilla/5.0 (Kiosk OS)'}
             )
-            with urllib.request.urlopen(req, timeout=10) as response:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as response:
                 data = json.loads(response.read().decode('utf-8'))
                 self.on_success.emit(data.get("apps", []))
         except Exception as e:
@@ -46,16 +50,31 @@ class DownloadAppThread(QThread):
     def run(self):
         try:
             self.on_progress.emit(10)
+            
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
             icon_url = self.app_data["icon_url"]
             icon_filename = os.path.basename(icon_url)
             icon_path = os.path.join("icons", icon_filename)
             os.makedirs("icons", exist_ok=True)
-            urllib.request.urlretrieve(icon_url, icon_path)
+            
+            req_icon = urllib.request.Request(icon_url, headers={'User-Agent': 'KioskOS'})
+            with urllib.request.urlopen(req_icon, timeout=10, context=ctx) as response:
+                with open(icon_path, 'wb') as f:
+                    f.write(response.read())
+            
             self.on_progress.emit(50)
 
             os.makedirs("apps", exist_ok=True)
             temp_script = os.path.join("apps", "update.tmp")
-            urllib.request.urlretrieve(self.app_data["script_url"], temp_script)
+            
+            req_script = urllib.request.Request(self.app_data["script_url"], headers={'User-Agent': 'KioskOS'})
+            with urllib.request.urlopen(req_script, timeout=10, context=ctx) as response:
+                with open(temp_script, 'wb') as f:
+                    f.write(response.read())
+                    
             self.on_progress.emit(80)
             
             target_script = os.path.join("apps", self.app_data["filename"])
@@ -73,7 +92,7 @@ class DownloadAppThread(QThread):
 
 class NetworkImageThread(QThread):
     """Asynchronously fetches and crops remote screenshots/icons without stuttering the GUI."""
-    on_image_ready = pyqtSignal(object, QPixmap)
+    on_image_ready = pyqtSignal(object, QPixmap, QPixmap)
     
     def __init__(self, url, target_widget, width, height, radius=8):
         super().__init__()
@@ -111,9 +130,28 @@ class NetworkImageThread(QThread):
                 p.drawPixmap(x, y, scaled)
                 p.end()
                 
-                self.on_image_ready.emit(self.target_widget, out_pix)
-        except Exception:
-            pass
+                # Pass both the rounded thumbnail and the raw original pixmap
+                self.on_image_ready.emit(self.target_widget, out_pix, pixmap)
+        except Exception as e:
+            print(f"Image download exception trace: {e}")
+
+
+class ClickableScreenshot(QLabel):
+    """A screenshot label that emits its original high-res pixmap when clicked."""
+    clicked = pyqtSignal(QPixmap)
+    
+    def __init__(self):
+        super().__init__()
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.original_pixmap = None
+        
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if self.original_pixmap and not self.original_pixmap.isNull():
+                self.clicked.emit(self.original_pixmap)
+            elif self.pixmap():
+                self.clicked.emit(self.pixmap())
+        super().mouseReleaseEvent(event)
 
 
 class AppCard(QFrame):
@@ -209,9 +247,10 @@ class AppCard(QFrame):
 
 class AppDetailsSection(QWidget):
     """Deep detailed section page layout for an application mapping all metadata metrics."""
-    def __init__(self, on_back_callback, install_callback):
+    def __init__(self, on_back_callback, install_callback, on_screenshot_click):
         super().__init__()
         self.install_callback = install_callback
+        self.on_screenshot_click = on_screenshot_click
         self.active_card = None
         self.app_data = None
         self.active_threads = []
@@ -332,11 +371,13 @@ class AppDetailsSection(QWidget):
         scroll.setWidget(container)
         layout.addWidget(scroll)
 
-    def apply_downloaded_image(self, widget, pixmap):
+    def apply_downloaded_image(self, widget, thumb_pix, orig_pix):
         """Callback to apply newly downloaded images to UI labels seamlessly."""
         try:
-            widget.setPixmap(pixmap)
+            widget.setPixmap(thumb_pix)
             widget.setStyleSheet("background-color: transparent;")
+            if hasattr(widget, 'original_pixmap'):
+                widget.original_pixmap = orig_pix
         except RuntimeError:
             pass
 
@@ -344,7 +385,6 @@ class AppDetailsSection(QWidget):
         self.app_data = app_data
         self.active_card = card_reference
 
-        # Clean up old active background threads to free memory
         for t in self.active_threads:
             try:
                 t.disconnect()
@@ -353,7 +393,6 @@ class AppDetailsSection(QWidget):
                 pass
         self.active_threads.clear()
 
-        # Set text metrics
         self.lbl_name.setText(app_data['name'])
         self.lbl_author_cat.setText(f"By {app_data.get('author', 'Unknown')} • {app_data.get('category', 'Utility')}")
         
@@ -363,7 +402,6 @@ class AppDetailsSection(QWidget):
         self.lbl_meta_ver.setText(str(app_data['version']))
         self.lbl_meta_size.setText(app_data.get('storage_needed', 'Unknown Size'))
 
-        # Set temporary mock icon while downloading
         icon_pix = QPixmap(80, 80)
         icon_pix.fill(Qt.GlobalColor.transparent)
         p = QPainter(icon_pix)
@@ -377,14 +415,12 @@ class AppDetailsSection(QWidget):
         p.end()
         self.lbl_icon.setPixmap(icon_pix)
 
-        # Trigger real icon download
         if app_data.get('icon_url'):
             icon_thread = NetworkImageThread(app_data['icon_url'], self.lbl_icon, 80, 80, radius=40)
             icon_thread.on_image_ready.connect(self.apply_downloaded_image)
             icon_thread.start()
             self.active_threads.append(icon_thread)
 
-        # Rebuild screenshot layout
         for i in reversed(range(self.scr_layout.count())):
             self.scr_layout.itemAt(i).widget().setParent(None)
 
@@ -392,13 +428,13 @@ class AppDetailsSection(QWidget):
         if screenshots:
             self.scr_scroll.show()
             for s_url in screenshots:
-                scr_lbl = QLabel()
+                scr_lbl = ClickableScreenshot()
+                scr_lbl.clicked.connect(self.on_screenshot_click)
                 scr_lbl.setFixedSize(240, 140)
                 scr_lbl.setStyleSheet("background-color: #2C2C35; border-radius: 8px; border: 1px solid #3C3C45;")
                 scr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.scr_layout.addWidget(scr_lbl)
                 
-                # Fetch and map real screenshot into the UI label dynamically
                 scr_thread = NetworkImageThread(s_url, scr_lbl, 240, 140, radius=8)
                 scr_thread.on_image_ready.connect(self.apply_downloaded_image)
                 scr_thread.start()
@@ -433,6 +469,7 @@ class AppStorePage(QWidget):
         super().__init__()
         self.on_install_success = on_install_success
         self.full_catalog_cache = []
+        self.base_pos = None
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 20, 40, 30)
@@ -445,6 +482,42 @@ class AppStorePage(QWidget):
         header_layout.addWidget(self.title_lbl)
         header_layout.addStretch()
 
+        # Expanding Search Engine
+        search_layout = QHBoxLayout()
+        search_layout.setSpacing(5)
+
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search apps...")
+        self.search_bar.setMaximumWidth(0)
+        self.search_bar.setStyleSheet("""
+            QLineEdit {
+                background-color: #2C2C35;
+                color: white;
+                border: 1px solid #3C3C45;
+                border-radius: 18px;
+                padding: 4px 15px;
+                font-family: 'Google Sans';
+                font-size: 14px;
+            }
+            QLineEdit:focus { border-color: #5A8DEF; }
+        """)
+        self.search_bar.textChanged.connect(self.on_search_query_changed)
+
+        self.btn_search = QPushButton("🔍")
+        self.btn_search.setFixedSize(36, 36)
+        self.btn_search.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_search.setStyleSheet("""
+            QPushButton { background: transparent; color: white; border-radius: 18px; font-size: 18px; border: none;}
+            QPushButton:hover { background-color: rgba(255,255,255,20); }
+        """)
+        self.btn_search.clicked.connect(self.toggle_search)
+
+        search_layout.addWidget(self.search_bar)
+        search_layout.addWidget(self.btn_search)
+        header_layout.addLayout(search_layout)
+        header_layout.addSpacing(10)
+
+        # Tab Navigation
         self.btn_tab_all = QPushButton("Catalog")
         self.btn_tab_installed = QPushButton("Installed")
         self.btn_tab_updates = QPushButton("Need Updating")
@@ -473,7 +546,14 @@ class AppStorePage(QWidget):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
+        # -------------------------------------------------------------
+        # PAGE TRANSITION SYSTEM
+        # -------------------------------------------------------------
         self.page_stack = QStackedWidget()
+        
+        # Setup opacity effect for smooth fading transitions
+        self.page_opacity = QGraphicsOpacityEffect(self.page_stack)
+        self.page_stack.setGraphicsEffect(self.page_opacity)
         
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -490,8 +570,9 @@ class AppStorePage(QWidget):
         self.scroll_area.setWidget(self.list_container)
         
         self.details_section = AppDetailsSection(
-            on_back_callback=lambda: self.page_stack.setCurrentIndex(0),
-            install_callback=self.start_install
+            on_back_callback=lambda: self.transition_to(0, slide_dir="right"),
+            install_callback=self.start_install,
+            on_screenshot_click=self.show_fullscreen_screenshot
         )
         
         self.page_stack.addWidget(self.scroll_area)
@@ -499,17 +580,174 @@ class AppStorePage(QWidget):
         layout.addWidget(self.page_stack)
 
         self.current_filter = "all"
+        self.setup_fullscreen_overlay()
         self.load_catalog()
 
-    def switch_view_filter(self, filter_mode):
-        self.current_filter = filter_mode
-        self.page_stack.setCurrentIndex(0) 
+    # -------------------------------------------------------------
+    # EXPANDING SEARCH BAR ANIMATION
+    # -------------------------------------------------------------
+    def toggle_search(self):
+        if not hasattr(self, 'search_anim'):
+            self.search_anim = QPropertyAnimation(self.search_bar, b"maximumWidth")
+            self.search_anim.setDuration(300)
+            self.search_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            
+        self.search_anim.stop()
+        try:
+            self.search_anim.finished.disconnect()
+        except Exception:
+            pass
+
+        if self.search_bar.maximumWidth() > 0:
+            # Collapse
+            self.search_anim.setStartValue(self.search_bar.maximumWidth())
+            self.search_anim.setEndValue(0)
+            self.search_anim.finished.connect(self.search_bar.clear)
+        else:
+            # Expand
+            self.search_anim.setStartValue(0)
+            self.search_anim.setEndValue(220)
+            self.search_bar.setFocus()
+            
+        self.search_anim.start()
+
+    def on_search_query_changed(self, text):
+        """Fires in real-time as the user types to live-filter the catalog."""
+        self.populate_catalog(self.full_catalog_cache)
+
+    # -------------------------------------------------------------
+    # FULLSCREEN SCREENSHOT ENGINE
+    # -------------------------------------------------------------
+    def setup_fullscreen_overlay(self):
+        """Creates an absolute floating layer for fullscreen image viewing."""
+        self.fullscreen_view = QFrame(self)
+        self.fullscreen_view.setStyleSheet("background-color: rgba(0, 0, 0, 240);")
+        self.fullscreen_view.hide()
         
+        fs_layout = QVBoxLayout(self.fullscreen_view)
+        fs_layout.setContentsMargins(20, 20, 20, 20)
+        
+        btn_close_fs = QPushButton("✕")
+        btn_close_fs.setFixedSize(50, 50)
+        btn_close_fs.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close_fs.setStyleSheet("background-color: rgba(255,255,255,20); color: white; border-radius: 25px; font-size: 24px; font-weight: bold; border: none;")
+        btn_close_fs.clicked.connect(self.hide_fullscreen)
+        
+        top_fs = QHBoxLayout()
+        top_fs.addStretch()
+        top_fs.addWidget(btn_close_fs)
+        
+        self.fs_image = QLabel()
+        self.fs_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.fs_image.setStyleSheet("background: transparent;")
+        
+        fs_layout.addLayout(top_fs)
+        fs_layout.addWidget(self.fs_image, stretch=1)
+        
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'fullscreen_view'):
+            self.fullscreen_view.setGeometry(self.rect())
+            
+    def show_fullscreen_screenshot(self, pixmap):
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(self.width() - 80, self.height() - 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.fs_image.setPixmap(scaled)
+        self.fullscreen_view.raise_()
+        self.fullscreen_view.show()
+        
+    def hide_fullscreen(self):
+        self.fullscreen_view.hide()
+
+    # -------------------------------------------------------------
+    # SLIDE & FADE ANIMATION ENGINE
+    # -------------------------------------------------------------
+    def _update_tab_styles(self, filter_mode):
         self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
         self.btn_tab_installed.setStyleSheet(self.tab_active_css if filter_mode == "installed" else self.tab_inactive_css)
         self.btn_tab_updates.setStyleSheet(self.tab_active_css if filter_mode == "updates" else self.tab_inactive_css)
+
+    def transition_to(self, target_index, filter_mode=None, slide_dir="left"):
+        """Crossfades gracefully to a new page index and tab layout with directional slide."""
+        if self.page_stack.currentIndex() == target_index and (filter_mode is None or filter_mode == self.current_filter):
+            return
+            
+        if not self.isVisible():
+            self.page_stack.setCurrentIndex(target_index)
+            if filter_mode:
+                self.current_filter = filter_mode
+                self._update_tab_styles(filter_mode)
+                self.populate_catalog(self.full_catalog_cache)
+            return
+
+        self.target_index = target_index
+        self.target_filter = filter_mode
+        self.slide_dir = slide_dir
         
-        self.populate_catalog(self.full_catalog_cache)
+        if not hasattr(self, 'out_anim_group') or self.out_anim_group.state() != QPropertyAnimation.State.Running:
+            self.base_pos = self.page_stack.pos()
+            
+        self.out_anim_group = QParallelAnimationGroup()
+        
+        self.fade_out = QPropertyAnimation(self.page_opacity, b"opacity")
+        self.fade_out.setDuration(150)
+        self.fade_out.setStartValue(self.page_opacity.opacity())
+        self.fade_out.setEndValue(0.0)
+        
+        self.slide_out = QPropertyAnimation(self.page_stack, b"pos")
+        self.slide_out.setDuration(150)
+        self.slide_out.setStartValue(self.base_pos)
+        offset = QPoint(-40 if slide_dir == "left" else 40, 0)
+        self.slide_out.setEndValue(self.base_pos + offset)
+        self.slide_out.setEasingCurve(QEasingCurve.Type.InCubic)
+        
+        self.out_anim_group.addAnimation(self.fade_out)
+        self.out_anim_group.addAnimation(self.slide_out)
+        self.out_anim_group.finished.connect(self._on_transition_midpoint)
+        self.out_anim_group.start()
+
+    def _on_transition_midpoint(self):
+        try:
+            self.out_anim_group.finished.disconnect(self._on_transition_midpoint)
+        except Exception:
+            pass
+            
+        self.page_stack.setCurrentIndex(self.target_index)
+        if self.target_filter:
+            self.current_filter = self.target_filter
+            self._update_tab_styles(self.target_filter)
+            self.populate_catalog(self.full_catalog_cache)
+            
+        self.in_anim_group = QParallelAnimationGroup()
+        
+        self.fade_in = QPropertyAnimation(self.page_opacity, b"opacity")
+        self.fade_in.setDuration(200)
+        self.fade_in.setStartValue(0.0)
+        self.fade_in.setEndValue(1.0)
+        
+        self.slide_in = QPropertyAnimation(self.page_stack, b"pos")
+        self.slide_in.setDuration(200)
+        offset = QPoint(40 if self.slide_dir == "left" else -40, 0)
+        self.slide_in.setStartValue(self.base_pos + offset)
+        self.slide_in.setEndValue(self.base_pos)
+        self.slide_in.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        self.in_anim_group.addAnimation(self.fade_in)
+        self.in_anim_group.addAnimation(self.slide_in)
+        self.in_anim_group.start()
+
+    def switch_view_filter(self, filter_mode):
+        tab_indices = {"all": 0, "installed": 1, "updates": 2}
+        curr_idx = tab_indices.get(self.current_filter, 0)
+        targ_idx = tab_indices.get(filter_mode, 0)
+        
+        if targ_idx == curr_idx:
+            if self.page_stack.currentIndex() == 1:
+                self.transition_to(0, filter_mode=filter_mode, slide_dir="right")
+            return
+            
+        slide_dir = "left" if targ_idx > curr_idx else "right"
+        self.transition_to(0, filter_mode=filter_mode, slide_dir=slide_dir)
 
     def load_catalog(self):
         for i in reversed(range(self.list_layout.count())):
@@ -540,8 +778,16 @@ class AppStorePage(QWidget):
             self.list_layout.addWidget(lbl_empty)
             return
 
+        query = self.search_bar.text().lower()
         visible_cards = 0
+
         for app_data in apps_list:
+            # Enforce Live Search
+            if query:
+                search_text = f"{app_data.get('name','')} {app_data.get('author','')} {app_data.get('category','')} {app_data.get('description','')} {app_data.get('expanded_description','')}".lower()
+                if query not in search_text:
+                    continue
+
             card = AppCard(app_data, self.start_install, self.open_app_profile_details)
             
             if self.current_filter == "installed" and not card.is_installed:
@@ -555,7 +801,11 @@ class AppStorePage(QWidget):
             visible_cards += 1
 
         if visible_cards == 0:
-            msg = "No installed applications found." if self.current_filter == "installed" else "All your applications are fully up to date! ✨"
+            if query:
+                msg = f"No apps matching '{query}'."
+            else:
+                msg = "No installed applications found." if self.current_filter == "installed" else "All your applications are fully up to date! ✨"
+                
             lbl_empty = QLabel(msg)
             lbl_empty.setFont(QFont("Google Sans", 16))
             lbl_empty.setStyleSheet("color: #666670; margin-top: 60px;")
@@ -563,8 +813,8 @@ class AppStorePage(QWidget):
             self.list_layout.addWidget(lbl_empty)
 
     def open_app_profile_details(self, app_data, card_reference):
-        self.page_stack.setCurrentIndex(1)
         self.details_section.populate_details(app_data, card_reference)
+        self.transition_to(1, slide_dir="left")
 
     def show_error(self, error_msg):
         for i in reversed(range(self.list_layout.count())):
@@ -602,7 +852,7 @@ class AppStorePage(QWidget):
             
         QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']} v{app_data['version']}!")
         
-        if self.current_filter != "all":
+        if self.current_filter != "all" or self.search_bar.text():
             self.populate_catalog(self.full_catalog_cache)
 
     def on_install_error(self, err_msg):
