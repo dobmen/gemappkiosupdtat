@@ -2,11 +2,11 @@ import os
 import urllib.request
 import json
 import time  
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget
+    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout
 )
 
 # Raw GitHub URL of your store manifest

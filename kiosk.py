@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import ssl
+import time
 import importlib
 import urllib.request
 from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint
@@ -455,8 +456,6 @@ class NestKiosk(QMainWindow):
         notifs_main_layout.addWidget(self.notif_scroll)
 
         self.cc_pages.extend([self.page_settings, self.page_notifs])
-        
-        # Completely empty tray at initial execution
         self.update_notif_header()
 
         # -------------------------------------------------------------
@@ -581,6 +580,40 @@ class NestKiosk(QMainWindow):
             
         self.current_toast = ToastNotification(self, app_name, title, desc, icon, self.launch_app)
         self.current_toast.show_toast()
+
+    # =================================================================
+    # KEYBOARD & DEBUG EVENTS
+    # =================================================================
+    def keyPressEvent(self, event):
+        """Intercepts keyboard events for debug actions."""
+        if event.key() == Qt.Key.Key_Backslash:
+            self.take_screenshot()
+        super().keyPressEvent(event)
+
+    def take_screenshot(self):
+        """Captures the current application state to a PNG file."""
+        try:
+            os.makedirs("screenshots", exist_ok=True)
+            timestamp = int(time.time())
+            
+            # Determine prefix based on currently active app if visible
+            app_name = "kiosk"
+            if not self.app_view.isHidden():
+                for name, widget in self.running_apps.items():
+                    if self.app_stack.currentWidget() == widget:
+                        app_name = name.lower().replace(" ", "_")
+                        break
+
+            filename = f"screenshots/{app_name}_{timestamp}.png"
+            
+            # Capture pixels from main window
+            pixmap = self.grab()
+            pixmap.save(filename, "PNG")
+            
+            # Fire toast notification feedback
+            self.show_toast("App Store", "Screenshot Saved", f"Saved to {filename}", "📸")
+        except Exception as e:
+            print(f"Screenshot error: {e}")
 
     # =================================================================
     # BACKGROUND ENGINE TASKS (SYSTEM & APP STORE)
