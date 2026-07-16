@@ -4,7 +4,7 @@ import urllib.request
 import json
 import time  
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QImage
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout, QGraphicsOpacityEffect, QLineEdit
@@ -15,7 +15,6 @@ MANIFEST_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosstor/main/sto
 
 
 class FetchManifestThread(QThread):
-    """Background thread to fetch the app store catalog without freezing the UI."""
     on_success = pyqtSignal(list)
     on_error = pyqtSignal(str)
 
@@ -38,7 +37,6 @@ class FetchManifestThread(QThread):
 
 
 class DownloadAppThread(QThread):
-    """Background thread to download an app script and icon from GitHub."""
     on_progress = pyqtSignal(int)
     on_finished = pyqtSignal(str)
     on_error = pyqtSignal(str)
@@ -48,6 +46,7 @@ class DownloadAppThread(QThread):
         self.app_data = app_data
 
     def run(self):
+        failed_url = "Unknown"
         try:
             self.on_progress.emit(10)
             
@@ -55,22 +54,27 @@ class DownloadAppThread(QThread):
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-            icon_url = self.app_data["icon_url"]
-            icon_filename = os.path.basename(icon_url)
-            icon_path = os.path.join("icons", icon_filename)
-            os.makedirs("icons", exist_ok=True)
-            
-            req_icon = urllib.request.Request(icon_url, headers={'User-Agent': 'KioskOS'})
-            with urllib.request.urlopen(req_icon, timeout=10, context=ctx) as response:
-                with open(icon_path, 'wb') as f:
-                    f.write(response.read())
+            icon_url = self.app_data.get("icon_url", "").strip()
+            script_url = self.app_data.get("script_url", "").strip()
+
+            if icon_url:
+                failed_url = icon_url
+                icon_filename = os.path.basename(icon_url)
+                icon_path = os.path.join("icons", icon_filename)
+                os.makedirs("icons", exist_ok=True)
+                
+                req_icon = urllib.request.Request(icon_url, headers={'User-Agent': 'KioskOS'})
+                with urllib.request.urlopen(req_icon, timeout=10, context=ctx) as response:
+                    with open(icon_path, 'wb') as f:
+                        f.write(response.read())
             
             self.on_progress.emit(50)
 
+            failed_url = script_url
             os.makedirs("apps", exist_ok=True)
             temp_script = os.path.join("apps", "update.tmp")
             
-            req_script = urllib.request.Request(self.app_data["script_url"], headers={'User-Agent': 'KioskOS'})
+            req_script = urllib.request.Request(script_url, headers={'User-Agent': 'KioskOS'})
             with urllib.request.urlopen(req_script, timeout=10, context=ctx) as response:
                 with open(temp_script, 'wb') as f:
                     f.write(response.read())
@@ -87,16 +91,15 @@ class DownloadAppThread(QThread):
                 
             self.on_finished.emit(self.app_data["name"])
         except Exception as e:
-            self.on_error.emit(f"Failed to install {self.app_data.get('name')}: {str(e)}")
+            self.on_error.emit(f"Failed to download from GitHub.\nBroken Link: {failed_url}\nError: {str(e)}")
 
 
 class NetworkImageThread(QThread):
-    """Asynchronously fetches and crops remote screenshots/icons without stuttering the GUI."""
-    on_image_ready = pyqtSignal(object, QPixmap, QPixmap)
+    on_image_ready = pyqtSignal(object, QImage, QImage)
     
     def __init__(self, url, target_widget, width, height, radius=8):
         super().__init__()
-        self.url = url
+        self.url = url.strip()
         self.target_widget = target_widget
         self.width = width
         self.height = height
@@ -111,14 +114,16 @@ class NetworkImageThread(QThread):
             req = urllib.request.Request(self.url, headers={'User-Agent': 'KioskOS'})
             with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
                 data = response.read()
-                pixmap = QPixmap()
-                pixmap.loadFromData(data)
+                
+                orig_img = QImage()
+                orig_img.loadFromData(data)
 
-                scaled = pixmap.scaled(self.width, self.height, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-                out_pix = QPixmap(self.width, self.height)
-                out_pix.fill(Qt.GlobalColor.transparent)
+                scaled = orig_img.scaled(self.width, self.height, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                
+                thumb_img = QImage(self.width, self.height, QImage.Format.Format_ARGB32_Premultiplied)
+                thumb_img.fill(Qt.GlobalColor.transparent)
 
-                p = QPainter(out_pix)
+                p = QPainter(thumb_img)
                 p.setRenderHint(QPainter.RenderHint.Antialiasing)
                 p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
                 clip = QPainterPath()
@@ -127,17 +132,15 @@ class NetworkImageThread(QThread):
                 
                 x = (self.width - scaled.width()) // 2
                 y = (self.height - scaled.height()) // 2
-                p.drawPixmap(x, y, scaled)
+                p.drawImage(x, y, scaled)
                 p.end()
                 
-                # Pass both the rounded thumbnail and the raw original pixmap
-                self.on_image_ready.emit(self.target_widget, out_pix, pixmap)
+                self.on_image_ready.emit(self.target_widget, thumb_img, orig_img)
         except Exception as e:
-            print(f"Image download exception trace: {e}")
+            print(f"Image download exception trace for {self.url}: {e}")
 
 
 class ClickableScreenshot(QLabel):
-    """A screenshot label that emits its original high-res pixmap when clicked."""
     clicked = pyqtSignal(QPixmap)
     
     def __init__(self):
@@ -155,7 +158,6 @@ class ClickableScreenshot(QLabel):
 
 
 class AppCard(QFrame):
-    """A Google Play style card representing a single app from GitHub."""
     def __init__(self, app_data, install_callback, open_details_callback):
         super().__init__()
         self.app_data = app_data
@@ -246,7 +248,6 @@ class AppCard(QFrame):
 
 
 class AppDetailsSection(QWidget):
-    """Deep detailed section page layout for an application mapping all metadata metrics."""
     def __init__(self, on_back_callback, install_callback, on_screenshot_click):
         super().__init__()
         self.install_callback = install_callback
@@ -259,7 +260,6 @@ class AppDetailsSection(QWidget):
         layout.setContentsMargins(0, 10, 0, 0)
         layout.setSpacing(15)
 
-        # Back Navigation Row
         nav_layout = QHBoxLayout()
         btn_back = QPushButton("◀ Catalog")
         btn_back.setFixedSize(110, 36)
@@ -270,7 +270,6 @@ class AppDetailsSection(QWidget):
         nav_layout.addStretch()
         layout.addLayout(nav_layout)
 
-        # Scroll Area for Profile Contents
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
@@ -285,7 +284,6 @@ class AppDetailsSection(QWidget):
         self.content_layout.setSpacing(25)
         self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # 1. Identity Box Card
         self.identity_card = QFrame()
         self.identity_card.setStyleSheet("background-color: #1C1C22; border: 1px solid #2C2C35; border-radius: 16px;")
         id_layout = QHBoxLayout(self.identity_card)
@@ -319,7 +317,6 @@ class AppDetailsSection(QWidget):
         id_layout.addWidget(self.btn_action)
         self.content_layout.addWidget(self.identity_card)
 
-        # 2. Screenshots Carousel
         self.scr_scroll = QScrollArea()
         self.scr_scroll.setFixedHeight(170)
         self.scr_scroll.setWidgetResizable(True)
@@ -335,7 +332,6 @@ class AppDetailsSection(QWidget):
         self.scr_scroll.setWidget(self.scr_container)
         self.content_layout.addWidget(self.scr_scroll)
 
-        # 3. Description Block
         self.lbl_desc_title = QLabel("About this application")
         self.lbl_desc_title.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
         self.lbl_desc = QLabel()
@@ -345,7 +341,6 @@ class AppDetailsSection(QWidget):
         self.content_layout.addWidget(self.lbl_desc_title)
         self.content_layout.addWidget(self.lbl_desc)
 
-        # 4. Metadata Details Spec Table
         self.spec_card = QFrame()
         self.spec_card.setStyleSheet("background-color: #14141A; border-radius: 12px; border: 1px solid #22222A;")
         spec_layout = QGridLayout(self.spec_card)
@@ -371,9 +366,11 @@ class AppDetailsSection(QWidget):
         scroll.setWidget(container)
         layout.addWidget(scroll)
 
-    def apply_downloaded_image(self, widget, thumb_pix, orig_pix):
-        """Callback to apply newly downloaded images to UI labels seamlessly."""
+    def apply_downloaded_image(self, widget, thumb_img, orig_img):
         try:
+            thumb_pix = QPixmap.fromImage(thumb_img)
+            orig_pix = QPixmap.fromImage(orig_img)
+            
             widget.setPixmap(thumb_pix)
             widget.setStyleSheet("background-color: transparent;")
             if hasattr(widget, 'original_pixmap'):
@@ -464,7 +461,6 @@ class AppDetailsSection(QWidget):
 
 
 class AppStorePage(QWidget):
-    """The Main App Store UI Module with clean Tabbed layout architectures."""
     def __init__(self, on_install_success=None):
         super().__init__()
         self.on_install_success = on_install_success
@@ -482,7 +478,6 @@ class AppStorePage(QWidget):
         header_layout.addWidget(self.title_lbl)
         header_layout.addStretch()
 
-        # Expanding Search Engine
         search_layout = QHBoxLayout()
         search_layout.setSpacing(5)
 
@@ -517,7 +512,6 @@ class AppStorePage(QWidget):
         header_layout.addLayout(search_layout)
         header_layout.addSpacing(10)
 
-        # Tab Navigation
         self.btn_tab_all = QPushButton("Catalog")
         self.btn_tab_installed = QPushButton("Installed")
         self.btn_tab_updates = QPushButton("Need Updating")
@@ -546,14 +540,11 @@ class AppStorePage(QWidget):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
-        # -------------------------------------------------------------
-        # PAGE TRANSITION SYSTEM
-        # -------------------------------------------------------------
         self.page_stack = QStackedWidget()
         
-        # Setup opacity effect for smooth fading transitions
         self.page_opacity = QGraphicsOpacityEffect(self.page_stack)
         self.page_stack.setGraphicsEffect(self.page_opacity)
+        self.page_opacity.setEnabled(False)  # <-- FIX: Default opacity effect OFF
         
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -583,9 +574,6 @@ class AppStorePage(QWidget):
         self.setup_fullscreen_overlay()
         self.load_catalog()
 
-    # -------------------------------------------------------------
-    # EXPANDING SEARCH BAR ANIMATION
-    # -------------------------------------------------------------
     def toggle_search(self):
         if not hasattr(self, 'search_anim'):
             self.search_anim = QPropertyAnimation(self.search_bar, b"maximumWidth")
@@ -599,12 +587,10 @@ class AppStorePage(QWidget):
             pass
 
         if self.search_bar.maximumWidth() > 0:
-            # Collapse
             self.search_anim.setStartValue(self.search_bar.maximumWidth())
             self.search_anim.setEndValue(0)
             self.search_anim.finished.connect(self.search_bar.clear)
         else:
-            # Expand
             self.search_anim.setStartValue(0)
             self.search_anim.setEndValue(220)
             self.search_bar.setFocus()
@@ -612,14 +598,9 @@ class AppStorePage(QWidget):
         self.search_anim.start()
 
     def on_search_query_changed(self, text):
-        """Fires in real-time as the user types to live-filter the catalog."""
         self.populate_catalog(self.full_catalog_cache)
 
-    # -------------------------------------------------------------
-    # FULLSCREEN SCREENSHOT ENGINE
-    # -------------------------------------------------------------
     def setup_fullscreen_overlay(self):
-        """Creates an absolute floating layer for fullscreen image viewing."""
         self.fullscreen_view = QFrame(self)
         self.fullscreen_view.setStyleSheet("background-color: rgba(0, 0, 0, 240);")
         self.fullscreen_view.hide()
@@ -659,16 +640,12 @@ class AppStorePage(QWidget):
     def hide_fullscreen(self):
         self.fullscreen_view.hide()
 
-    # -------------------------------------------------------------
-    # SLIDE & FADE ANIMATION ENGINE
-    # -------------------------------------------------------------
     def _update_tab_styles(self, filter_mode):
         self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
         self.btn_tab_installed.setStyleSheet(self.tab_active_css if filter_mode == "installed" else self.tab_inactive_css)
         self.btn_tab_updates.setStyleSheet(self.tab_active_css if filter_mode == "updates" else self.tab_inactive_css)
 
     def transition_to(self, target_index, filter_mode=None, slide_dir="left"):
-        """Crossfades gracefully to a new page index and tab layout with directional slide."""
         if self.page_stack.currentIndex() == target_index and (filter_mode is None or filter_mode == self.current_filter):
             return
             
@@ -683,6 +660,8 @@ class AppStorePage(QWidget):
         self.target_index = target_index
         self.target_filter = filter_mode
         self.slide_dir = slide_dir
+        
+        self.page_opacity.setEnabled(True)  # <-- FIX: Enable opacity strictly for the animation
         
         if not hasattr(self, 'out_anim_group') or self.out_anim_group.state() != QPropertyAnimation.State.Running:
             self.base_pos = self.page_stack.pos()
@@ -734,7 +713,15 @@ class AppStorePage(QWidget):
         
         self.in_anim_group.addAnimation(self.fade_in)
         self.in_anim_group.addAnimation(self.slide_in)
+        self.in_anim_group.finished.connect(self._on_transition_finished)
         self.in_anim_group.start()
+
+    def _on_transition_finished(self):
+        try:
+            self.in_anim_group.finished.disconnect(self._on_transition_finished)
+        except Exception:
+            pass
+        self.page_opacity.setEnabled(False)  # <-- FIX: Disable completely when done
 
     def switch_view_filter(self, filter_mode):
         tab_indices = {"all": 0, "installed": 1, "updates": 2}
@@ -782,7 +769,6 @@ class AppStorePage(QWidget):
         visible_cards = 0
 
         for app_data in apps_list:
-            # Enforce Live Search
             if query:
                 search_text = f"{app_data.get('name','')} {app_data.get('author','')} {app_data.get('category','')} {app_data.get('description','')} {app_data.get('expanded_description','')}".lower()
                 if query not in search_text:
