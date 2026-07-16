@@ -40,7 +40,8 @@ class ModernDialog(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        self.setFixedSize(400, 220)
+        # Increased size to comfortably fit longer word-wrapped messages
+        self.setFixedSize(460, 260)
 
         # Main Layout
         layout = QVBoxLayout(self)
