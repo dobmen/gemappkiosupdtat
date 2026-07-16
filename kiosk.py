@@ -47,6 +47,54 @@ class SystemUpdateCheckThread(QThread):
             pass
 
 
+class AppStoreUpdateCheckThread(QThread):
+    """Background worker that checks for updates only for locally installed applications to prevent ghost notifications."""
+    updates_detected = pyqtSignal(list)
+
+    def run(self):
+        try:
+            # 1. Identify which apps are genuinely installed locally
+            installed_modules = []
+            if os.path.exists("apps"):
+                for filename in os.listdir("apps"):
+                    if filename.endswith(".py") and filename not in ["__init__.py", "app_store.py", "local_music.py", "web_app.py", "settings.py"]:
+                        installed_modules.append(filename.replace(".py", ""))
+
+            if not installed_modules:
+                return
+
+            # 2. Get local app version configurations
+            local_versions = {}
+            if os.path.exists("apps_version.json"):
+                with open("apps_version.json", "r") as f:
+                    local_versions = json.load(f)
+
+            # 3. Check remote repository versions mapping
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            url = "https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/main/apps_version.json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'KioskOS-AppUpdater/1.0'})
+            
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
+                remote_versions = json.loads(response.read().decode('utf-8'))
+                
+                apps_needing_update = []
+                for app_id in installed_modules:
+                    if app_id in remote_versions:
+                        current_v = local_versions.get(app_id, "0.1.0")
+                        remote_v = remote_versions[app_id]
+                        if remote_v != current_v:
+                            clean_name = app_id.replace("_", " ").title()
+                            apps_needing_update.append(clean_name)
+                            
+                if apps_needing_update:
+                    self.updates_detected.emit(apps_needing_update)
+        except Exception:
+            pass
+
+
 class ToastNotification(QFrame):
     """A One UI style system-wide heads-up notification pop-up."""
     def __init__(self, parent, app_name, title, desc, icon_char, click_callback):
@@ -97,7 +145,6 @@ class ToastNotification(QFrame):
     def show_toast(self):
         self.raise_()
         self.show()
-        # Center horizontally: (1024 - 420) / 2 = 302
         self.pos_anim.setStartValue(QPoint(302, -100))
         self.pos_anim.setEndValue(QPoint(302, 25))
         self.pos_anim.start()
@@ -244,6 +291,7 @@ class NestKiosk(QMainWindow):
         self.active_gesture = None  
         self.running_apps = {} 
         self.current_toast = None
+        self.empty_label = None
 
         # -------------------------------------------------------------
         # 1. MAIN SCREEN CAROUSEL
@@ -292,7 +340,7 @@ class NestKiosk(QMainWindow):
         self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold;")
 
         # -------------------------------------------------------------
-        # 2. CONTROL CENTER (Redesigned for Consistency)
+        # 2. CONTROL CENTER
         # -------------------------------------------------------------
         self.control_center = SlidingPanel(self, QRect(0, -500, 1024, 500), QRect(0, 0, 1024, 500))
         self.control_center.setStyleSheet("background-color: #16161A; border-bottom: 2px solid #282830;")
@@ -318,7 +366,6 @@ class NestKiosk(QMainWindow):
         self.btn_tab_settings.clicked.connect(lambda: self.switch_cc_page(0))
         self.btn_tab_notifs.clicked.connect(lambda: self.switch_cc_page(1))
         
-        # Tabs centered, Back button completely removed
         header_layout.addStretch()
         header_layout.addWidget(self.btn_tab_settings)
         header_layout.addWidget(self.btn_tab_notifs)
@@ -329,7 +376,7 @@ class NestKiosk(QMainWindow):
         self.cc_index = 0
         self.cc_pages = []
 
-        # Page 0: Quick Settings (Now housed inside a cohesive card)
+        # Page 0: Quick Settings
         self.page_settings = QWidget(self.cc_carousel)
         self.page_settings.setGeometry(0, 0, 1024, 440)
         settings_layout = QVBoxLayout(self.page_settings)
@@ -408,7 +455,9 @@ class NestKiosk(QMainWindow):
         notifs_main_layout.addWidget(self.notif_scroll)
 
         self.cc_pages.extend([self.page_settings, self.page_notifs])
-        self.populate_initial_notifications()
+        
+        # Completely empty tray at initial execution
+        self.update_notif_header()
 
         # -------------------------------------------------------------
         # 3. RESPONSIVE APP DRAWER
@@ -513,12 +562,17 @@ class NestKiosk(QMainWindow):
         self.edge_interceptor.raise_() 
 
         # -------------------------------------------------------------
-        # 5. DAILY BACKGROUND SYSTEM UPDATE CHECKER
+        # 5. DUAL BACKGROUND RECURRING ENGINE UPDATERS
         # -------------------------------------------------------------
         self.update_check_timer = QTimer(self)
         self.update_check_timer.timeout.connect(self.check_for_system_update)
         self.update_check_timer.start(86400000) 
         QTimer.singleShot(5000, self.check_for_system_update)
+
+        self.app_update_timer = QTimer(self)
+        self.app_update_timer.timeout.connect(self.check_for_app_updates)
+        self.app_update_timer.start(86400000) 
+        QTimer.singleShot(8000, self.check_for_app_updates)
 
     def show_toast(self, app_name, title, desc, icon):
         """Creates and fires a One UI system-wide pop-up notification."""
@@ -529,7 +583,7 @@ class NestKiosk(QMainWindow):
         self.current_toast.show_toast()
 
     # =================================================================
-    # BACKGROUND SYSTEM UPDATE CHECKER
+    # BACKGROUND ENGINE TASKS (SYSTEM & APP STORE)
     # =================================================================
     def check_for_system_update(self):
         if hasattr(self, 'update_thread') and self.update_thread and self.update_thread.isRunning():
@@ -548,18 +602,26 @@ class NestKiosk(QMainWindow):
         self.add_notification("Settings", desc, "⚙️")
         self.show_toast("Settings", "System Update", desc, "⚙️")
 
+    def check_for_app_updates(self):
+        """Spawns an isolated thread checking remote repository packages mapping local files only."""
+        if hasattr(self, 'app_update_thread') and self.app_update_thread and self.app_update_thread.isRunning():
+            return
+        self.app_update_thread = AppStoreUpdateCheckThread()
+        self.app_update_thread.updates_detected.connect(self.on_app_updates_detected)
+        self.app_update_thread.finished.connect(self.app_update_thread.deleteLater)
+        self.app_update_thread.start()
+
+    def on_app_updates_detected(self, apps_list):
+        count = len(apps_list)
+        toast_desc = f"{count} app{'s' if count > 1 else ''} need updates."
+        expanded_desc = f"Updates available for: {', '.join(apps_list)}."
+        
+        self.add_notification("App Store", expanded_desc, "📦")
+        self.show_toast("App Store", "App Updates", toast_desc, "📦")
+
     # =================================================================
     # NOTIFICATION CENTER METHODS
     # =================================================================
-    def populate_initial_notifications(self):
-        alerts = [
-            ("System Status", "Universal Wi-Fi Mode is active and optimized for over-the-air OTA updates.", "⚙️"),
-            ("Spotify Remote", "Connected to AirPlay Speaker. Ready for lossless audio playback.", "🎧"),
-            ("App Store", "2 application updates available in repository (Gemini App Store).", "📦")
-        ]
-        for title, desc, icon in alerts:
-            self.add_notification(title, desc, icon)
-
     def add_notification(self, title, desc, icon="🔔"):
         card = QFrame()
         card.setStyleSheet("background-color: #22222B; border-radius: 12px; border: 1px solid #2F2F3B;")
@@ -612,22 +674,27 @@ class NestKiosk(QMainWindow):
     def clear_all_notifications(self):
         for i in reversed(range(self.notif_layout.count())):
             item = self.notif_layout.itemAt(i)
-            if item.widget():
+            if item.widget() and item.widget() != self.empty_label:
                 item.widget().deleteLater()
         QTimer.singleShot(50, self.update_notif_header)
 
     def update_notif_header(self):
-        count = self.notif_layout.count()
+        count = 0
+        for i in range(self.notif_layout.count()):
+            w = self.notif_layout.itemAt(i).widget()
+            if w and w != self.empty_label:
+                count += 1
+
         if count == 0:
             self.lbl_notif_count.setText("No New Notifications")
-            if not hasattr(self, 'empty_label') or not self.empty_label:
+            if not self.empty_label:
                 self.empty_label = QLabel("You're all caught up! ✨")
                 self.empty_label.setFont(QFont("Google Sans", 16))
                 self.empty_label.setStyleSheet("color: #666670; margin-top: 40px;")
                 self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.notif_layout.addWidget(self.empty_label)
         else:
-            if hasattr(self, 'empty_label') and self.empty_label:
+            if self.empty_label:
                 self.empty_label.deleteLater()
                 self.empty_label = None
             self.lbl_notif_count.setText(f"Recent Alerts ({count})")
@@ -965,10 +1032,6 @@ class NestKiosk(QMainWindow):
     # =================================================================
     # APP LAUNCHING & ROUTING
     # =================================================================
-    def update_clock(self):
-        self.lbl_time.setText(QTime.currentTime().toString("HH:mm"))
-        self.lbl_date.setText(QDate.currentDate().toString("dddd, MMMM d"))
-
     def launch_app(self, app_name):
         self.app_drawer.slide_out()
         self.task_ribbon.hide()

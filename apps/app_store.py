@@ -1,12 +1,12 @@
 import os
 import urllib.request
 import json
-import time  # Used for CDN cache-busting
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
-from PyQt6.QtGui import QFont
+import time  
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller
+    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget
 )
 
 # Raw GitHub URL of your store manifest
@@ -20,9 +20,7 @@ class FetchManifestThread(QThread):
 
     def run(self):
         try:
-            # Append a live timestamp query parameter to bypass GitHub's raw CDN cache
             cache_busting_url = f"{MANIFEST_URL}?t={int(time.time())}"
-            
             req = urllib.request.Request(
                 cache_busting_url, 
                 headers={'User-Agent': 'Mozilla/5.0 (Kiosk OS)'}
@@ -47,8 +45,6 @@ class DownloadAppThread(QThread):
     def run(self):
         try:
             self.on_progress.emit(10)
-            
-            # 1. Download the icon file into icons/
             icon_url = self.app_data["icon_url"]
             icon_filename = os.path.basename(icon_url)
             icon_path = os.path.join("icons", icon_filename)
@@ -56,17 +52,14 @@ class DownloadAppThread(QThread):
             urllib.request.urlretrieve(icon_url, icon_path)
             self.on_progress.emit(50)
 
-            # 2. Download to a .tmp file first for atomic updating
             os.makedirs("apps", exist_ok=True)
             temp_script = os.path.join("apps", "update.tmp")
             urllib.request.urlretrieve(self.app_data["script_url"], temp_script)
             self.on_progress.emit(80)
             
-            # 3. Only replace the real file if download succeeds
             target_script = os.path.join("apps", self.app_data["filename"])
             os.replace(temp_script, target_script)
             
-            # 4. Update the .ver companion file
             ver_path = target_script.replace(".py", ".ver")
             with open(ver_path, "w") as f:
                 f.write(str(self.app_data["version"]))
@@ -79,19 +72,16 @@ class DownloadAppThread(QThread):
 
 class AppCard(QFrame):
     """A Google Play style card representing a single app from GitHub."""
-    def __init__(self, app_data, install_callback):
+    def __init__(self, app_data, install_callback, open_details_callback):
         super().__init__()
         self.app_data = app_data
         self.install_callback = install_callback
+        self.open_details_callback = open_details_callback
         
-        # Minimum height ensures multi-line descriptions don't get cut off
         self.setMinimumHeight(145)
         self.setStyleSheet("""
-            AppCard {
-                background-color: #1C1C22;
-                border: 1px solid #2C2C35;
-                border-radius: 12px;
-            }
+            AppCard { background-color: #1C1C22; border: 1px solid #2C2C35; border-radius: 12px; }
+            AppCard:hover { background-color: #24242E; border-color: #3C3C45; }
         """)
 
         layout = QHBoxLayout(self)
@@ -104,22 +94,22 @@ class AppCard(QFrame):
         
         lbl_name = QLabel(f"{app_data['name']} (v{app_data['version']})")
         lbl_name.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
-        lbl_name.setStyleSheet("color: white; border: none;")
+        lbl_name.setStyleSheet("color: white; border: none; background: transparent;")
         
         lbl_author = QLabel(f"By {app_data.get('author', 'Unknown')}")
         lbl_author.setFont(QFont("Google Sans", 12))
-        lbl_author.setStyleSheet("color: #888888; border: none;")
+        lbl_author.setStyleSheet("color: #888888; border: none; background: transparent;")
         
         lbl_desc = QLabel(app_data['description'])
         lbl_desc.setFont(QFont("Google Sans", 14))
-        lbl_desc.setStyleSheet("color: #CCCCCC; border: none;")
+        lbl_desc.setStyleSheet("color: #CCCCCC; border: none; background: transparent;")
         lbl_desc.setWordWrap(True)
 
         info_layout.addWidget(lbl_name)
         info_layout.addWidget(lbl_author)
         info_layout.addWidget(lbl_desc)
 
-        # 1. DETERMINE VERSION & INSTALL STATE FIRST
+        # Determine version & install state
         local_script = os.path.join("apps", app_data["filename"])
         ver_path = local_script.replace(".py", ".ver")
         
@@ -131,71 +121,282 @@ class AppCard(QFrame):
         
         self.needs_update = self.is_installed and (str(app_data["version"]) > installed_version)
 
-        # 2. CREATE BUTTON USING THOSE STATES
         self.btn_install = QPushButton()
         self.btn_install.setFixedSize(130, 45)
         self.btn_install.setCursor(Qt.CursorShape.PointingHandCursor)
         self.update_button_style()
-        self.btn_install.clicked.connect(self.on_click)
+        self.btn_install.clicked.connect(self.on_install_click)
 
         layout.addLayout(info_layout)
         layout.addStretch()
         layout.addWidget(self.btn_install, alignment=Qt.AlignmentFlag.AlignVCenter)
 
     def update_button_style(self):
-        """Cleanly sets the button styling based on install and update status."""
         if self.needs_update:
             self.btn_install.setText("⬆ Update")
             self.btn_install.setStyleSheet("""
-                QPushButton { background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; }
+                QPushButton { background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none; }
                 QPushButton:hover { background-color: #E67E22; }
             """)
         elif self.is_installed:
             self.btn_install.setText("Installed")
             self.btn_install.setStyleSheet("""
-                QPushButton { background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 15px; }
+                QPushButton { background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 15px; border: none; }
                 QPushButton:hover { background-color: #383845; color: white; }
             """)
         else:
             self.btn_install.setText("⬇ Install")
             self.btn_install.setStyleSheet("""
-                QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; }
+                QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none; }
                 QPushButton:hover { background-color: #4A7DDF; }
             """)
 
-    def on_click(self):
+    def on_install_click(self):
         self.btn_install.setEnabled(False)
         self.btn_install.setText("Updating..." if self.needs_update else "Installing...")
         self.install_callback(self.app_data, self)
 
+    def mouseReleaseEvent(self, event):
+        # Intercept card background taps to launch deep detail sub-section view
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Don't trigger details if the user explicitly clicked the action button bounds
+            if not self.btn_install.geometry().contains(event.position().toPoint()):
+                self.open_details_callback(self.app_data, self)
+        super().mouseReleaseEvent(event)
+
+
+class AppDetailsSection(QWidget):
+    """Deep detailed section page layout for an application mapping all metadata metrics."""
+    def __init__(self, on_back_callback, install_callback):
+        super().__init__()
+        self.install_callback = install_callback
+        self.active_card = None
+        self.app_data = None
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 10, 0, 0)
+        layout.setSpacing(15)
+
+        # Back Navigation Row
+        nav_layout = QHBoxLayout()
+        btn_back = QPushButton("◀ Catalog")
+        btn_back.setFixedSize(110, 36)
+        btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_back.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 8px; font-weight: bold; border: none;")
+        btn_back.clicked.connect(on_back_callback)
+        nav_layout.addWidget(btn_back)
+        nav_layout.addStretch()
+        layout.addLayout(nav_layout)
+
+        # Scroll Area for Profile Contents
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        self.content_layout = QVBoxLayout(container)
+        self.content_layout.setContentsMargins(10, 10, 10, 50)
+        self.content_layout.setSpacing(25)
+        self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        # 1. Identity Box Card (Icon, Title, Category, Action Button)
+        self.identity_card = QFrame()
+        self.identity_card.setStyleSheet("background-color: #1C1C22; border: 1px solid #2C2C35; border-radius: 16px;")
+        id_layout = QHBoxLayout(self.identity_card)
+        id_layout.setContentsMargins(20, 20, 20, 20)
+        id_layout.setSpacing(20)
+
+        self.lbl_icon = QLabel()
+        self.lbl_icon.setFixedSize(80, 80)
+        self.lbl_icon.setStyleSheet("background-color: #2C2C35; border-radius: 40px;")
+        self.lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        title_box = QVBoxLayout()
+        title_box.setSpacing(4)
+        self.lbl_name = QLabel()
+        self.lbl_name.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        self.lbl_name.setStyleSheet("color: white; border: none;")
+        
+        self.lbl_author_cat = QLabel()
+        self.lbl_author_cat.setFont(QFont("Google Sans", 13))
+        self.lbl_author_cat.setStyleSheet("color: #888888; border: none;")
+        title_box.addWidget(self.lbl_name)
+        title_box.addWidget(self.lbl_author_cat)
+
+        self.btn_action = QPushButton()
+        self.btn_action.setFixedSize(140, 48)
+        self.btn_action.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_action.clicked.connect(self.on_action_clicked)
+
+        id_layout.addWidget(self.lbl_icon)
+        id_layout.addLayout(title_box, stretch=1)
+        id_layout.addWidget(self.btn_action)
+        self.content_layout.addWidget(self.identity_card)
+
+        # 2. Screenshots Carousel Row Section
+        self.scr_scroll = QScrollArea()
+        self.scr_scroll.setFixedHeight(170)
+        self.scr_scroll.setWidgetResizable(True)
+        self.scr_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.scr_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scr_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        QScroller.grabGesture(self.scr_scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        
+        self.scr_container = QWidget()
+        self.scr_layout = QHBoxLayout(self.scr_container)
+        self.scr_layout.setContentsMargins(0, 0, 0, 0)
+        self.scr_layout.setSpacing(14)
+        self.scr_scroll.setWidget(self.scr_container)
+        self.content_layout.addWidget(self.scr_scroll)
+
+        # 3. Description Block
+        self.lbl_desc_title = QLabel("About this application")
+        self.lbl_desc_title.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        self.lbl_desc = QLabel()
+        self.lbl_desc.setFont(QFont("Google Sans", 14))
+        self.lbl_desc.setStyleSheet("color: #CCCCCC; line-height: 22px;")
+        self.lbl_desc.setWordWrap(True)
+        self.content_layout.addWidget(self.lbl_desc_title)
+        self.content_layout.addWidget(self.lbl_desc)
+
+        # 4. Metadata Details Spec Table Grid Card
+        self.spec_card = QFrame()
+        self.spec_card.setStyleSheet("background-color: #14141A; border-radius: 12px; border: 1px solid #22222A;")
+        spec_layout = QGridLayout(self.spec_card)
+        spec_layout.setContentsMargins(20, 15, 20, 15)
+        spec_layout.setSpacing(15)
+
+        self.lbl_meta_ver_title = QLabel("Version")
+        self.lbl_meta_ver_title.setStyleSheet("color: #666670; font-size: 13px; font-weight: bold; border: none;")
+        self.lbl_meta_ver = QLabel()
+        self.lbl_meta_ver.setStyleSheet("color: white; font-size: 14px; border: none;")
+        
+        self.lbl_meta_size_title = QLabel("Storage Needed")
+        self.lbl_meta_size_title.setStyleSheet("color: #666670; font-size: 13px; font-weight: bold; border: none;")
+        self.lbl_meta_size = QLabel()
+        self.lbl_meta_size.setStyleSheet("color: white; font-size: 14px; border: none;")
+
+        spec_layout.addWidget(self.lbl_meta_ver_title, 0, 0)
+        spec_layout.addWidget(self.lbl_meta_ver, 1, 0)
+        spec_layout.addWidget(self.lbl_meta_size_title, 0, 1)
+        spec_layout.addWidget(self.lbl_meta_size, 1, 1)
+        self.content_layout.addWidget(self.spec_card)
+
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+
+    def populate_details(self, app_data, card_reference):
+        self.app_data = app_data
+        self.active_card = card_reference
+
+        # Sync header text metrics
+        self.lbl_name.setText(app_data['name'])
+        self.lbl_author_cat.setText(f"By {app_data.get('author', 'Unknown')} • {app_data.get('category', 'Utility')}")
+        
+        # Pull description fields safely
+        desc_text = app_data.get('expanded_description') or app_data.get('description', '')
+        self.lbl_desc.setText(desc_text)
+        
+        # Spec table metrics
+        self.lbl_meta_ver.setText(str(app_data['version']))
+        self.lbl_meta_size.setText(app_data.get('storage_needed', 'Unknown Size'))
+
+        # Mock Rounded Mock App Icon
+        icon_pix = QPixmap(80, 80)
+        icon_pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(icon_pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setBrush(QColor("#5A8DEF"))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(0, 0, 80, 80)
+        p.setPen(QColor("white"))
+        p.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
+        p.drawText(QRect(0, 0, 80, 80), Qt.AlignmentFlag.AlignCenter, app_data['name'][0].upper())
+        p.end()
+        self.lbl_icon.setPixmap(icon_pix)
+
+        # Rebuild screenshot layout elements dynamically
+        for i in reversed(range(self.scr_layout.count())):
+            self.scr_layout.itemAt(i).widget().setParent(None)
+
+        screenshots = app_data.get('screenshots', [])
+        if screenshots:
+            self.scr_scroll.show()
+            for s_url in screenshots:
+                mock_scr = QFrame()
+                mock_scr.setFixedSize(240, 140)
+                mock_scr.setStyleSheet("background-color: #2C2C35; border-radius: 8px; border: 1px solid #3C3C45;")
+                self.scr_layout.addWidget(mock_scr)
+        else:
+            self.scr_scroll.hide()
+
+        self.update_action_button_style()
+
+    def update_action_button_style(self):
+        if not self.active_card: return
+        self.btn_action.setEnabled(True)
+        if self.active_card.needs_update:
+            self.btn_action.setText("⬆ Update")
+            self.btn_action.setStyleSheet("background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none;")
+        elif self.active_card.is_installed:
+            self.btn_action.setText("Installed")
+            self.btn_action.setStyleSheet("background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 15px; border: none;")
+        else:
+            self.btn_action.setText("⬇ Install")
+            self.btn_action.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none;")
+
+    def on_action_clicked(self):
+        self.btn_action.setEnabled(False)
+        self.btn_action.setText("Processing...")
+        self.install_callback(self.app_data, self.active_card)
+
 
 class AppStorePage(QWidget):
-    """The Main App Store UI Module."""
+    """The Main App Store UI Module with clean Tabbed layout architectures."""
     def __init__(self, on_install_success=None):
         super().__init__()
         self.on_install_success = on_install_success
+        self.full_catalog_cache = []
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 20, 40, 30)
         layout.setSpacing(15)
 
-        # Header Section
+        # --- Top Section Header Bar Row ---
         header_layout = QHBoxLayout()
-        title = QLabel("GitHub App Store")
-        title.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
-        title.setStyleSheet("color: white;")
-        
-        btn_refresh = QPushButton("🔄 Refresh Catalog")
-        btn_refresh.setFixedSize(160, 40)
-        btn_refresh.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 8px; font-weight: bold;")
-        btn_refresh.clicked.connect(self.load_catalog)
-
-        header_layout.addWidget(title)
+        self.title_lbl = QLabel("GitHub App Store")
+        self.title_lbl.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
+        self.title_lbl.setStyleSheet("color: white;")
+        header_layout.addWidget(self.title_lbl)
         header_layout.addStretch()
-        header_layout.addWidget(btn_refresh)
+
+        # Section Tab Switches
+        self.btn_tab_all = QPushButton("Catalog")
+        self.btn_tab_installed = QPushButton("Installed")
+        self.btn_tab_updates = QPushButton("Need Updating")
+        
+        self.tab_active_css = "background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 13px; padding: 6px 14px; border: none;"
+        self.tab_inactive_css = "background-color: #2C2C35; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 13px; padding: 6px 14px; border: none;"
+        
+        self.btn_tab_all.setStyleSheet(self.tab_active_css)
+        self.btn_tab_installed.setStyleSheet(self.tab_inactive_css)
+        self.btn_tab_updates.setStyleSheet(self.tab_inactive_css)
+
+        for btn in [self.btn_tab_all, self.btn_tab_installed, self.btn_tab_updates]:
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            header_layout.addWidget(btn)
+
+        self.btn_tab_all.clicked.connect(lambda: self.switch_view_filter("all"))
+        self.btn_tab_installed.clicked.connect(lambda: self.switch_view_filter("installed"))
+        self.btn_tab_updates.clicked.connect(lambda: self.switch_view_filter("updates"))
+        
         layout.addLayout(header_layout)
 
-        # Progress Bar for active downloads
+        # Download Tracker Engine Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(6)
         self.progress_bar.setTextVisible(False)
@@ -203,39 +404,48 @@ class AppStorePage(QWidget):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
-        # -------------------------------------------------------------
-        # SCROLLABLE STORE LIST WITH TOUCH SWIPE ENABLED
-        # -------------------------------------------------------------
+        # Multi-View Display Stack Router
+        self.page_stack = QStackedWidget()
+        
+        # 1. Main scrollable listing widget box
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-        
-        # Hide ugly desktop scrollbars for a clean mobile app look
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        
-        # =============================================================
-        # NEW: ENABLE KINETIC TOUCH SWIPE SCROLLING!
-        # =============================================================
-        QScroller.grabGesture(
-            self.scroll_area.viewport(), 
-            QScroller.ScrollerGestureType.LeftMouseButtonGesture
-        )
+        QScroller.grabGesture(self.scroll_area.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         
         self.list_container = QWidget()
         self.list_container.setStyleSheet("background: transparent;")
         self.list_layout = QVBoxLayout(self.list_container)
         self.list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.list_layout.setSpacing(14)
-        
         self.scroll_area.setWidget(self.list_container)
-        layout.addWidget(self.scroll_area)
+        
+        # 2. Detailed Info Deep-Link Sub-Section
+        self.details_section = AppDetailsSection(
+            on_back_callback=lambda: self.page_stack.setCurrentIndex(0),
+            install_callback=self.start_install
+        )
+        
+        self.page_stack.addWidget(self.scroll_area)
+        self.page_stack.addWidget(self.details_section)
+        layout.addWidget(self.page_stack)
 
-        # Initial fetch
+        self.current_filter = "all"
         self.load_catalog()
 
+    def switch_view_filter(self, filter_mode):
+        self.current_filter = filter_mode
+        self.page_stack.setCurrentIndex(0) # Route home to listing view
+        
+        self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
+        self.btn_tab_installed.setStyleSheet(self.tab_active_css if filter_mode == "installed" else self.tab_inactive_css)
+        self.btn_tab_updates.setStyleSheet(self.tab_active_css if filter_mode == "updates" else self.tab_inactive_css)
+        
+        self.populate_catalog(self.full_catalog_cache)
+
     def load_catalog(self):
-        """Clears current cards and fetches fresh data from GitHub."""
         for i in reversed(range(self.list_layout.count())):
             self.list_layout.itemAt(i).widget().setParent(None)
 
@@ -246,9 +456,13 @@ class AppStorePage(QWidget):
         self.list_layout.addWidget(lbl_loading)
 
         self.fetcher = FetchManifestThread()
-        self.fetcher.on_success.connect(self.populate_catalog)
+        self.fetcher.on_success.connect(self.cache_and_populate)
         self.fetcher.on_error.connect(self.show_error)
         self.fetcher.start()
+
+    def cache_and_populate(self, apps_list):
+        self.full_catalog_cache = apps_list
+        self.populate_catalog(apps_list)
 
     def populate_catalog(self, apps_list):
         for i in reversed(range(self.list_layout.count())):
@@ -260,9 +474,32 @@ class AppStorePage(QWidget):
             self.list_layout.addWidget(lbl_empty)
             return
 
+        visible_cards = 0
         for app_data in apps_list:
-            card = AppCard(app_data, self.start_install)
+            card = AppCard(app_data, self.start_install, self.open_app_profile_details)
+            
+            if self.current_filter == "installed" and not card.is_installed:
+                card.deleteLater()
+                continue
+            if self.current_filter == "updates" and not card.needs_update:
+                card.deleteLater()
+                continue
+                
             self.list_layout.addWidget(card)
+            visible_cards += 1
+
+        if visible_cards == 0:
+            msg = "No installed applications found." if self.current_filter == "installed" else "All your applications are fully up to date! ✨"
+            lbl_empty = QLabel(msg)
+            lbl_empty.setFont(QFont("Google Sans", 16))
+            lbl_empty.setStyleSheet("color: #666670; margin-top: 60px;")
+            lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.list_layout.addWidget(lbl_empty)
+
+    def open_app_profile_details(self, app_data, card_reference):
+        """Routes container view index to detailed sub-section profile dashboard mapping layout metrics."""
+        self.page_stack.setCurrentIndex(1)
+        self.details_section.populate_details(app_data, card_reference)
 
     def show_error(self, error_msg):
         for i in reversed(range(self.list_layout.count())):
@@ -275,33 +512,35 @@ class AppStorePage(QWidget):
         self.list_layout.addWidget(lbl_err)
 
     def start_install(self, app_data, card_reference):
-        """Triggers background download of script and icon."""
         self.progress_bar.setValue(0)
         self.progress_bar.show()
 
         self.downloader = DownloadAppThread(app_data)
         self.downloader.on_progress.connect(self.progress_bar.setValue)
-        
-        # Correctly pass BOTH app_data and card_reference!
         self.downloader.on_finished.connect(lambda name: self.on_install_complete(app_data, card_reference))
-        
         self.downloader.on_error.connect(self.on_install_error)
         self.downloader.start()
 
     def on_install_complete(self, app_data, card):
         self.progress_bar.hide()
         
-        # Update card properties and styling
         card.is_installed = True
         card.needs_update = False
         card.btn_install.setEnabled(True)
         card.update_button_style()
         
-        # If kiosk.py passed a refresh function, trigger it!
+        # If deeply indexed inside details tab, loop update style back to active sub-section frame
+        if self.page_stack.currentIndex() == 1:
+            self.details_section.update_action_button_style()
+
         if self.on_install_success:
             self.on_install_success()
             
         QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']} v{app_data['version']}!")
+        
+        # Force active view metrics filter refresh layout loop
+        if self.current_filter != "all":
+            self.populate_catalog(self.full_catalog_cache)
 
     def on_install_error(self, err_msg):
         self.progress_bar.hide()
