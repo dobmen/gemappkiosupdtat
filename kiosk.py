@@ -1,8 +1,10 @@
 import os
 import sys
 import json
+import ssl
 import importlib
-from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer
+import urllib.request
+from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
@@ -14,6 +16,35 @@ from components import SlidingPanel
 from apps.local_music import LocalMusicPage
 from apps.web_app import create_web_app_view
 from apps.app_store import AppStorePage
+
+
+class SystemUpdateCheckThread(QThread):
+    """Background worker that checks GitHub every 24 hours for new Kiosk OS releases without freezing the GUI."""
+    update_detected = pyqtSignal(str)
+
+    def run(self):
+        try:
+            local_version = "0.1.0"
+            if os.path.exists("os_version.json"):
+                with open("os_version.json", "r") as f:
+                    data = json.load(f)
+                    local_version = data.get("version", "0.1.0")
+
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            url = "https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/main/os_version.json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'KioskOS-Updater/1.0'})
+            
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
+                remote_data = json.loads(response.read().decode('utf-8'))
+                remote_version = remote_data.get("version", local_version)
+                
+                if remote_version != local_version:
+                    self.update_detected.emit(remote_version)
+        except Exception:
+            pass
 
 
 class DynamicAppButton(QFrame):
@@ -190,16 +221,54 @@ class NestKiosk(QMainWindow):
         self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold;")
 
         # -------------------------------------------------------------
-        # 2. CONTROL CENTER (Swipe Down)
+        # 2. CONTROL CENTER (Swipe Down - Horizontal Settings & Notifications)
         # -------------------------------------------------------------
         self.control_center = SlidingPanel(self, QRect(0, -500, 1024, 500), QRect(0, 0, 1024, 500))
         self.control_center.setStyleSheet("background-color: #16161A; border-bottom: 2px solid #282830;")
-        cc_layout = QVBoxLayout(self.control_center)
-        cc_layout.setContentsMargins(60, 40, 60, 40)
+        
+        self.cc_header = QWidget(self.control_center)
+        self.cc_header.setGeometry(0, 0, 1024, 60)
+        self.cc_header.setStyleSheet("background-color: rgba(22, 22, 26, 240); border-bottom: 1px solid #22222A;")
+        
+        header_layout = QHBoxLayout(self.cc_header)
+        header_layout.setContentsMargins(50, 10, 50, 10)
+        
+        self.btn_tab_settings = QPushButton("⚙️ Quick Settings")
+        self.btn_tab_notifs = QPushButton("🔔 Notifications")
+        
+        self.cc_tab_active = "background: rgba(255,255,255,30); color: white; border-radius: 18px; font-weight: bold; font-size: 15px; padding: 6px 20px;"
+        self.cc_tab_inactive = "background: transparent; color: rgba(255,255,255,140); border-radius: 18px; font-weight: bold; font-size: 15px; padding: 6px 20px;"
+        
+        self.btn_tab_settings.setStyleSheet(self.cc_tab_active)
+        self.btn_tab_notifs.setStyleSheet(self.cc_tab_inactive)
+        self.btn_tab_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_tab_notifs.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.btn_tab_settings.clicked.connect(lambda: self.switch_cc_page(0))
+        self.btn_tab_notifs.clicked.connect(lambda: self.switch_cc_page(1))
+        
+        header_layout.addWidget(self.btn_tab_settings)
+        header_layout.addWidget(self.btn_tab_notifs)
+        header_layout.addStretch()
+        
+        btn_close_cc = QPushButton("▲ Close")
+        btn_close_cc.setFixedSize(90, 36)
+        btn_close_cc.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close_cc.setStyleSheet("background-color: rgba(255,255,255,15); color: #CCCCCC; border-radius: 8px; font-weight: bold; font-size: 13px;")
+        btn_close_cc.clicked.connect(self.control_center.slide_out)
+        header_layout.addWidget(btn_close_cc)
 
-        cc_title = QLabel("Quick Settings")
-        cc_title.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
-        cc_layout.addWidget(cc_title)
+        self.cc_carousel = QWidget(self.control_center)
+        self.cc_carousel.setGeometry(0, 60, 1024, 440)
+        self.cc_index = 0
+        self.cc_pages = []
+
+        # Page 0: Quick Settings
+        self.page_settings = QWidget(self.cc_carousel)
+        self.page_settings.setGeometry(0, 0, 1024, 440)
+        settings_layout = QVBoxLayout(self.page_settings)
+        settings_layout.setContentsMargins(60, 20, 60, 20)
+        settings_layout.setSpacing(20)
 
         slider_layout = QGridLayout()
         slider_layout.setSpacing(20)
@@ -212,43 +281,111 @@ class NestKiosk(QMainWindow):
         v_slider = QSlider(Qt.Orientation.Horizontal)
         v_slider.setValue(50)
         slider_layout.addWidget(v_slider, 1, 1)
-        cc_layout.addLayout(slider_layout)
+        settings_layout.addLayout(slider_layout)
+        settings_layout.addStretch()
 
         close_sys_btn = QPushButton("✕ Exit Kiosk OS")
-        close_sys_btn.setFixedHeight(50)
+        close_sys_btn.setFixedHeight(48)
+        close_sys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_sys_btn.setStyleSheet("background-color: #E24A4A; color: white; border-radius: 10px; font-size: 16px; font-weight: bold;")
         close_sys_btn.clicked.connect(self.close)
-        cc_layout.addWidget(close_sys_btn)
+        settings_layout.addWidget(close_sys_btn)
+
+        # Page 1: Notification Center
+        self.page_notifs = QWidget(self.cc_carousel)
+        self.page_notifs.setGeometry(1024, 0, 1024, 440)
+        notifs_main_layout = QVBoxLayout(self.page_notifs)
+        notifs_main_layout.setContentsMargins(50, 15, 50, 15)
+        notifs_main_layout.setSpacing(10)
+
+        notif_header = QHBoxLayout()
+        self.lbl_notif_count = QLabel("Recent Alerts")
+        self.lbl_notif_count.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        notif_header.addWidget(self.lbl_notif_count)
+        notif_header.addStretch()
+
+        btn_clear_notifs = QPushButton("Clear All")
+        btn_clear_notifs.setFixedSize(100, 32)
+        btn_clear_notifs.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_clear_notifs.setStyleSheet("background: rgba(255,255,255,15); color: white; border-radius: 6px; font-weight: bold;")
+        btn_clear_notifs.clicked.connect(self.clear_all_notifications)
+        notif_header.addWidget(btn_clear_notifs)
+        notifs_main_layout.addLayout(notif_header)
+
+        self.notif_scroll = QScrollArea()
+        self.notif_scroll.setWidgetResizable(True)
+        self.notif_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.notif_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.notif_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        QScroller.grabGesture(self.notif_scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+
+        self.notif_container = QWidget()
+        self.notif_container.setStyleSheet("background: transparent;")
+        self.notif_layout = QVBoxLayout(self.notif_container)
+        self.notif_layout.setContentsMargins(0, 0, 0, 10)
+        self.notif_layout.setSpacing(12)
+        self.notif_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        self.notif_scroll.setWidget(self.notif_container)
+        notifs_main_layout.addWidget(self.notif_scroll)
+
+        self.cc_pages.extend([self.page_settings, self.page_notifs])
+        self.populate_initial_notifications()
 
         # -------------------------------------------------------------
-        # 3. RESPONSIVE APP DRAWER & MULTITASKING SIDEBAR
+        # 3. RESPONSIVE APP DRAWER
         # -------------------------------------------------------------
         self.app_drawer = SlidingPanel(self, QRect(0, 600, 1024, 600), QRect(0, 0, 1024, 600))
         self.app_drawer.setStyleSheet("background-color: #121215;")
         
-        drawer_base_layout = QHBoxLayout(self.app_drawer)
-        drawer_base_layout.setContentsMargins(0, 0, 0, 0)
-        drawer_base_layout.setSpacing(0)
-
-        # 3A. The New Background Task Manager Sidebar!
-        self.task_sidebar = QFrame()
-        self.task_sidebar.setFixedWidth(280)
-        self.task_sidebar.setStyleSheet("background-color: #16161A; border-right: 1px solid #282830;")
-        self.task_sidebar_layout = QVBoxLayout(self.task_sidebar)
-        self.task_sidebar_layout.setContentsMargins(20, 40, 20, 20)
-        self.task_sidebar.hide() # Hidden completely if no apps are running
-        drawer_base_layout.addWidget(self.task_sidebar)
-
-        # 3B. Main App Grid Area
-        self.drawer_main_area = QWidget()
-        drawer_main_layout = QVBoxLayout(self.drawer_main_area)
-        drawer_main_layout.setContentsMargins(0, 40, 0, 0)
+        drawer_main_layout = QVBoxLayout(self.app_drawer)
+        drawer_main_layout.setContentsMargins(0, 30, 0, 0)
         drawer_main_layout.setSpacing(10)
 
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(60, 0, 60, 0)
+        
         drawer_title = QLabel("Applications")
         drawer_title.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
-        drawer_title.setStyleSheet("margin-left: 60px;")
-        drawer_main_layout.addWidget(drawer_title)
+        header_layout.addWidget(drawer_title)
+        header_layout.addStretch()
+
+        self.multitask_btn_container = QWidget()
+        self.multitask_btn_container.setFixedSize(170, 48)
+        self.multitask_btn_container.setStyleSheet("background: transparent;")
+
+        self.btn_multitask = QPushButton("🗂️ Active Tasks", self.multitask_btn_container)
+        self.btn_multitask.setGeometry(0, 4, 160, 40)
+        self.btn_multitask.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_multitask.setFont(QFont("Google Sans", 13, QFont.Weight.Bold))
+        self.btn_multitask.setStyleSheet("""
+            QPushButton { background-color: #22222A; color: white; border: 1px solid #33333F; border-radius: 20px; }
+            QPushButton:hover { background-color: #2E2E38; border-color: #4A4A5A; }
+        """)
+        self.btn_multitask.clicked.connect(self.toggle_task_ribbon)
+
+        self.lbl_task_badge = QLabel("0", self.multitask_btn_container)
+        self.lbl_task_badge.setGeometry(142, 0, 24, 24)
+        self.lbl_task_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_task_badge.setFont(QFont("Google Sans", 11, QFont.Weight.Bold))
+        self.lbl_task_badge.setStyleSheet("""
+            background-color: #3EA6FF; color: #0E0E12; border-radius: 12px; border: 2px solid #121215; font-weight: bold;
+        """)
+        self.lbl_task_badge.hide() 
+
+        header_layout.addWidget(self.multitask_btn_container)
+        drawer_main_layout.addLayout(header_layout)
+
+        self.task_ribbon = QFrame()
+        self.task_ribbon.setFixedHeight(120)
+        self.task_ribbon.setStyleSheet("background-color: #1A1A22; border-top: 1px solid #2A2A35; border-bottom: 1px solid #2A2A35;")
+        self.task_ribbon.hide()
+        
+        self.ribbon_layout = QHBoxLayout(self.task_ribbon)
+        self.ribbon_layout.setContentsMargins(60, 15, 60, 15)
+        self.ribbon_layout.setSpacing(15)
+        self.ribbon_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        drawer_main_layout.addWidget(self.task_ribbon)
 
         self.drawer_scroll = QScrollArea()
         self.drawer_scroll.setWidgetResizable(True)
@@ -261,17 +398,16 @@ class NestKiosk(QMainWindow):
         self.drawer_container.setStyleSheet("background: transparent;")
         
         self.drawer_grid = QGridLayout(self.drawer_container)
-        self.drawer_grid.setContentsMargins(60, 10, 60, 100) 
+        self.drawer_grid.setContentsMargins(60, 20, 60, 100) 
         self.drawer_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
 
         self.drawer_scroll.setWidget(self.drawer_container)
         drawer_main_layout.addWidget(self.drawer_scroll)
-        drawer_base_layout.addWidget(self.drawer_main_area)
 
         self.rebuild_app_drawer()
 
         # -------------------------------------------------------------
-        # 4. ACTIVE APP VIEW CONTAINER (Now uses a Stacked Widget!)
+        # 4. ACTIVE APP VIEW CONTAINER
         # -------------------------------------------------------------
         self.app_view = QWidget(self)
         self.app_view.setGeometry(0, 0, 1024, 600)
@@ -284,7 +420,6 @@ class NestKiosk(QMainWindow):
         self.app_view_layout.setContentsMargins(0, 0, 0, 0)
         self.app_view_layout.setSpacing(0)
         
-        # This keeps our background apps neatly stacked memory
         self.app_stack = QStackedWidget()
         self.app_view_layout.addWidget(self.app_stack)
 
@@ -299,81 +434,218 @@ class NestKiosk(QMainWindow):
         self.edge_interceptor.setStyleSheet("background-color: transparent;")
         self.edge_interceptor.raise_() 
 
+        # -------------------------------------------------------------
+        # 5. DAILY BACKGROUND SYSTEM UPDATE CHECKER
+        # -------------------------------------------------------------
+        self.update_check_timer = QTimer(self)
+        self.update_check_timer.timeout.connect(self.check_for_system_update)
+        self.update_check_timer.start(86400000) # 24 hours in milliseconds
+        
+        # Run an initial non-blocking check 5 seconds after system boot
+        QTimer.singleShot(5000, self.check_for_system_update)
+
     # =================================================================
-    # TASK SWITCHER MANAGER
+    # BACKGROUND SYSTEM UPDATE CHECKER
     # =================================================================
-    def update_task_switcher(self):
-        """Dynamically populates the left sidebar with running background apps."""
-        # Clear existing buttons
-        for i in reversed(range(self.task_sidebar_layout.count())):
-            item = self.task_sidebar_layout.itemAt(i)
+    def check_for_system_update(self):
+        """Spawns a background thread to check GitHub for OS updates without freezing the GUI."""
+        if hasattr(self, 'update_thread') and self.update_thread and self.update_thread.isRunning():
+            return
+        self.update_thread = SystemUpdateCheckThread()
+        self.update_thread.update_detected.connect(self.on_system_update_detected)
+        self.update_thread.finished.connect(self.update_thread.deleteLater)
+        self.update_thread.start()
+
+    def on_system_update_detected(self, new_version):
+        """Called when a new OS update is found on GitHub."""
+        if getattr(self, '_notified_update_version', None) == new_version:
+            return
+        self._notified_update_version = new_version
+        self.add_notification("Settings", "There is new update available.", "⚙️")
+
+    # =================================================================
+    # NOTIFICATION CENTER METHODS
+    # =================================================================
+    def populate_initial_notifications(self):
+        """Creates dummy notifications so the feed isn't empty."""
+        alerts = [
+            ("System Status", "Universal Wi-Fi Mode is active and optimized for over-the-air OTA updates.", "⚙️"),
+            ("Spotify Remote", "Connected to AirPlay Speaker. Ready for lossless audio playback.", "🎧"),
+            ("App Store", "2 application updates available in repository (Gemini App Store).", "📦"),
+            ("Settings", "There is new update available.", "⚙️")
+        ]
+        for title, desc, icon in alerts:
+            self.add_notification(title, desc, icon)
+
+    def add_notification(self, title, desc, icon="🔔"):
+        """Adds a dismissible alert card to the Notification Center."""
+        card = QFrame()
+        card.setStyleSheet("background-color: #22222B; border-radius: 12px; border: 1px solid #2F2F3B;")
+        
+        layout = QHBoxLayout(card)
+        layout.setContentsMargins(18, 14, 14, 14)
+        layout.setSpacing(15)
+        
+        lbl_icon = QLabel(icon)
+        lbl_icon.setFont(QFont("Google Sans", 24))
+        lbl_icon.setFixedSize(45, 45)
+        lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_icon.setStyleSheet("background-color: rgba(255,255,255,10); border-radius: 22px; border: none;")
+        
+        text_box = QVBoxLayout()
+        text_box.setSpacing(3)
+        lbl_title = QLabel(title)
+        lbl_title.setFont(QFont("Google Sans", 15, QFont.Weight.Bold))
+        lbl_title.setStyleSheet("color: white; border: none;")
+        
+        lbl_desc = QLabel(desc)
+        lbl_desc.setFont(QFont("Google Sans", 13))
+        lbl_desc.setStyleSheet("color: #AAAAAA; border: none;")
+        lbl_desc.setWordWrap(True)
+        
+        text_box.addWidget(lbl_title)
+        text_box.addWidget(lbl_desc)
+        
+        btn_dismiss = QPushButton("✕")
+        btn_dismiss.setFixedSize(36, 36)
+        btn_dismiss.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_dismiss.setFont(QFont("Google Sans", 15, QFont.Weight.Bold))
+        btn_dismiss.setStyleSheet("""
+            QPushButton { background: transparent; color: #888888; border: none; border-radius: 18px; }
+            QPushButton:hover { background: rgba(226,74,74,40); color: #E24A4A; }
+        """)
+        btn_dismiss.clicked.connect(lambda: self.remove_notification(card))
+        
+        layout.addWidget(lbl_icon)
+        layout.addLayout(text_box, stretch=1)
+        layout.addWidget(btn_dismiss)
+        
+        self.notif_layout.insertWidget(0, card)
+        self.update_notif_header()
+
+    def remove_notification(self, card_widget):
+        card_widget.deleteLater()
+        QTimer.singleShot(50, self.update_notif_header)
+
+    def clear_all_notifications(self):
+        for i in reversed(range(self.notif_layout.count())):
+            item = self.notif_layout.itemAt(i)
             if item.widget():
                 item.widget().deleteLater()
+        QTimer.singleShot(50, self.update_notif_header)
 
+    def update_notif_header(self):
+        count = self.notif_layout.count()
+        if count == 0:
+            self.lbl_notif_count.setText("No New Notifications")
+            if not hasattr(self, 'empty_label') or not self.empty_label:
+                self.empty_label = QLabel("You're all caught up! ✨")
+                self.empty_label.setFont(QFont("Google Sans", 16))
+                self.empty_label.setStyleSheet("color: #666670; margin-top: 40px;")
+                self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.notif_layout.addWidget(self.empty_label)
+        else:
+            if hasattr(self, 'empty_label') and self.empty_label:
+                self.empty_label.deleteLater()
+                self.empty_label = None
+            self.lbl_notif_count.setText(f"Recent Alerts ({count})")
+
+    def switch_cc_page(self, index):
+        if index == self.cc_index: return
+        target_x = -1024 if index > self.cc_index else 1024
+        
+        current_page = self.cc_pages[self.cc_index]
+        next_page = self.cc_pages[index]
+        next_page.show()
+        next_page.move(target_x, 0)
+        
+        self.animate_carousel(current_page, QRect(-target_x, 0, 1024, 440), next_page, QRect(0, 0, 1024, 440), index)
+        self.update_cc_tabs(index)
+
+    def update_cc_tabs(self, active_idx):
+        self.cc_index = active_idx
+        if active_idx == 0:
+            self.btn_tab_settings.setStyleSheet(self.cc_tab_active)
+            self.btn_tab_notifs.setStyleSheet(self.cc_tab_inactive)
+        else:
+            self.btn_tab_settings.setStyleSheet(self.cc_tab_inactive)
+            self.btn_tab_notifs.setStyleSheet(self.cc_tab_active)
+
+    # =================================================================
+    # TASK SWITCHER BUTTON & EXPANDING RIBBON
+    # =================================================================
+    def toggle_task_ribbon(self):
         if not self.running_apps:
-            self.task_sidebar.hide()
+            self.task_ribbon.hide()
             return
-            
-        self.task_sidebar.show()
-        
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        
-        # Header with Close All button
-        header = QHBoxLayout()
-        title = QLabel("Running")
-        title.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
-        title.setStyleSheet("color: white;")
-        
-        btn_close_all = QPushButton("Close All")
-        btn_close_all.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_close_all.setStyleSheet("""
-            QPushButton { background: transparent; color: #E24A4A; font-weight: bold; font-size: 14px; }
-            QPushButton:hover { color: #C0392B; }
-        """)
-        btn_close_all.clicked.connect(self.kill_all_apps)
-        
-        header.addWidget(title)
-        header.addStretch()
-        header.addWidget(btn_close_all)
-        layout.addLayout(header)
-        layout.addSpacing(15)
-        
-        # Generate list of running apps
+        self.task_ribbon.setVisible(not self.task_ribbon.isVisible())
+
+    def update_task_switcher(self):
+        count = len(self.running_apps)
+        if count > 0:
+            self.lbl_task_badge.setText(str(count))
+            self.lbl_task_badge.show()
+        else:
+            self.lbl_task_badge.hide()
+            self.task_ribbon.hide()
+            return
+
+        for i in reversed(range(self.ribbon_layout.count())):
+            item = self.ribbon_layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                while item.layout().count():
+                    sub = item.layout().takeAt(0)
+                    if sub.widget(): sub.widget().deleteLater()
+
         for app_name in list(self.running_apps.keys()):
-            row = QHBoxLayout()
-            row.setSpacing(8)
+            card = QFrame()
+            card.setFixedSize(200, 75)
+            card.setStyleSheet("background-color: #24242E; border-radius: 12px; border: 1px solid #333340;")
+            
+            card_layout = QHBoxLayout(card)
+            card_layout.setContentsMargins(12, 8, 10, 8)
+            card_layout.setSpacing(10)
             
             btn_switch = QPushButton(app_name)
-            btn_switch.setFixedHeight(50)
             btn_switch.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_switch.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+            btn_switch.setFont(QFont("Google Sans", 13, QFont.Weight.Bold))
             btn_switch.setStyleSheet("""
-                QPushButton { background-color: #2C2C35; color: white; border-radius: 8px; text-align: left; padding-left: 15px; }
-                QPushButton:hover { background-color: #3C3C45; }
+                QPushButton { background: transparent; color: white; border: none; text-align: left; }
+                QPushButton:hover { color: #3EA6FF; }
             """)
             btn_switch.clicked.connect(lambda checked, a=app_name: self.launch_app(a))
             
             btn_kill = QPushButton("✕")
-            btn_kill.setFixedSize(50, 50)
+            btn_kill.setFixedSize(32, 32)
             btn_kill.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_kill.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+            btn_kill.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
             btn_kill.setStyleSheet("""
-                QPushButton { background-color: rgba(226, 74, 74, 40); color: #E24A4A; border-radius: 8px; }
-                QPushButton:hover { background-color: rgba(226, 74, 74, 80); color: white;}
+                QPushButton { background-color: rgba(226, 74, 74, 30); color: #E24A4A; border-radius: 16px; border: none; }
+                QPushButton:hover { background-color: #E24A4A; color: white; }
             """)
             btn_kill.clicked.connect(lambda checked, a=app_name: self.kill_app(a))
             
-            row.addWidget(btn_switch, stretch=1)
-            row.addWidget(btn_kill)
-            layout.addLayout(row)
-            
-        self.task_sidebar_layout.addWidget(container)
+            card_layout.addWidget(btn_switch, stretch=1)
+            card_layout.addWidget(btn_kill)
+            self.ribbon_layout.addWidget(card)
+
+        if count > 1:
+            btn_close_all = QPushButton("Close All")
+            btn_close_all.setFixedSize(100, 75)
+            btn_close_all.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_close_all.setFont(QFont("Google Sans", 12, QFont.Weight.Bold))
+            btn_close_all.setStyleSheet("""
+                QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border: 1px dashed #E24A4A; border-radius: 12px; }
+                QPushButton:hover { background-color: #E24A4A; color: white; border-style: solid; }
+            """)
+            btn_close_all.clicked.connect(self.kill_all_apps)
+            self.ribbon_layout.addWidget(btn_close_all)
+
+        self.ribbon_layout.addStretch()
 
     def kill_app(self, app_name):
-        """Force quits a background app and frees its memory."""
         if app_name in self.running_apps:
             widget = self.running_apps.pop(app_name)
             self.app_stack.removeWidget(widget)
@@ -381,10 +653,8 @@ class NestKiosk(QMainWindow):
             self.update_task_switcher()
 
     def kill_all_apps(self):
-        """Quits all background apps."""
         for app_name in list(self.running_apps.keys()):
             self.kill_app(app_name)
-
 
     # =================================================================
     # DYNAMIC APP CATALOG SCANNER & RESPONSIVE GRID
@@ -491,7 +761,9 @@ class NestKiosk(QMainWindow):
                         self.active_gesture = 'open_controls'
                         self.control_center.raise_()
             else:
-                if not self.app_drawer.is_visible and not self.control_center.is_visible and self.app_view.isHidden():
+                if self.control_center.is_visible:
+                    self.active_gesture = 'cc_horizontal'
+                elif not self.app_drawer.is_visible and self.app_view.isHidden():
                     self.active_gesture = 'horizontal'
 
         if self.active_gesture == 'edge_swipe_back':
@@ -509,6 +781,17 @@ class NestKiosk(QMainWindow):
         elif self.active_gesture == 'close_controls':
             new_y = max(-500, min(0, dy))
             self.control_center.move(0, new_y)
+        elif self.active_gesture == 'cc_horizontal':
+            current_page = self.cc_pages[self.cc_index]
+            other_index = 1 if self.cc_index == 0 else 0
+            other_page = self.cc_pages[other_index]
+            
+            current_page.move(dx, 0)
+            other_page.show()
+            if dx < 0:
+                other_page.move(1024 + dx, 0)
+            else:
+                other_page.move(-1024 + dx, 0)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             current_page.move(dx, 0)
@@ -548,6 +831,18 @@ class NestKiosk(QMainWindow):
         elif self.active_gesture == 'close_controls':
             if dy < -120: self.control_center.slide_out()
             else:         self.control_center.slide_in()
+        elif self.active_gesture == 'cc_horizontal':
+            current_page = self.cc_pages[self.cc_index]
+            other_index = 1 if self.cc_index == 0 else 0
+            other_page = self.cc_pages[other_index]
+            
+            if abs(dx) > 150:
+                target_x = -1024 if dx < 0 else 1024
+                self.animate_carousel(current_page, QRect(target_x, 0, 1024, 440), other_page, QRect(0, 0, 1024, 440), other_index)
+                self.update_cc_tabs(other_index)
+            else:
+                self.animate_carousel(current_page, QRect(0, 0, 1024, 440))
+                other_page.move(1024 if dx < 0 else -1024, 0)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             if dx < -200 and self.home_index < len(self.home_pages) - 1:
@@ -580,7 +875,10 @@ class NestKiosk(QMainWindow):
             self.anim_next.setEndValue(target2)
             self.anim_next.start()
             if new_index is not None:
-                self.home_index = new_index
+                if page1 in self.home_pages:
+                    self.home_index = new_index
+                else:
+                    self.cc_index = new_index
 
     # =================================================================
     # APP LAUNCHING & ROUTING
@@ -590,14 +888,12 @@ class NestKiosk(QMainWindow):
         self.lbl_date.setText(QDate.currentDate().toString("dddd, MMMM d"))
 
     def launch_app(self, app_name):
-        """Launches an app or seamlessly resumes it from the background pool."""
         self.app_drawer.slide_out()
+        self.task_ribbon.hide()
         
-        # If the app is already running, just switch to it!
         if app_name in self.running_apps:
             self.app_stack.setCurrentWidget(self.running_apps[app_name])
         else:
-            # Otherwise, instantiate it and store it in memory.
             page_instance = None
             if app_name == "Character.ai":
                 page_instance = create_web_app_view("https://character.ai", app_name, self.minimize_app)
@@ -637,7 +933,6 @@ class NestKiosk(QMainWindow):
                     layout.addWidget(app_title, alignment=Qt.AlignmentFlag.AlignCenter)
                     layout.addWidget(desc, alignment=Qt.AlignmentFlag.AlignCenter)
                     
-                    # Fallback home button for dummy apps
                     btn_close = QPushButton("Return Home")
                     btn_close.setFixedSize(200, 50)
                     btn_close.setStyleSheet("background-color: #E24A4A; border-radius: 10px; color: white;")
@@ -649,9 +944,8 @@ class NestKiosk(QMainWindow):
             self.app_stack.addWidget(page_instance)
             self.running_apps[app_name] = page_instance
             self.app_stack.setCurrentWidget(page_instance)
-            self.update_task_switcher() # Refresh the sidebar!
+            self.update_task_switcher()
 
-        # Tizen style zoom-in animation
         start_rect = QRect(int(1024 * 0.075), int(600 * 0.075), int(1024 * 0.85), int(600 * 0.85))
         self.app_view.setGeometry(start_rect) 
         self.app_opacity.setOpacity(0.0)
@@ -713,8 +1007,6 @@ class NestKiosk(QMainWindow):
         self.app_view.hide()
         self.app_opacity.setOpacity(1.0) 
         self.app_view.move(0, 0)
-        # Note: We NO LONGER delete the app layout. It rests in background memory.
 
     def minimize_app(self):
-        """Minimizes the app (called by swiping or hitting home buttons)."""
         self.animate_app_close()

@@ -77,7 +77,6 @@ class ScrollLabel(QWidget):
             self.update_metrics()
 
     def sizeHint(self):
-        # Tells the layout exactly how much space the text wants
         return QSize(self._fm_width, self.height())
 
     def minimumSizeHint(self):
@@ -86,11 +85,10 @@ class ScrollLabel(QWidget):
     def update_metrics(self):
         fm = QFontMetrics(self._font)
         self._fm_width = fm.horizontalAdvance(self._text)
-        self.updateGeometry() # Forces layout to recalculate width
+        self.updateGeometry() 
         self.check_scroll()
 
     def check_scroll(self):
-        # Only start scrolling if text width strictly exceeds the physical widget width
         if self._fm_width > self.width() + 2 and self.width() > 0:
             if not self._timer.isActive():
                 self._timer.start()
@@ -1071,6 +1069,12 @@ class SpotifyPage(QWidget):
         self.is_playing = False
         self.is_liked = False
         
+        # Initialize panel attributes immediately to prevent AttributeError during cleanup
+        self.queue_panel = None
+        self.lib_panel = None
+        self.playlist_details_panel = None
+        self.lyrics_panel = None
+        
         self.lyrics_fetcher = None
         self.img_fetcher = None
         self.queue_fetcher = None
@@ -1221,9 +1225,10 @@ class SpotifyPage(QWidget):
             btn_login = QPushButton("Log In on Touchscreen")
             btn_login.setFixedSize(360, 65)
             btn_login.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Stripped unsupported transform property
             btn_login.setStyleSheet("""
                 QPushButton { background-color: #1ED760; color: #0E0E12; font-size: 19px; font-weight: bold; border-radius: 32px; }
-                QPushButton:hover { background-color: #1FDF64; transform: scale(1.02); }
+                QPushButton:hover { background-color: #1FDF64; }
             """)
             btn_login.clicked.connect(self.open_login_browser)
             layout.addWidget(btn_login, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -1715,10 +1720,20 @@ class SpotifyPage(QWidget):
         self._retire_thread(getattr(self, 'skip_fetcher', None))
         self._retire_thread(getattr(self, 'device_fetcher', None))
         self._retire_thread(getattr(self, 'transfer_thread', None))
-        self._retire_thread(getattr(self.queue_panel, 'img_fetcher', None))
-        self._retire_thread(getattr(self.lib_panel, 'img_fetcher', None))
-        self._retire_thread(getattr(self.playlist_details_panel, 'header_img_fetcher', None))
-        self._retire_thread(getattr(self.playlist_details_panel, 'img_fetcher', None))
+        
+        # Safe getattr checks to prevent AttributeError crashes
+        queue_panel = getattr(self, 'queue_panel', None)
+        if queue_panel:
+            self._retire_thread(getattr(queue_panel, 'img_fetcher', None))
+            
+        lib_panel = getattr(self, 'lib_panel', None)
+        if lib_panel:
+            self._retire_thread(getattr(lib_panel, 'img_fetcher', None))
+            
+        pl_panel = getattr(self, 'playlist_details_panel', None)
+        if pl_panel:
+            self._retire_thread(getattr(pl_panel, 'header_img_fetcher', None))
+            self._retire_thread(getattr(pl_panel, 'img_fetcher', None))
 
         for i in reversed(range(self.layout().count())):
             item = self.layout().itemAt(i)
@@ -1882,10 +1897,21 @@ class SpotifyPage(QWidget):
         self._retire_thread(getattr(self, 'skip_fetcher', None))
         self._retire_thread(getattr(self, 'device_fetcher', None))
         self._retire_thread(getattr(self, 'transfer_thread', None))
-        self._retire_thread(getattr(self.queue_panel, 'img_fetcher', None))
-        self._retire_thread(getattr(self.lib_panel, 'img_fetcher', None))
-        self._retire_thread(getattr(self.playlist_details_panel, 'header_img_fetcher', None))
-        self._retire_thread(getattr(self.playlist_details_panel, 'img_fetcher', None))
+        
+        # Safe getattr checks to prevent AttributeError crashes
+        queue_panel = getattr(self, 'queue_panel', None)
+        if queue_panel:
+            self._retire_thread(getattr(queue_panel, 'img_fetcher', None))
+            
+        lib_panel = getattr(self, 'lib_panel', None)
+        if lib_panel:
+            self._retire_thread(getattr(lib_panel, 'img_fetcher', None))
+            
+        pl_panel = getattr(self, 'playlist_details_panel', None)
+        if pl_panel:
+            self._retire_thread(getattr(pl_panel, 'header_img_fetcher', None))
+            self._retire_thread(getattr(pl_panel, 'img_fetcher', None))
+
         for t in list(self._retiring_threads):
             try: t.wait(200)
             except RuntimeError: pass
