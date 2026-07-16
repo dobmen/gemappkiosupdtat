@@ -54,7 +54,6 @@ class AppStoreUpdateCheckThread(QThread):
 
     def run(self):
         try:
-            # 1. Identify which apps are genuinely installed locally
             installed_modules = []
             if os.path.exists("apps"):
                 for filename in os.listdir("apps"):
@@ -64,29 +63,37 @@ class AppStoreUpdateCheckThread(QThread):
             if not installed_modules:
                 return
 
-            # 2. Get local app version configurations
             local_versions = {}
             if os.path.exists("apps_version.json"):
                 with open("apps_version.json", "r") as f:
                     local_versions = json.load(f)
 
-            # 3. Check remote repository versions mapping
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-            url = "https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/main/apps_version.json"
+            url = "https://raw.githubusercontent.com/dobmen/gemappkiosstor/main/store_manifest.json"
             req = urllib.request.Request(url, headers={'User-Agent': 'KioskOS-AppUpdater/1.0'})
             
             with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
-                remote_versions = json.loads(response.read().decode('utf-8'))
+                manifest = json.loads(response.read().decode('utf-8'))
+                remote_apps = manifest.get("apps", [])
+                
+                remote_versions = {app["filename"].replace(".py", ""): app["version"] for app in remote_apps}
                 
                 apps_needing_update = []
                 for app_id in installed_modules:
                     if app_id in remote_versions:
-                        current_v = local_versions.get(app_id, "0.1.0")
+                        # Use local .ver files directly for installed apps
+                        local_script = os.path.join("apps", f"{app_id}.py")
+                        ver_path = local_script.replace(".py", ".ver")
+                        current_v = "0.0.0"
+                        if os.path.exists(ver_path):
+                            with open(ver_path, "r") as f:
+                                current_v = f.read().strip()
+                                
                         remote_v = remote_versions[app_id]
-                        if remote_v != current_v:
+                        if remote_v > current_v:
                             clean_name = app_id.replace("_", " ").title()
                             apps_needing_update.append(clean_name)
                             
@@ -456,6 +463,8 @@ class NestKiosk(QMainWindow):
         notifs_main_layout.addWidget(self.notif_scroll)
 
         self.cc_pages.extend([self.page_settings, self.page_notifs])
+        
+        # Fresh initialization with completely empty notifications
         self.update_notif_header()
 
         # -------------------------------------------------------------
@@ -575,8 +584,11 @@ class NestKiosk(QMainWindow):
 
     def show_toast(self, app_name, title, desc, icon):
         """Creates and fires a One UI system-wide pop-up notification."""
-        if hasattr(self, 'current_toast') and self.current_toast:
-            self.current_toast.deleteLater()
+        try:
+            if getattr(self, 'current_toast', None):
+                self.current_toast.deleteLater()
+        except RuntimeError:
+            pass
             
         self.current_toast = ToastNotification(self, app_name, title, desc, icon, self.launch_app)
         self.current_toast.show_toast()
@@ -1065,6 +1077,11 @@ class NestKiosk(QMainWindow):
     # =================================================================
     # APP LAUNCHING & ROUTING
     # =================================================================
+    def update_clock(self):
+        """Updates the home screen clock and date every second."""
+        self.lbl_time.setText(QTime.currentTime().toString("HH:mm"))
+        self.lbl_date.setText(QDate.currentDate().toString("dddd, MMMM d"))
+
     def launch_app(self, app_name):
         self.app_drawer.slide_out()
         self.task_ribbon.hide()
