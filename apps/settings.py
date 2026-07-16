@@ -564,7 +564,7 @@ class SettingsPage(QWidget):
         self.lbl_update_status.setText(f"Status: Pulling latest code from GitHub...\nPlease do not turn off the device.")
         
         self.save_setting("os_version", new_version)
-        QTimer.singleShot(1500, lambda: os.system("git pull origin main && sudo reboot"))
+        QTimer.singleShot(1500, lambda: os.system("git fetch origin && git reset --hard origin/main && sudo reboot"))
 
 
     def create_power_page(self):
