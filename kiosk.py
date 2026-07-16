@@ -5,12 +5,19 @@ import ssl
 import time
 import importlib
 import urllib.request
-from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint
+from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint, QUrl
 from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
     QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect, QStackedWidget
 )
+
+# Optional Multimedia for Notification Sounds
+try:
+    from PyQt6.QtMultimedia import QSoundEffect
+    MULTIMEDIA_AVAILABLE = True
+except ImportError:
+    MULTIMEDIA_AVAILABLE = False
 
 # Import our custom modules
 from components import SlidingPanel
@@ -19,8 +26,19 @@ from apps.web_app import create_web_app_view
 from apps.app_store import AppStorePage
 
 
+def get_system_setting(key, default=None):
+    """Fast, global helper to read user preferences dynamically."""
+    try:
+        if os.path.exists("config.json"):
+            with open("config.json", "r") as f:
+                config = json.load(f)
+                return config.get(key, default)
+    except Exception:
+        pass
+    return default
+
+
 class SystemUpdateCheckThread(QThread):
-    """Background worker that checks GitHub every 24 hours for new Kiosk OS releases without freezing the GUI."""
     update_detected = pyqtSignal(str)
 
     def run(self):
@@ -49,7 +67,6 @@ class SystemUpdateCheckThread(QThread):
 
 
 class AppStoreUpdateCheckThread(QThread):
-    """Background worker that checks for updates only for locally installed applications to prevent ghost notifications."""
     updates_detected = pyqtSignal(list)
 
     def run(self):
@@ -84,7 +101,6 @@ class AppStoreUpdateCheckThread(QThread):
                 apps_needing_update = []
                 for app_id in installed_modules:
                     if app_id in remote_versions:
-                        # Use local .ver files directly for installed apps
                         local_script = os.path.join("apps", f"{app_id}.py")
                         ver_path = local_script.replace(".py", ".ver")
                         current_v = "0.0.0"
@@ -104,14 +120,17 @@ class AppStoreUpdateCheckThread(QThread):
 
 
 class ToastNotification(QFrame):
-    """A One UI style system-wide heads-up notification pop-up."""
+    """A One UI style system-wide heads-up notification with Swipe-to-Dismiss and Sound."""
     def __init__(self, parent, app_name, title, desc, icon_char, click_callback):
         super().__init__(parent)
         self.app_name = app_name
         self.click_callback = click_callback
+        self.drag_start_x = None
+        self.is_swiping = False
         
         self.setFixedSize(420, 85)
         self.setStyleSheet("background-color: #22222B; border-radius: 42px; border: 1px solid #33333F;")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(15, 10, 25, 10)
@@ -164,13 +183,49 @@ class ToastNotification(QFrame):
         self.pos_anim.setEndValue(QPoint(302, -100))
         self.pos_anim.finished.connect(self.deleteLater)
         self.pos_anim.start()
-        
+
+    def swipe_dismiss(self, to_right):
+        """Flings the notification off the screen horizontally."""
+        target_x = 1200 if to_right else -500
+        self.pos_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.pos_anim.setDuration(300)
+        self.pos_anim.setStartValue(self.pos())
+        self.pos_anim.setEndValue(QPoint(target_x, self.pos().y()))
+        self.pos_anim.finished.connect(self.deleteLater)
+        self.pos_anim.start()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.hide_timer.stop() 
+            self.drag_start_x = event.globalPosition().x()
+            self.start_pos_x = self.pos().x()
+            self.is_swiping = False
+
+    def mouseMoveEvent(self, event):
+        if self.drag_start_x is not None:
+            dx = event.globalPosition().x() - self.drag_start_x
+            if abs(dx) > 10:
+                self.is_swiping = True
+                self.move(int(self.start_pos_x + dx), self.pos().y())
+
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.hide_timer.stop()
-            self.dismiss()
-            if self.click_callback and self.app_name:
-                self.click_callback(self.app_name)
+            if self.is_swiping:
+                dx = event.globalPosition().x() - self.drag_start_x
+                if abs(dx) > 100:  
+                    self.swipe_dismiss(dx > 0)
+                else:  
+                    self.pos_anim.setEasingCurve(QEasingCurve.Type.OutBack)
+                    self.pos_anim.setStartValue(self.pos())
+                    self.pos_anim.setEndValue(QPoint(302, 25))
+                    self.pos_anim.start()
+                    self.hide_timer.start(4000)
+            else:
+                self.dismiss()
+                if self.click_callback and self.app_name:
+                    self.click_callback(self.app_name)
+            self.drag_start_x = None
+            self.is_swiping = False
 
 
 class DynamicAppButton(QFrame):
@@ -301,6 +356,14 @@ class NestKiosk(QMainWindow):
         self.current_toast = None
         self.empty_label = None
 
+        # Setup Notification Audio
+        self.notif_sound = None
+        if MULTIMEDIA_AVAILABLE:
+            sound_path = os.path.abspath("notification.wav")
+            if os.path.exists(sound_path):
+                self.notif_sound = QSoundEffect()
+                self.notif_sound.setSource(QUrl.fromLocalFile(sound_path))
+
         # -------------------------------------------------------------
         # 1. MAIN SCREEN CAROUSEL
         # -------------------------------------------------------------
@@ -348,48 +411,25 @@ class NestKiosk(QMainWindow):
         self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold;")
 
         # -------------------------------------------------------------
-        # 2. CONTROL CENTER
+        # 2. SPLIT-SCREEN CONTROL CENTER (Left: Settings | Right: Notifs)
         # -------------------------------------------------------------
         self.control_center = SlidingPanel(self, QRect(0, -500, 1024, 500), QRect(0, 0, 1024, 500))
-        self.control_center.setStyleSheet("background-color: #16161A; border-bottom: 2px solid #282830;")
+        self.control_center.setStyleSheet("background-color: rgba(22, 22, 26, 245); border-bottom: 2px solid #282830;")
         
-        self.cc_header = QWidget(self.control_center)
-        self.cc_header.setGeometry(0, 0, 1024, 60)
-        self.cc_header.setStyleSheet("background-color: rgba(22, 22, 26, 240); border-bottom: 1px solid #22222A;")
-        
-        header_layout = QHBoxLayout(self.cc_header)
-        header_layout.setContentsMargins(50, 10, 50, 10)
-        
-        self.btn_tab_settings = QPushButton("⚙️ Quick Settings")
-        self.btn_tab_notifs = QPushButton("🔔 Notifications")
-        
-        self.cc_tab_active = "background: rgba(255,255,255,30); color: white; border-radius: 18px; font-weight: bold; font-size: 15px; padding: 6px 20px;"
-        self.cc_tab_inactive = "background: transparent; color: rgba(255,255,255,140); border-radius: 18px; font-weight: bold; font-size: 15px; padding: 6px 20px;"
-        
-        self.btn_tab_settings.setStyleSheet(self.cc_tab_active)
-        self.btn_tab_notifs.setStyleSheet(self.cc_tab_inactive)
-        self.btn_tab_settings.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_tab_notifs.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        self.btn_tab_settings.clicked.connect(lambda: self.switch_cc_page(0))
-        self.btn_tab_notifs.clicked.connect(lambda: self.switch_cc_page(1))
-        
-        header_layout.addStretch()
-        header_layout.addWidget(self.btn_tab_settings)
-        header_layout.addWidget(self.btn_tab_notifs)
-        header_layout.addStretch()
+        cc_layout = QHBoxLayout(self.control_center)
+        cc_layout.setContentsMargins(50, 40, 50, 40)
+        cc_layout.setSpacing(40)
 
-        self.cc_carousel = QWidget(self.control_center)
-        self.cc_carousel.setGeometry(0, 60, 1024, 440)
-        self.cc_index = 0
-        self.cc_pages = []
-
-        # Page 0: Quick Settings
-        self.page_settings = QWidget(self.cc_carousel)
-        self.page_settings.setGeometry(0, 0, 1024, 440)
+        # LEFT SIDE: Quick Settings
+        self.page_settings = QWidget()
+        self.page_settings.setFixedWidth(400)
         settings_layout = QVBoxLayout(self.page_settings)
-        settings_layout.setContentsMargins(60, 20, 60, 20)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
         settings_layout.setSpacing(20)
+
+        lbl_qs_title = QLabel("⚙️ Quick Settings")
+        lbl_qs_title.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        settings_layout.addWidget(lbl_qs_title)
 
         qs_card = QFrame()
         qs_card.setStyleSheet("background-color: #22222B; border-radius: 12px; border: 1px solid #2F2F3B;")
@@ -424,16 +464,23 @@ class NestKiosk(QMainWindow):
         close_sys_btn.clicked.connect(self.close)
         settings_layout.addWidget(close_sys_btn)
 
-        # Page 1: Notification Center
-        self.page_notifs = QWidget(self.cc_carousel)
-        self.page_notifs.setGeometry(1024, 0, 1024, 440)
+        cc_layout.addWidget(self.page_settings)
+
+        # CENTER DIVIDER
+        divider = QFrame()
+        divider.setFrameShape(QFrame.Shape.VLine)
+        divider.setStyleSheet("background-color: #33333F;")
+        cc_layout.addWidget(divider)
+
+        # RIGHT SIDE: Notifications
+        self.page_notifs = QWidget()
         notifs_main_layout = QVBoxLayout(self.page_notifs)
-        notifs_main_layout.setContentsMargins(50, 15, 50, 15)
+        notifs_main_layout.setContentsMargins(0, 0, 0, 0)
         notifs_main_layout.setSpacing(10)
 
         notif_header = QHBoxLayout()
         self.lbl_notif_count = QLabel("Recent Alerts")
-        self.lbl_notif_count.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        self.lbl_notif_count.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
         notif_header.addWidget(self.lbl_notif_count)
         notif_header.addStretch()
 
@@ -462,9 +509,7 @@ class NestKiosk(QMainWindow):
         self.notif_scroll.setWidget(self.notif_container)
         notifs_main_layout.addWidget(self.notif_scroll)
 
-        self.cc_pages.extend([self.page_settings, self.page_notifs])
-        
-        # Fresh initialization with completely empty notifications
+        cc_layout.addWidget(self.page_notifs)
         self.update_notif_header()
 
         # -------------------------------------------------------------
@@ -583,12 +628,22 @@ class NestKiosk(QMainWindow):
         QTimer.singleShot(8000, self.check_for_app_updates)
 
     def show_toast(self, app_name, title, desc, icon):
-        """Creates and fires a One UI system-wide pop-up notification."""
+        """Creates and fires a One UI system-wide pop-up notification with sound, respecting DND/Silent."""
+        dnd_mode = get_system_setting("dnd_mode", False)
+        if dnd_mode:
+            return  # Suppress heads-up toast entirely
+            
         try:
             if getattr(self, 'current_toast', None):
                 self.current_toast.deleteLater()
         except RuntimeError:
             pass
+            
+        silent_mode = get_system_setting("silent_mode", False)
+        if self.notif_sound and not silent_mode:
+            sys_vol = get_system_setting("system_volume", 80)
+            self.notif_sound.setVolume(sys_vol / 100.0)
+            self.notif_sound.play()
             
         self.current_toast = ToastNotification(self, app_name, title, desc, icon, self.launch_app)
         self.current_toast.show_toast()
@@ -608,7 +663,6 @@ class NestKiosk(QMainWindow):
             os.makedirs("screenshots", exist_ok=True)
             timestamp = int(time.time())
             
-            # Determine prefix based on currently active app if visible
             app_name = "kiosk"
             if not self.app_view.isHidden():
                 for name, widget in self.running_apps.items():
@@ -617,12 +671,9 @@ class NestKiosk(QMainWindow):
                         break
 
             filename = f"screenshots/{app_name}_{timestamp}.png"
-            
-            # Capture pixels from main window
             pixmap = self.grab()
             pixmap.save(filename, "PNG")
             
-            # Fire toast notification feedback
             self.show_toast("App Store", "Screenshot Saved", f"Saved to {filename}", "📸")
         except Exception as e:
             print(f"Screenshot error: {e}")
@@ -648,7 +699,6 @@ class NestKiosk(QMainWindow):
         self.show_toast("Settings", "System Update", desc, "⚙️")
 
     def check_for_app_updates(self):
-        """Spawns an isolated thread checking remote repository packages mapping local files only."""
         if hasattr(self, 'app_update_thread') and self.app_update_thread and self.app_update_thread.isRunning():
             return
         self.app_update_thread = AppStoreUpdateCheckThread()
@@ -743,27 +793,6 @@ class NestKiosk(QMainWindow):
                 self.empty_label.deleteLater()
                 self.empty_label = None
             self.lbl_notif_count.setText(f"Recent Alerts ({count})")
-
-    def switch_cc_page(self, index):
-        if index == self.cc_index: return
-        target_x = -1024 if index > self.cc_index else 1024
-        
-        current_page = self.cc_pages[self.cc_index]
-        next_page = self.cc_pages[index]
-        next_page.show()
-        next_page.move(target_x, 0)
-        
-        self.animate_carousel(current_page, QRect(-target_x, 0, 1024, 440), next_page, QRect(0, 0, 1024, 440), index)
-        self.update_cc_tabs(index)
-
-    def update_cc_tabs(self, active_idx):
-        self.cc_index = active_idx
-        if active_idx == 0:
-            self.btn_tab_settings.setStyleSheet(self.cc_tab_active)
-            self.btn_tab_notifs.setStyleSheet(self.cc_tab_inactive)
-        else:
-            self.btn_tab_settings.setStyleSheet(self.cc_tab_inactive)
-            self.btn_tab_notifs.setStyleSheet(self.cc_tab_active)
 
     # =================================================================
     # TASK SWITCHER BUTTON & EXPANDING RIBBON
@@ -955,9 +984,7 @@ class NestKiosk(QMainWindow):
                         self.active_gesture = 'open_controls'
                         self.control_center.raise_()
             else:
-                if self.control_center.is_visible:
-                    self.active_gesture = 'cc_horizontal'
-                elif not self.app_drawer.is_visible and self.app_view.isHidden():
+                if not self.app_drawer.is_visible and not self.control_center.is_visible and self.app_view.isHidden():
                     self.active_gesture = 'horizontal'
 
         if self.active_gesture == 'edge_swipe_back':
@@ -975,17 +1002,6 @@ class NestKiosk(QMainWindow):
         elif self.active_gesture == 'close_controls':
             new_y = max(-500, min(0, dy))
             self.control_center.move(0, new_y)
-        elif self.active_gesture == 'cc_horizontal':
-            current_page = self.cc_pages[self.cc_index]
-            other_index = 1 if self.cc_index == 0 else 0
-            other_page = self.cc_pages[other_index]
-            
-            current_page.move(dx, 0)
-            other_page.show()
-            if dx < 0:
-                other_page.move(1024 + dx, 0)
-            else:
-                other_page.move(-1024 + dx, 0)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             current_page.move(dx, 0)
@@ -1025,18 +1041,6 @@ class NestKiosk(QMainWindow):
         elif self.active_gesture == 'close_controls':
             if dy < -120: self.control_center.slide_out()
             else:         self.control_center.slide_in()
-        elif self.active_gesture == 'cc_horizontal':
-            current_page = self.cc_pages[self.cc_index]
-            other_index = 1 if self.cc_index == 0 else 0
-            other_page = self.cc_pages[other_index]
-            
-            if abs(dx) > 150:
-                target_x = -1024 if dx < 0 else 1024
-                self.animate_carousel(current_page, QRect(target_x, 0, 1024, 440), other_page, QRect(0, 0, 1024, 440), other_index)
-                self.update_cc_tabs(other_index)
-            else:
-                self.animate_carousel(current_page, QRect(0, 0, 1024, 440))
-                other_page.move(1024 if dx < 0 else -1024, 0)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             if dx < -200 and self.home_index < len(self.home_pages) - 1:
@@ -1069,10 +1073,7 @@ class NestKiosk(QMainWindow):
             self.anim_next.setEndValue(target2)
             self.anim_next.start()
             if new_index is not None:
-                if page1 in self.home_pages:
-                    self.home_index = new_index
-                else:
-                    self.cc_index = new_index
+                self.home_index = new_index
 
     # =================================================================
     # APP LAUNCHING & ROUTING

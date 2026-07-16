@@ -112,6 +112,7 @@ class SettingsPage(QWidget):
         categories = [
             ("Network & Wi-Fi", "📶"),
             ("Display", "☀️"),
+            ("Audio & Sound", "🔊"),
             ("Customize", "🎨"),
             ("System Storage", "💾"),
             ("Software Update", "🔄"),
@@ -135,6 +136,7 @@ class SettingsPage(QWidget):
         
         self.right_stack.addWidget(self.create_network_page())
         self.right_stack.addWidget(self.create_display_page())
+        self.right_stack.addWidget(self.create_audio_page())
         self.right_stack.addWidget(self.create_customize_page())
         self.right_stack.addWidget(self.create_storage_page())
         self.right_stack.addWidget(self.create_update_page()) 
@@ -159,6 +161,23 @@ class SettingsPage(QWidget):
         except Exception:
             pass
         return default
+
+    def save_setting(self, key, value):
+        config = {}
+        try:
+            if os.path.exists("config.json"):
+                with open("config.json", "r") as f:
+                    config = json.load(f)
+        except Exception:
+            pass
+            
+        config[key] = value
+        
+        try:
+            with open("config.json", "w") as f:
+                json.dump(config, f)
+        except Exception as e:
+            print(f"Failed to save setting: {e}")
 
     # =================================================================
     # CATEGORY PAGES
@@ -239,12 +258,107 @@ class SettingsPage(QWidget):
             QSlider::sub-page:horizontal { background: #5A8DEF; border-radius: 4px; }
             QSlider::handle:horizontal { width: 24px; margin: -8px 0; background: white; border-radius: 12px; }
         """)
-        self.bright_slider.valueChanged.connect(self.change_brightness)
+        self.bright_slider.valueChanged.connect(lambda v: self.save_setting("brightness", v))
         card_layout.addWidget(self.bright_slider)
         
         layout.addWidget(card)
         layout.addStretch()
         return page
+
+    def create_audio_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        title = QLabel("Audio & Sound")
+        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setStyleSheet("color: white;")
+        layout.addWidget(title)
+        layout.addSpacing(20)
+
+        # Make content scrollable for small displays
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        card = QFrame()
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(15)
+        
+        # 1. System Sounds Volume Slider
+        lbl_vol = QLabel("System Sounds Volume")
+        lbl_vol.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_vol.setStyleSheet("color: white; border: none;")
+        card_layout.addWidget(lbl_vol)
+        
+        self.sys_vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.sys_vol_slider.setRange(0, 100)
+        self.sys_vol_slider.setValue(self.get_saved_setting("system_volume", 80))
+        self.sys_vol_slider.setStyleSheet("""
+            QSlider { background: transparent; height: 50px; }
+            QSlider::groove:horizontal { height: 8px; background: rgba(255, 255, 255, 30); border-radius: 4px; }
+            QSlider::sub-page:horizontal { background: #5A8DEF; border-radius: 4px; }
+            QSlider::handle:horizontal { width: 24px; margin: -8px 0; background: white; border-radius: 12px; }
+        """)
+        self.sys_vol_slider.valueChanged.connect(lambda v: self.save_setting("system_volume", v))
+        card_layout.addWidget(self.sys_vol_slider)
+
+        card_layout.addSpacing(10)
+
+        # 2. Silent Mode Toggle
+        self.is_silent = self.get_saved_setting("silent_mode", False)
+        self.btn_silent = QPushButton()
+        self.update_toggle_btn(self.btn_silent, "Silent Mode (Mute System Sounds)", self.is_silent)
+        self.btn_silent.clicked.connect(self.toggle_silent)
+        card_layout.addWidget(self.btn_silent)
+
+        # 3. Do Not Disturb Toggle
+        self.is_dnd = self.get_saved_setting("dnd_mode", False)
+        self.btn_dnd = QPushButton()
+        self.update_toggle_btn(self.btn_dnd, "Do Not Disturb (Hide Pop-up Notifications)", self.is_dnd)
+        self.btn_dnd.clicked.connect(self.toggle_dnd)
+        card_layout.addWidget(self.btn_dnd)
+
+        container_layout.addWidget(card)
+        container_layout.addStretch()
+        
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+        return page
+
+    def update_toggle_btn(self, btn, text, state):
+        """Helper to style toggle buttons beautifully."""
+        btn.setFixedHeight(60)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        if state:
+            btn.setText(f"✓  {text}")
+            btn.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; text-align: left; padding-left: 20px; border: none; }")
+        else:
+            btn.setText(f"✕  {text}")
+            btn.setStyleSheet("QPushButton { background-color: #2C2C35; color: #AAAAAA; border-radius: 12px; text-align: left; padding-left: 20px; border: none; }")
+
+    def toggle_silent(self):
+        self.is_silent = not self.is_silent
+        self.save_setting("silent_mode", self.is_silent)
+        self.update_toggle_btn(self.btn_silent, "Silent Mode (Mute System Sounds)", self.is_silent)
+
+    def toggle_dnd(self):
+        self.is_dnd = not self.is_dnd
+        self.save_setting("dnd_mode", self.is_dnd)
+        self.update_toggle_btn(self.btn_dnd, "Do Not Disturb (Hide Pop-up Notifications)", self.is_dnd)
 
     def create_customize_page(self):
         page = QWidget()
@@ -351,7 +465,6 @@ class SettingsPage(QWidget):
         layout.addStretch()
         return page
 
-    # --- REAL SOFTWARE UPDATE PAGE ---
     def create_update_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -407,7 +520,6 @@ class SettingsPage(QWidget):
         return page
 
     def trigger_update_check(self):
-        """Contacts GitHub to read the version manifest."""
         self.btn_check_update.setEnabled(False)
         self.btn_check_update.setText("Checking GitHub...")
         
@@ -446,14 +558,12 @@ class SettingsPage(QWidget):
         self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Update failed.\nError: {err_msg}")
 
     def install_update(self, new_version):
-        """Runs a Git Pull and restarts the machine."""
         self.btn_check_update.setEnabled(False)
         self.btn_check_update.setText("Installing...")
         self.update_progress.show()
         self.lbl_update_status.setText(f"Status: Pulling latest code from GitHub...\nPlease do not turn off the device.")
         
         self.save_setting("os_version", new_version)
-        
         QTimer.singleShot(1500, lambda: os.system("git pull origin main && sudo reboot"))
 
 
@@ -495,25 +605,8 @@ class SettingsPage(QWidget):
         return page
 
     # =================================================================
-    # SYSTEM HOOKS & CONFIG
+    # SYSTEM CONFIG HELPERS
     # =================================================================
-    def save_setting(self, key, value):
-        config = {}
-        try:
-            if os.path.exists("config.json"):
-                with open("config.json", "r") as f:
-                    config = json.load(f)
-        except Exception:
-            pass
-            
-        config[key] = value
-        
-        try:
-            with open("config.json", "w") as f:
-                json.dump(config, f)
-        except Exception as e:
-            print(f"Failed to save setting: {e}")
-
     def update_scale_val(self, val):
         self.lbl_scale_val.setText(f"{val}%")
         self.save_setting("app_drawer_scale", val)
@@ -556,9 +649,6 @@ class SettingsPage(QWidget):
             return f"Free Space: {free_gb} GB\nTotal Size: {total_gb} GB"
         except Exception:
             return "Storage information unavailable."
-
-    def change_brightness(self, value):
-        self.save_setting("brightness", value)
 
     def reboot_system(self):
         reply = QMessageBox.question(
