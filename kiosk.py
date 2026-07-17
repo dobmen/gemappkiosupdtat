@@ -67,11 +67,14 @@ class SystemUpdateCheckThread(QThread):
                     data = json.load(f)
                     local_version = data.get("version", "0.1.0")
 
+            # Dynamically fetch the update channel from settings (defaults to main)
+            channel = get_system_setting("update_channel", "main")
+
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-            url = "https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/main/os_version.json"
+            url = f"https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/{channel}/os_version.json"
             req = urllib.request.Request(url, headers={'User-Agent': 'KioskOS-Updater/1.0'})
             
             with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
@@ -1118,29 +1121,6 @@ class NestKiosk(QMainWindow):
     # =================================================================
     # APP LAUNCHING & ROUTING
     # =================================================================
-    def update_clock(self):
-        t = QTime.currentTime()
-        d = QDate.currentDate()
-        if self.active_clock_widget:
-            self.active_clock_widget.update_time(t, d)
-        if hasattr(self, 'selector_overlay'):
-            self.selector_overlay.update_time(t, d)
-
-    def apply_clockface(self, idx):
-        if self.active_clock_widget:
-            self.active_clock_widget.setParent(None)
-            self.active_clock_widget.deleteLater()
-            
-        self.active_clock_widget = CLOCKFACE_CLASSES[idx]()
-        self.clock_layout.addWidget(self.active_clock_widget)
-        save_system_setting("clockface_index", idx)
-        self.update_clock()
-
-    def open_clockface_selector(self):
-        self.long_press_timer.stop()
-        current_idx = get_system_setting("clockface_index", 0)
-        self.selector_overlay.show_selector(current_idx)
-
     def launch_app(self, app_name):
         self.app_drawer.slide_out()
         self.task_ribbon.hide()
