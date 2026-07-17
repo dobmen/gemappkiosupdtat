@@ -4,15 +4,21 @@ import shutil
 import json
 import urllib.request
 import time
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog
 )
 
+# =================================================================
+# ⚙️ OS UPDATE CONFIGURATION
+# =================================================================
+UPDATE_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/main/os_version.json"
+
+
 class CheckUpdateThread(QThread):
-    """Background thread to fetch the latest OS version from the selected GitHub branch."""
+    """Background thread to fetch the latest OS version from GitHub."""
     on_success = pyqtSignal(dict)
     on_error = pyqtSignal(str)
 
@@ -22,7 +28,6 @@ class CheckUpdateThread(QThread):
 
     def run(self):
         try:
-            # Dynamically fetches from the 'main' or 'beta' branch based on user settings
             update_url = f"https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/{self.channel}/os_version.json"
             cache_busting_url = f"{update_url}?t={int(time.time())}"
             req = urllib.request.Request(cache_busting_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -40,7 +45,6 @@ class ModernDialog(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        
         self.setFixedSize(520, 300)
 
         layout = QVBoxLayout(self)
@@ -97,11 +101,17 @@ class ModernDialog(QDialog):
 
 
 class CategoryButton(QPushButton):
-    def __init__(self, title, icon):
-        super().__init__(f"{icon}  {title}")
+    def __init__(self, title, icon_path):
+        super().__init__(f"  {title}")
         self.setFixedHeight(75) 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        
+        # Load PNG icon if it exists
+        if os.path.exists(icon_path):
+            self.setIcon(QIcon(icon_path))
+            self.setIconSize(QSize(28, 28))
+            
         self.setStyleSheet(self.get_inactive_style())
 
     def get_inactive_style(self):
@@ -173,18 +183,18 @@ class SettingsPage(QWidget):
 
         self.category_buttons = []
         categories = [
-            ("Network & Wi-Fi", "📶"),
-            ("Display", "☀️"),
-            ("Audio & Sound", "🔊"),
-            ("Customize", "🎨"),
-            ("Installed Apps", "📱"),
-            ("System Storage", "💾"),
-            ("Software Update", "🔄"),
-            ("Power", "⚡")
+            ("Network and Wi-Fi", "icons/network.png"),
+            ("Display", "icons/display.png"),
+            ("Audio and Sound", "icons/audio.png"),
+            ("Customize", "icons/customize.png"),
+            ("Installed Apps", "icons/apps.png"),
+            ("System Storage", "icons/storage.png"),
+            ("Software Update", "icons/update.png"),
+            ("Power", "icons/power.png")
         ]
 
-        for i, (title, icon) in enumerate(categories):
-            btn = CategoryButton(title, icon)
+        for i, (title, icon_path) in enumerate(categories):
+            btn = CategoryButton(title, icon_path)
             btn.clicked.connect(lambda checked, idx=i: self.switch_category(idx))
             self.category_buttons.append(btn)
             left_layout.addWidget(btn)
@@ -216,7 +226,10 @@ class SettingsPage(QWidget):
         self.right_stack.setCurrentIndex(index)
         for i, btn in enumerate(self.category_buttons):
             btn.set_active(i == index)
-        if index == 4:
+        # Refresh dynamic tabs when clicked
+        if index == 3: # Customize
+            self.update_clockface_preview()
+        elif index == 4: # Installed Apps
             self.refresh_apps_list()
 
     def get_saved_setting(self, key, default):
@@ -306,15 +319,24 @@ class SettingsPage(QWidget):
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
         card_layout = QVBoxLayout(card)
         
+        # Display Brightness with Percentage
+        bright_header = QHBoxLayout()
         lbl_bright = QLabel("Screen Brightness")
-        lbl_bright.setFont(QFont("Google Sans", 16))
-        lbl_bright.setStyleSheet("color: #CCCCCC; border: none;")
-        card_layout.addWidget(lbl_bright)
+        lbl_bright.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_bright.setStyleSheet("color: white; border: none;")
+        
+        saved_brightness = self.get_saved_setting("brightness", 80)
+        self.lbl_bright_val = QLabel(f"{saved_brightness}%")
+        self.lbl_bright_val.setFont(QFont("Google Sans", 16))
+        self.lbl_bright_val.setStyleSheet("color: #5A8DEF; border: none;")
+        
+        bright_header.addWidget(lbl_bright)
+        bright_header.addStretch()
+        bright_header.addWidget(self.lbl_bright_val)
+        card_layout.addLayout(bright_header)
         
         self.bright_slider = QSlider(Qt.Orientation.Horizontal)
         self.bright_slider.setRange(10, 100)
-        
-        saved_brightness = self.get_saved_setting("brightness", 80)
         self.bright_slider.setValue(saved_brightness)
         
         self.bright_slider.setStyleSheet("""
@@ -323,12 +345,16 @@ class SettingsPage(QWidget):
             QSlider::sub-page:horizontal { background: #5A8DEF; border-radius: 4px; }
             QSlider::handle:horizontal { width: 24px; margin: -8px 0; background: white; border-radius: 12px; }
         """)
-        self.bright_slider.valueChanged.connect(lambda v: self.save_setting("brightness", v))
+        self.bright_slider.valueChanged.connect(self.update_brightness_val)
         card_layout.addWidget(self.bright_slider)
         
         layout.addWidget(card)
         layout.addStretch()
         return page
+
+    def update_brightness_val(self, val):
+        self.lbl_bright_val.setText(f"{val}%")
+        self.save_setting("brightness", val)
 
     def create_audio_page(self):
         page = QWidget()
@@ -336,7 +362,7 @@ class SettingsPage(QWidget):
         layout.setContentsMargins(30, 20, 30, 30)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        title = QLabel("Audio & Sound")
+        title = QLabel("Audio and Sound")
         title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
@@ -390,15 +416,17 @@ class SettingsPage(QWidget):
 
         card_layout.addSpacing(10)
 
+        # Silent Mode Redesign
         self.is_silent = self.get_saved_setting("silent_mode", False)
         self.btn_silent = QPushButton()
-        self.update_toggle_btn(self.btn_silent, "Silent Mode (Mute System Sounds)", self.is_silent)
+        self.update_toggle_btn(self.btn_silent, "Silent Mode", self.is_silent, "silent")
         self.btn_silent.clicked.connect(self.toggle_silent)
         card_layout.addWidget(self.btn_silent)
 
+        # DND Mode Redesign
         self.is_dnd = self.get_saved_setting("dnd_mode", False)
         self.btn_dnd = QPushButton()
-        self.update_toggle_btn(self.btn_dnd, "Do Not Disturb (Hide Pop-up Notifications)", self.is_dnd)
+        self.update_toggle_btn(self.btn_dnd, "Do Not Disturb", self.is_dnd, "dnd")
         self.btn_dnd.clicked.connect(self.toggle_dnd)
         card_layout.addWidget(self.btn_dnd)
 
@@ -413,26 +441,38 @@ class SettingsPage(QWidget):
         self.lbl_vol_val.setText(f"{val}%")
         self.save_setting("system_volume", val)
 
-    def update_toggle_btn(self, btn, text, state):
+    def update_toggle_btn(self, btn, text, state, mode_type="default"):
         btn.setFixedHeight(60)
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
-        if state:
-            btn.setText(f"✓  {text}")
-            btn.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; text-align: left; padding-left: 20px; border: none; }")
+        
+        if mode_type == "silent":
+            active_bg = "#E24A4A"  # Red
+            icon = "🔕"
+        elif mode_type == "dnd":
+            active_bg = "#7B61FF"  # Blue-purple
+            icon = "🌙"
         else:
-            btn.setText(f"✕  {text}")
+            active_bg = "#5A8DEF"
+            icon = "✓"
+
+        if state:
+            btn.setText(f"{icon}  {text} (ON)")
+            btn.setStyleSheet(f"QPushButton {{ background-color: {active_bg}; color: white; border-radius: 12px; text-align: left; padding-left: 20px; border: none; }}")
+        else:
+            icon_off = "✕" if mode_type == "default" else icon
+            btn.setText(f"{icon_off}  {text} (OFF)")
             btn.setStyleSheet("QPushButton { background-color: #2C2C35; color: #AAAAAA; border-radius: 12px; text-align: left; padding-left: 20px; border: none; }")
 
     def toggle_silent(self):
         self.is_silent = not self.is_silent
         self.save_setting("silent_mode", self.is_silent)
-        self.update_toggle_btn(self.btn_silent, "Silent Mode (Mute System Sounds)", self.is_silent)
+        self.update_toggle_btn(self.btn_silent, "Silent Mode", self.is_silent, "silent")
 
     def toggle_dnd(self):
         self.is_dnd = not self.is_dnd
         self.save_setting("dnd_mode", self.is_dnd)
-        self.update_toggle_btn(self.btn_dnd, "Do Not Disturb (Hide Pop-up Notifications)", self.is_dnd)
+        self.update_toggle_btn(self.btn_dnd, "Do Not Disturb", self.is_dnd, "dnd")
 
     def create_customize_page(self):
         page = QWidget()
@@ -445,19 +485,32 @@ class SettingsPage(QWidget):
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
         layout.addSpacing(20)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+
+        container = QWidget()
+        container.setStyleSheet("background: transparent;")
+        card_layout = QVBoxLayout(container)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
-        card_layout = QVBoxLayout(card)
+        c_layout = QVBoxLayout(card)
         
-        saved_scale = self.get_saved_setting("app_drawer_scale", 100)
-        
+        # App Drawer settings
         scale_header = QHBoxLayout()
         lbl_scale = QLabel("App Drawer Icon Scale")
         lbl_scale.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
         lbl_scale.setStyleSheet("color: white; border: none;")
         
+        saved_scale = self.get_saved_setting("app_drawer_scale", 100)
         self.lbl_scale_val = QLabel(f"{saved_scale}%")
         self.lbl_scale_val.setFont(QFont("Google Sans", 16))
         self.lbl_scale_val.setStyleSheet("color: #5A8DEF; border: none;")
@@ -465,7 +518,7 @@ class SettingsPage(QWidget):
         scale_header.addWidget(lbl_scale)
         scale_header.addStretch()
         scale_header.addWidget(self.lbl_scale_val)
-        card_layout.addLayout(scale_header)
+        c_layout.addLayout(scale_header)
         
         self.scale_slider = QSlider(Qt.Orientation.Horizontal)
         self.scale_slider.setRange(50, 200) 
@@ -477,14 +530,14 @@ class SettingsPage(QWidget):
             QSlider::handle:horizontal { width: 24px; margin: -8px 0; background: white; border-radius: 12px; }
         """)
         self.scale_slider.valueChanged.connect(self.update_scale_val)
-        card_layout.addWidget(self.scale_slider)
+        c_layout.addWidget(self.scale_slider)
         
-        card_layout.addSpacing(15)
+        c_layout.addSpacing(15)
 
         lbl_layout = QLabel("App Drawer Layout")
         lbl_layout.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
         lbl_layout.setStyleSheet("color: white; border: none;")
-        card_layout.addWidget(lbl_layout)
+        c_layout.addWidget(lbl_layout)
 
         layout_btns = QHBoxLayout()
         layout_btns.setSpacing(15)
@@ -503,15 +556,91 @@ class SettingsPage(QWidget):
 
         layout_btns.addWidget(self.btn_grid)
         layout_btns.addWidget(self.btn_list)
-        card_layout.addLayout(layout_btns)
+        c_layout.addLayout(layout_btns)
+        
+        card_layout.addWidget(card)
+        card_layout.addSpacing(20)
 
-        layout.addWidget(card)
-        layout.addStretch()
+        # Clockface Preview Sub-Card
+        lbl_cf = QLabel("Watch Face")
+        lbl_cf.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_cf.setStyleSheet("color: white; border: none;")
+        card_layout.addWidget(lbl_cf)
+
+        cf_card = QFrame()
+        cf_card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
+        cf_layout = QHBoxLayout(cf_card)
+        cf_layout.setContentsMargins(15, 15, 15, 15)
+        cf_layout.setSpacing(15)
+        
+        self.lbl_cf_preview = QLabel()
+        self.lbl_cf_preview.setFixedSize(90, 90)
+        self.lbl_cf_preview.setStyleSheet("background-color: #0C0C0E; border-radius: 45px; border: 2px solid #5A8DEF;")
+        self.lbl_cf_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cf_layout.addWidget(self.lbl_cf_preview)
+        
+        cf_info = QVBoxLayout()
+        cf_name = QLabel("Current Clockface")
+        cf_name.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        cf_name.setStyleSheet("color: white; border: none; background: transparent;")
+        
+        btn_change_cf = QPushButton("Change Clockface")
+        btn_change_cf.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_change_cf.setStyleSheet("""
+            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-size: 13px; font-weight: bold; padding: 8px 14px; border: none; }
+            QPushButton:hover { background-color: #4A7DDF; }
+        """)
+        btn_change_cf.clicked.connect(self.open_clockface_selector)
+        
+        cf_info.addWidget(cf_name)
+        cf_info.addWidget(btn_change_cf)
+        cf_info.addStretch()
+        
+        cf_layout.addLayout(cf_info)
+        cf_layout.addStretch()
+        card_layout.addWidget(cf_card)
+
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
         
         saved_layout = self.get_saved_setting("app_drawer_layout", "grid")
         self.set_app_layout(saved_layout, save=False)
+        self.update_clockface_preview()
+        
         return page
 
+    def update_clockface_preview(self):
+        """Dynamically instantiates and renders the active clockface to a miniature preview pixmap."""
+        try:
+            from components.clockfaces import CLOCKFACE_CLASSES
+            from PyQt6.QtCore import QTime, QDate
+            
+            idx = self.get_saved_setting("clockface_index", 0)
+            if idx < len(CLOCKFACE_CLASSES):
+                inst = CLOCKFACE_CLASSES[idx]()
+                inst.setGeometry(0, 0, 360, 360)
+                inst.update_time(QTime.currentTime(), QDate.currentDate())
+                
+                pix = QPixmap(360, 360)
+                pix.fill(Qt.GlobalColor.transparent)
+                inst.render(pix)
+                
+                scaled = pix.scaled(90, 90, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                self.lbl_cf_preview.setPixmap(scaled)
+        except Exception as e:
+            print(f"Could not load clockface preview: {e}")
+
+    def open_clockface_selector(self):
+        """Triggers the wear-os style clockface selector from the main OS."""
+        main_window = self.window()
+        if hasattr(main_window, 'open_clockface_selector'):
+            if self.on_close:
+                self.on_close()  # Slide settings away
+            main_window.open_clockface_selector()
+
+    # =================================================================
+    # INSTALLED APPS PAGE W/ ICONS & UNINSTALLER
+    # =================================================================
     def create_apps_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -583,6 +712,43 @@ class SettingsPage(QWidget):
             app_id = filename[:-3] 
             app_name = "Music" if app_id == "local_music" else app_id.replace("_", " ").title()
 
+            # Dynamic Icon Loading
+            lbl_icon = QLabel()
+            lbl_icon.setFixedSize(48, 48)
+            lbl_icon.setStyleSheet("background: transparent; border: none;")
+            
+            icon_path = ""
+            if os.path.exists(os.path.join("icons", f"{app_id}.png")):
+                icon_path = os.path.join("icons", f"{app_id}.png")
+            elif os.path.exists(os.path.join("icons", f"{app_id}.svg")):
+                icon_path = os.path.join("icons", f"{app_id}.svg")
+                
+            target_pix = QPixmap(48, 48)
+            target_pix.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(target_pix)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            
+            original_pix = QPixmap(icon_path) if icon_path else QPixmap()
+            if not original_pix.isNull():
+                path = QPainterPath()
+                path.addEllipse(0, 0, 48, 48)
+                painter.setClipPath(path)
+                scaled = original_pix.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                x = (48 - scaled.width()) // 2
+                y = (48 - scaled.height()) // 2
+                painter.drawPixmap(x, y, scaled)
+            else:
+                colors = ["#E24A4A", "#5A8DEF", "#F39C12", "#27AE60", "#8E44AD", "#9B59B6"]
+                painter.setBrush(QColor(colors[len(app_name) % len(colors)]))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawEllipse(0, 0, 48, 48)
+                painter.setPen(QColor("#FFFFFF"))
+                painter.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
+                painter.drawText(QRect(0, 0, 48, 48), Qt.AlignmentFlag.AlignCenter, app_name[0].upper())
+            painter.end()
+            lbl_icon.setPixmap(target_pix)
+
             ver_file = os.path.join("apps", f"{app_id}.ver")
             version_str = ""
             if os.path.exists(ver_file):
@@ -608,6 +774,8 @@ class SettingsPage(QWidget):
             
             info_box.addWidget(lbl_name)
             info_box.addWidget(lbl_status)
+            
+            card_layout.addWidget(lbl_icon)
             card_layout.addLayout(info_box)
             card_layout.addStretch()
 
@@ -761,7 +929,6 @@ class SettingsPage(QWidget):
         self.save_setting("update_channel", channel)
         self.update_toggle_btn(self.btn_beta, "Receive Beta Updates", self.is_beta)
         
-        # Reset UI
         self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Switched to {channel.upper()} channel.")
         self.btn_check_update.setText("Check for Updates")
         self.btn_check_update.setStyleSheet("""
@@ -829,7 +996,6 @@ class SettingsPage(QWidget):
             self.lbl_update_status.setText(f"Status: Pulling latest code from GitHub...\nPlease do not turn off the device.")
             
             self.save_setting("os_version", new_version)
-            # Safely fetches, switches to the correct channel (creating it locally if needed), and hard resets
             git_cmd = f"git fetch origin && git switch -C {channel} origin/{channel} && sudo reboot"
             QTimer.singleShot(1500, lambda: os.system(git_cmd))
 

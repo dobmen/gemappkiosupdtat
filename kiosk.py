@@ -67,9 +67,7 @@ class SystemUpdateCheckThread(QThread):
                     data = json.load(f)
                     local_version = data.get("version", "0.1.0")
 
-            # Dynamically fetch the update channel from settings (defaults to main)
             channel = get_system_setting("update_channel", "main")
-
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
@@ -95,7 +93,7 @@ class AppStoreUpdateCheckThread(QThread):
             installed_modules = []
             if os.path.exists("apps"):
                 for filename in os.listdir("apps"):
-                    if filename.endswith(".py") and filename not in ["__init__.py", "app_store.py", "local_music.py", "web_app.py", "settings.py"]:
+                    if filename.endswith(".py") and filename not in ["__init__.py", "app_store.py", "local_music.py", "web_app.py", "settings.py", "gallery.py"]:
                         installed_modules.append(filename.replace(".py", ""))
 
             if not installed_modules:
@@ -141,7 +139,6 @@ class AppStoreUpdateCheckThread(QThread):
 
 
 class ToastNotification(QFrame):
-    """A One UI style system-wide heads-up notification with Swipe-to-Dismiss and Sound."""
     def __init__(self, parent, app_name, title, desc, icon_char, click_callback):
         super().__init__(parent)
         self.app_name = app_name
@@ -429,7 +426,7 @@ class NestKiosk(QMainWindow):
         self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold;")
 
         # -------------------------------------------------------------
-        # 2. SPLIT-SCREEN CONTROL CENTER (Left: Settings | Right: Notifs)
+        # 2. SPLIT-SCREEN CONTROL CENTER
         # -------------------------------------------------------------
         self.control_center = SlidingPanel(self, QRect(0, -500, 1024, 500), QRect(0, 0, 1024, 500))
         self.control_center.setStyleSheet("background-color: rgba(22, 22, 26, 245); border-bottom: 2px solid #282830;")
@@ -438,7 +435,6 @@ class NestKiosk(QMainWindow):
         cc_layout.setContentsMargins(50, 40, 50, 40)
         cc_layout.setSpacing(40)
 
-        # LEFT SIDE: Quick Settings
         self.page_settings = QWidget()
         self.page_settings.setFixedWidth(400)
         settings_layout = QVBoxLayout(self.page_settings)
@@ -484,13 +480,11 @@ class NestKiosk(QMainWindow):
 
         cc_layout.addWidget(self.page_settings)
 
-        # CENTER DIVIDER
         divider = QFrame()
         divider.setFrameShape(QFrame.Shape.VLine)
         divider.setStyleSheet("background-color: #33333F;")
         cc_layout.addWidget(divider)
 
-        # RIGHT SIDE: Notifications
         self.page_notifs = QWidget()
         notifs_main_layout = QVBoxLayout(self.page_notifs)
         notifs_main_layout.setContentsMargins(0, 0, 0, 0)
@@ -940,15 +934,17 @@ class NestKiosk(QMainWindow):
         for i in range(self.drawer_grid.rowCount()):
             self.drawer_grid.setRowStretch(i, 0)
 
+        # Added Gallery to Core Apps List
         core_apps = [
             ("App Store", "icons/appstore.png"),
+            ("Gallery", "icons/gallery.svg"),
             ("Local Music", "icons/music.svg")
         ]
 
         downloaded_apps = []
         if os.path.exists("apps"):
             for filename in sorted(os.listdir("apps")):
-                if filename.endswith(".py") and filename not in ["__init__.py", "app_store.py", "local_music.py", "web_app.py", "settings.py"]:
+                if filename.endswith(".py") and filename not in ["__init__.py", "app_store.py", "local_music.py", "web_app.py", "settings.py", "gallery.py"]:
                     clean_name = filename.replace(".py", "").replace("_", " ").title()
                     png_name = filename.replace(".py", ".png")
                     svg_name = filename.replace(".py", ".svg")
@@ -1121,6 +1117,29 @@ class NestKiosk(QMainWindow):
     # =================================================================
     # APP LAUNCHING & ROUTING
     # =================================================================
+    def update_clock(self):
+        t = QTime.currentTime()
+        d = QDate.currentDate()
+        if self.active_clock_widget:
+            self.active_clock_widget.update_time(t, d)
+        if hasattr(self, 'selector_overlay'):
+            self.selector_overlay.update_time(t, d)
+
+    def apply_clockface(self, idx):
+        if self.active_clock_widget:
+            self.active_clock_widget.setParent(None)
+            self.active_clock_widget.deleteLater()
+            
+        self.active_clock_widget = CLOCKFACE_CLASSES[idx]()
+        self.clock_layout.addWidget(self.active_clock_widget)
+        save_system_setting("clockface_index", idx)
+        self.update_clock()
+
+    def open_clockface_selector(self):
+        self.long_press_timer.stop()
+        current_idx = get_system_setting("clockface_index", 0)
+        self.selector_overlay.show_selector(current_idx)
+
     def launch_app(self, app_name):
         self.app_drawer.slide_out()
         self.task_ribbon.hide()
@@ -1134,6 +1153,10 @@ class NestKiosk(QMainWindow):
                 page_instance = LocalMusicPage()
             elif app_name == "App Store":
                 page_instance = AppStorePage()
+            elif app_name == "Gallery":
+                # Routings added for Gallery
+                from apps.gallery import GalleryPage
+                page_instance = GalleryPage(on_close=self.minimize_app)
             else:
                 loaded_successfully = False
                 try:
@@ -1143,7 +1166,7 @@ class NestKiosk(QMainWindow):
                         importlib.reload(mod) 
                         
                         for attr_name in dir(mod):
-                            if attr_name.endswith("Page") and attr_name not in ["AppStorePage", "LocalMusicPage"]:
+                            if attr_name.endswith("Page") and attr_name not in ["AppStorePage", "LocalMusicPage", "GalleryPage"]:
                                 page_class = getattr(mod, attr_name)
                                 try:
                                     page_instance = page_class(on_close=self.minimize_app)
