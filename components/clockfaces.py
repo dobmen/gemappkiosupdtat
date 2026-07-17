@@ -121,27 +121,35 @@ class StackedClock(QWidget):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(0)
+        
         self.lbl_hour = QLabel()
         self.lbl_hour.setFont(QFont("Google Sans", 115, QFont.Weight.Bold))
         self.lbl_hour.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         self.lbl_minute = QLabel()
         self.lbl_minute.setFont(QFont("Google Sans", 115, QFont.Weight.Bold))
         self.lbl_minute.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         self.lbl_date = QLabel()
         self.lbl_date.setFont(QFont("Google Sans", 20))
         self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         layout.addWidget(self.lbl_hour)
         layout.addWidget(self.lbl_minute)
+        layout.addSpacing(15) 
         layout.addWidget(self.lbl_date)
+        
         self.load_settings()
 
     def load_settings(self):
         self.hour_color = get_setting("stacked_hour", "#FFFFFF")
         self.min_color = get_setting("stacked_min", "#5A8DEF")
         self.bg = get_setting("stacked_bg", "#0C0C0E")
-        self.lbl_hour.setStyleSheet(f"color: {self.hour_color}; background: transparent;")
-        self.lbl_minute.setStyleSheet(f"color: {self.min_color}; background: transparent;")
-        self.lbl_date.setStyleSheet("color: #AAAAAA; margin-top: 15px; background: transparent;")
+        
+        # Using negative margins forces the text together vertically without shrinking the font size
+        self.lbl_hour.setStyleSheet(f"color: {self.hour_color}; background: transparent; margin-bottom: -25px;")
+        self.lbl_minute.setStyleSheet(f"color: {self.min_color}; background: transparent; margin-top: -25px;")
+        self.lbl_date.setStyleSheet("color: #AAAAAA; background: transparent;")
         self.update()
 
     def update_time(self, t, d):
@@ -268,6 +276,7 @@ class ClockSelectorOverlay(QWidget):
         self.previews = []
         self.wrappers = []
         self.name_labels = []
+        self.border_frames = []
         
         for i, (name, Cls) in enumerate(CLOCKFACES):
             inst = Cls()
@@ -281,12 +290,20 @@ class ClockSelectorOverlay(QWidget):
             lbl_card_name.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
             lbl_card_name.setStyleSheet("color: white; background: transparent; border: none; padding-top: 40px;")
             
+            # Un-clickable border overlay that perfectly wraps the clock
+            border_frame = QFrame()
+            border_frame.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            border_frame.setStyleSheet("border: 2px solid #33333F; border-radius: 36px;")
+            border_frame.hide()
+            
             l.addWidget(inst, 0, 0)
+            l.addWidget(border_frame, 0, 0)
             l.addWidget(lbl_card_name, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
             
             self.previews.append(inst)
             self.wrappers.append(wrapper)
             self.name_labels.append(lbl_card_name)
+            self.border_frames.append(border_frame)
             wrapper.hide()
 
         self.btn_close = QPushButton("✕", self.main_container)
@@ -450,6 +467,14 @@ class ClockSelectorOverlay(QWidget):
 
     def slide_to(self, idx):
         self.current_idx = idx
+        
+        # Dynamically map the border highlights
+        for i, b_frame in enumerate(self.border_frames):
+            if i == self.current_idx:
+                b_frame.setStyleSheet("border: 4px solid #FFFFFF; border-radius: 36px;")
+            else:
+                b_frame.setStyleSheet("border: 2px solid #33333F; border-radius: 36px;")
+        
         self.grp_slide = QParallelAnimationGroup()
         for i, wrapper in enumerate(self.wrappers):
             offset = i - self.current_idx
@@ -561,6 +586,8 @@ class ClockSelectorOverlay(QWidget):
         
         for lbl in self.name_labels:
             lbl.hide()
+        for b_frame in self.border_frames:
+            b_frame.hide()
             
         active_wrapper = self.wrappers[self.current_idx]
         active_wrapper.raise_()
@@ -597,6 +624,14 @@ class ClockSelectorOverlay(QWidget):
         
         for i, wrapper in enumerate(self.wrappers):
             self.name_labels[i].hide() 
+            self.border_frames[i].show()
+            
+            # Map the exact border layout directly upon showing
+            if i == self.current_idx:
+                self.border_frames[i].setStyleSheet("border: 4px solid #FFFFFF; border-radius: 36px;")
+            else:
+                self.border_frames[i].setStyleSheet("border: 2px solid #33333F; border-radius: 36px;")
+                
             offset = i - self.current_idx
             if offset == 0:
                 wrapper.setGeometry(0, 0, 1024, 600)
@@ -637,8 +672,11 @@ class ClockSelectorOverlay(QWidget):
         self.lbl_title.hide()
         self.btn_close.hide()
         self.btn_customize.hide()
+        
         for lbl in self.name_labels:
             lbl.hide()
+        for b_frame in self.border_frames:
+            b_frame.hide()
         
         if self.current_idx != self.saved_idx:
             self.current_idx = self.saved_idx
