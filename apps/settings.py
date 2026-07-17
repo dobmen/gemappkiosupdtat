@@ -4,21 +4,18 @@ import shutil
 import json
 import urllib.request
 import time
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor, QPen
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog
+    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit
 )
 
 # =================================================================
 # ⚙️ OS UPDATE CONFIGURATION
 # =================================================================
-UPDATE_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/main/os_version.json"
-
-
 class CheckUpdateThread(QThread):
-    """Background thread to fetch the latest OS version from GitHub."""
+    """Background thread to fetch the latest OS version from GitHub and calculate payload size."""
     on_success = pyqtSignal(dict)
     on_error = pyqtSignal(str)
 
@@ -31,8 +28,23 @@ class CheckUpdateThread(QThread):
             update_url = f"https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/{self.channel}/os_version.json"
             cache_busting_url = f"{update_url}?t={int(time.time())}"
             req = urllib.request.Request(cache_busting_url, headers={'User-Agent': 'Mozilla/5.0'})
+            
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode('utf-8'))
+                
+                # Dynamically calculate the payload size of the upcoming main.py file
+                size_mb = "Unknown"
+                if "main_script_url" in data:
+                    try:
+                        size_req = urllib.request.Request(data["main_script_url"], method='HEAD', headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(size_req, timeout=5) as size_resp:
+                            bytes_size = int(size_resp.headers.get('Content-Length', 0))
+                            if bytes_size > 0:
+                                size_mb = f"{(bytes_size / (1024 * 1024)):.2f} MB"
+                    except Exception:
+                        pass
+                
+                data['calculated_size'] = size_mb
                 self.on_success.emit(data)
         except Exception as e:
             self.on_error.emit(str(e))
@@ -695,7 +707,6 @@ class SettingsPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Added gallery.py firmly to core_apps
         core_apps = ["settings.py", "app_store.py", "__init__.py", "kiosk.py", "local_music.py", "spotify.py", "web_app.py", "gallery.py"]
         
         try:
@@ -704,7 +715,6 @@ class SettingsPage(QWidget):
             
             files = [f for f in os.listdir("apps") if f.endswith(".py") and not f.startswith("__")]
             
-            # Sort system apps to top, handling case sensitivity correctly
             files.sort(key=lambda x: (x.lower() not in core_apps, x.lower()))
         except Exception as e:
             lbl_err = QLabel(f"Error loading apps: {e}")
@@ -777,7 +787,6 @@ class SettingsPage(QWidget):
                 except Exception:
                     pass
             
-            # Locked Case-Insensitive Core Match Check
             is_core = filename.lower() in core_apps
 
             info_box = QVBoxLayout()
@@ -878,7 +887,7 @@ class SettingsPage(QWidget):
         return page
 
     # =================================================================
-    # UPDATE PAGE W/ BETA TOGGLE
+    # UPDATE PAGE W/ BETA TOGGLE & PAYLOAD SIZE INJECTION
     # =================================================================
     def create_update_page(self):
         page = QWidget()
@@ -918,7 +927,6 @@ class SettingsPage(QWidget):
         card_layout.addWidget(self.update_progress)
         card_layout.addSpacing(15)
 
-        # BETA TOGGLE SWITCH
         self.is_beta = self.get_saved_setting("update_channel", "main") == "beta"
         self.btn_beta = QPushButton()
         self.update_toggle_btn(self.btn_beta, "Receive Beta Updates", self.is_beta)
@@ -980,9 +988,10 @@ class SettingsPage(QWidget):
         
         latest_version = data.get("version", "0.0.0")
         release_notes = data.get("notes", "No notes provided.")
+        payload_size = data.get("calculated_size", "Unknown")
         
         if latest_version > self.current_os_version:
-            self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nNew Version Available: v{latest_version}\nNotes: {release_notes}")
+            self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nNew Version Available: v{latest_version}  ({payload_size})\nNotes: {release_notes}")
             self.btn_check_update.setText("⬇ Download & Install")
             self.btn_check_update.setStyleSheet("""
                 QPushButton { background-color: #1ED760; color: #0C0C0E; border-radius: 12px; }
