@@ -1,7 +1,30 @@
-# components/clockfaces.py
-from PyQt6.QtCore import Qt, QTime, QDate, QPoint, QPropertyAnimation, QParallelAnimationGroup
+import os
+from PyQt6.QtCore import Qt, QTime, QDate, QPoint, QRect, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, pyqtProperty
 from PyQt6.QtGui import QFont, QPainter, QPen, QColor, QBrush, QPolygon
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QStackedWidget, QPushButton, QGraphicsOpacityEffect
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QStackedWidget, QPushButton
+
+class FadeOverlay(QWidget):
+    """A completely thread-safe fade overlay to replace buggy QGraphicsOpacityEffect."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self._alpha = 0
+        self.hide()
+
+    @pyqtProperty(int)
+    def alpha(self):
+        return self._alpha
+
+    @alpha.setter
+    def alpha(self, value):
+        self._alpha = value
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(12, 12, 14, self._alpha))
+
 
 class ClassicClock(QWidget):
     def __init__(self):
@@ -21,6 +44,7 @@ class ClassicClock(QWidget):
     def update_time(self, t, d):
         self.lbl_time.setText(t.toString("HH:mm"))
         self.lbl_date.setText(d.toString("dddd, MMMM d"))
+
 
 class StackedClock(QWidget):
     def __init__(self):
@@ -47,6 +71,7 @@ class StackedClock(QWidget):
         self.lbl_hour.setText(t.toString("HH"))
         self.lbl_minute.setText(t.toString("mm"))
         self.lbl_date.setText(d.toString("dddd, MMM d"))
+
 
 class AnalogClock(QWidget):
     def __init__(self):
@@ -117,17 +142,21 @@ class ClockSelectorOverlay(QWidget):
         self.setGeometry(0, 0, 1024, 600)
         self.hide()
         
-        self.bg = QFrame(self)
-        self.bg.setGeometry(0, 0, 1024, 600)
-        self.bg.setStyleSheet("background-color: rgba(12, 12, 14, 245);")
+        # Container to hold everything so we can animate it sliding up
+        self.main_container = QFrame(self)
+        self.main_container.setGeometry(0, 0, 1024, 600)
         
-        self.lbl_title = QLabel("Select Watch Face", self)
+        self.bg = QFrame(self.main_container)
+        self.bg.setGeometry(0, 0, 1024, 600)
+        self.bg.setStyleSheet("background-color: rgba(12, 12, 14, 250);")
+        
+        self.lbl_title = QLabel("Select Watch Face", self.main_container)
         self.lbl_title.setGeometry(0, 40, 1024, 50)
         self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
         self.lbl_title.setStyleSheet("color: white; background: transparent;")
         
-        self.preview_stack = QStackedWidget(self)
+        self.preview_stack = QStackedWidget(self.main_container)
         self.preview_stack.setGeometry(312, 110, 400, 360)
         self.preview_stack.setStyleSheet("background: transparent;")
         
@@ -149,33 +178,35 @@ class ClockSelectorOverlay(QWidget):
             
             self.previews.append(inst)
             self.preview_stack.addWidget(container)
+
+        # Purely hardware-safe fade overlay placed strictly over the preview stack
+        self.fade_overlay = FadeOverlay(self.main_container)
+        self.fade_overlay.setGeometry(312, 110, 400, 360)
             
-        self.btn_prev = QPushButton("◀", self)
+        self.btn_prev = QPushButton("◀", self.main_container)
         self.btn_prev.setGeometry(200, 260, 60, 60)
         self.btn_prev.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_prev.setStyleSheet("background: rgba(255,255,255,20); color: white; border-radius: 30px; font-size: 24px; border: none;")
         self.btn_prev.clicked.connect(self.prev_face)
         
-        self.btn_next = QPushButton("▶", self)
+        self.btn_next = QPushButton("▶", self.main_container)
         self.btn_next.setGeometry(764, 260, 60, 60)
         self.btn_next.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_next.setStyleSheet("background: rgba(255,255,255,20); color: white; border-radius: 30px; font-size: 24px; border: none;")
         self.btn_next.clicked.connect(self.next_face)
         
-        self.btn_apply = QPushButton("Apply", self)
+        self.btn_apply = QPushButton("Apply", self.main_container)
         self.btn_apply.setGeometry(412, 500, 200, 50)
         self.btn_apply.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_apply.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 25px; font-size: 18px; font-weight: bold; border: none;")
         self.btn_apply.clicked.connect(self.apply)
         
-        self.btn_close = QPushButton("✕", self)
+        self.btn_close = QPushButton("✕", self.main_container)
         self.btn_close.setGeometry(50, 40, 50, 50)
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_close.setStyleSheet("background: rgba(255,255,255,20); color: white; border-radius: 25px; font-size: 20px; border: none;")
         self.btn_close.clicked.connect(self.close_selector)
         
-        self.opacity_effect = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self.opacity_effect)
         self.swipe_start_x = None
 
     def update_time(self, t, d):
@@ -198,16 +229,16 @@ class ClockSelectorOverlay(QWidget):
         offset = -50 if direction == "left" else 50
         
         self.anim_out = QPropertyAnimation(self.preview_stack, b"pos")
-        self.anim_out.setDuration(120)
+        self.anim_out.setDuration(150)
         self.anim_out.setStartValue(base_pos)
         self.anim_out.setEndValue(base_pos + QPoint(offset, 0))
         
-        self.fade_out = QPropertyAnimation(self.preview_stack.graphicsEffect() if self.preview_stack.graphicsEffect() else QGraphicsOpacityEffect(self.preview_stack), b"opacity")
-        if not self.preview_stack.graphicsEffect():
-            self.preview_stack.setGraphicsEffect(self.fade_out.targetObject())
-        self.fade_out.setDuration(120)
-        self.fade_out.setStartValue(1.0)
-        self.fade_out.setEndValue(0.0)
+        self.fade_overlay.show()
+        self.fade_overlay.raise_()
+        self.fade_out = QPropertyAnimation(self.fade_overlay, b"alpha")
+        self.fade_out.setDuration(150)
+        self.fade_out.setStartValue(0)
+        self.fade_out.setEndValue(255)
         
         self.grp_out = QParallelAnimationGroup()
         self.grp_out.addAnimation(self.anim_out)
@@ -220,14 +251,15 @@ class ClockSelectorOverlay(QWidget):
         offset = 50 if direction == "left" else -50
         
         self.anim_in = QPropertyAnimation(self.preview_stack, b"pos")
-        self.anim_in.setDuration(120)
+        self.anim_in.setDuration(150)
         self.anim_in.setStartValue(base_pos + QPoint(offset, 0))
         self.anim_in.setEndValue(base_pos)
         
-        self.fade_in = QPropertyAnimation(self.preview_stack.graphicsEffect(), b"opacity")
-        self.fade_in.setDuration(120)
-        self.fade_in.setStartValue(0.0)
-        self.fade_in.setEndValue(1.0)
+        self.fade_in = QPropertyAnimation(self.fade_overlay, b"alpha")
+        self.fade_in.setDuration(150)
+        self.fade_in.setStartValue(255)
+        self.fade_in.setEndValue(0)
+        self.fade_in.finished.connect(self.fade_overlay.hide)
         
         self.grp_in = QParallelAnimationGroup()
         self.grp_in.addAnimation(self.anim_in)
@@ -254,16 +286,21 @@ class ClockSelectorOverlay(QWidget):
         self.preview_stack.setCurrentIndex(current_idx)
         self.show()
         self.raise_()
-        self.fade_anim = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade_anim.setDuration(200)
-        self.fade_anim.setStartValue(0.0)
-        self.fade_anim.setEndValue(1.0)
-        self.fade_anim.start()
+        
+        # Smooth slide-up animation replacing buggy opacity fade
+        self.slide_anim = QPropertyAnimation(self.main_container, b"pos")
+        self.slide_anim.setDuration(350)
+        self.slide_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.slide_anim.setStartValue(QPoint(0, 600))
+        self.slide_anim.setEndValue(QPoint(0, 0))
+        self.slide_anim.start()
         
     def close_selector(self):
-        self.fade_anim = QPropertyAnimation(self.opacity_effect, b"opacity")
-        self.fade_anim.setDuration(200)
-        self.fade_anim.setStartValue(1.0)
-        self.fade_anim.setEndValue(0.0)
-        self.fade_anim.finished.connect(self.hide)
-        self.fade_anim.start()
+        # Smooth slide-down animation out of the way
+        self.slide_anim = QPropertyAnimation(self.main_container, b"pos")
+        self.slide_anim.setDuration(300)
+        self.slide_anim.setEasingCurve(QEasingCurve.Type.InCubic)
+        self.slide_anim.setStartValue(QPoint(0, 0))
+        self.slide_anim.setEndValue(QPoint(0, 600))
+        self.slide_anim.finished.connect(self.hide)
+        self.slide_anim.start()
