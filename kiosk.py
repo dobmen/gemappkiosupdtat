@@ -398,6 +398,8 @@ class NestKiosk(QMainWindow):
         self.page_clock.setGeometry(0, 0, 1024, 600)
         self.clock_layout = QVBoxLayout(self.page_clock)
         self.clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.clock_layout.setContentsMargins(0, 0, 0, 0)
+        self.clock_layout.setSpacing(0)
         
         self.active_clock_widget = None
         self.apply_clockface(get_system_setting("clockface_index", 0))
