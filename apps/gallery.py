@@ -1,20 +1,23 @@
 import os
 import time
 import socket
+import shutil
 import urllib.parse
 import urllib.request
 import http.server
 import socketserver
-from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal, QObject, QPoint, QRect
 from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter, QPainterPath, QPen, QColor
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QGridLayout, QStackedWidget, QScroller, QDialog, QProgressBar
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
+    QScrollArea, QFrame, QGridLayout, QStackedWidget, QScroller, QDialog, QProgressBar, QLineEdit
 )
 
 # =================================================================
-# BACKGROUND WEB SERVER & SIGNALS
+# BACKGROUND WEB SERVER & SIGNALS (PORT CHANGED TO 52634)
 # =================================================================
+SERVER_PORT = 52634
+
 class UploadSignals(QObject):
     client_connected = pyqtSignal()
     client_disconnected = pyqtSignal()
@@ -25,7 +28,7 @@ class UploadSignals(QObject):
 
 class UploadHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        pass  # Completely silences terminal spam from the HTTP Server
+        pass  
 
     def do_GET(self):
         if self.path == '/ping':
@@ -42,14 +45,14 @@ class UploadHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            html = """<!DOCTYPE html>
+            html = f"""<!DOCTYPE html>
             <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0C0C0E; color: white; text-align: center; padding: 40px 20px; }
-                input[type="file"] { display: none; }
-                .btn { background: #5A8DEF; padding: 18px 40px; border-radius: 12px; color: white; border: none; font-size: 20px; margin: 20px; display: inline-block; cursor: pointer; font-weight: bold; box-shadow: 0 4px 15px rgba(90, 141, 239, 0.4); }
-                .btn:active { background: #4A7DDF; }
-                #progress { color: #AAAAAA; margin-top: 30px; font-size: 18px; }
+                body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0C0C0E; color: white; text-align: center; padding: 40px 20px; }}
+                input[type="file"] {{ display: none; }}
+                .btn {{ background: #5A8DEF; padding: 18px 40px; border-radius: 12px; color: white; border: none; font-size: 20px; margin: 20px; display: inline-block; cursor: pointer; font-weight: bold; box-shadow: 0 4px 15px rgba(90, 141, 239, 0.4); }}
+                .btn:active {{ background: #4A7DDF; }}
+                #progress {{ color: #AAAAAA; margin-top: 30px; font-size: 18px; }}
             </style>
             </head><body>
             <h2 style="font-size: 28px; margin-bottom: 10px;">Upload Photos</h2>
@@ -58,25 +61,23 @@ class UploadHandler(http.server.BaseHTTPRequestHandler):
             <input type="file" id="fileInput" multiple accept="image/*" onchange="upload()">
             <div id="progress"></div>
             <script>
-                // Pings the Kiosk OS constantly so it knows the phone is still connected
-                setInterval(() => fetch('/ping').catch(()=>{}), 1000);
-                
-                async function upload() {
+                setInterval(() => fetch('/ping').catch(()=>{{}}), 1000);
+                async function upload() {{
                     const files = document.getElementById('fileInput').files;
                     let div = document.getElementById('progress');
-                    for (let i=0; i<files.length; i++) {
+                    for (let i=0; i<files.length; i++) {{
                         const file = files[i];
-                        div.innerText = `Sending file ${i+1} of ${files.length}...`;
-                        await fetch('/upload?filename=' + encodeURIComponent(file.name), {
+                        div.innerText = `Sending file ${{i+1}} of ${{files.length}}...`;
+                        await fetch('/upload?filename=' + encodeURIComponent(file.name), {{
                             method: 'POST',
                             body: file,
-                            headers: {'Content-Type': 'application/octet-stream'}
-                        });
-                    }
+                            headers: {{'Content-Type': 'application/octet-stream'}}
+                        }});
+                    }}
                     div.innerHTML = "<span style='color: #1ED760;'>All files sent successfully!</span>";
                     setTimeout(() => div.innerText="", 4000);
                     document.getElementById('fileInput').value = '';
-                }
+                }}
             </script>
             </body></html>"""
             self.wfile.write(html.encode('utf-8'))
@@ -119,7 +120,7 @@ class UploadHandler(http.server.BaseHTTPRequestHandler):
 
 
 class UploadServerThread(QThread):
-    def __init__(self, signals, port=8080):
+    def __init__(self, signals, port=SERVER_PORT):
         super().__init__()
         self.signals = signals
         self.port = port
@@ -158,12 +159,36 @@ class QRFetchThread(QThread):
         except Exception:
             pass
 
+# =================================================================
+# UI MODERN INTERFACE & ALBUM MANAGER COMPONENTS
+# =================================================================
+class SwipeableImageLabel(QLabel):
+    """Custom label to intercept touch swipe gestures for image navigation."""
+    swiped_left = pyqtSignal()
+    swiped_right = pyqtSignal()
 
-# =================================================================
-# UI COMPONENTS
-# =================================================================
+    def __init__(self):
+        super().__init__()
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.swipe_start_x = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.swipe_start_x = event.position().toPoint().x()
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.swipe_start_x is not None:
+            dx = event.position().toPoint().x() - self.swipe_start_x
+            if dx > 60:
+                self.swiped_right.emit() # Swiped right to go back
+            elif dx < -60:
+                self.swiped_left.emit() # Swiped left to go forward
+        self.swipe_start_x = None
+        super().mouseReleaseEvent(event)
+
+
 class ModernDialog(QDialog):
-    """A sleek, Android/One UI style popup dialog."""
     def __init__(self, parent, title, message, accept_text="OK", cancel_text="Cancel"):
         super().__init__(parent)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
@@ -173,7 +198,6 @@ class ModernDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-
         bg_frame = QFrame(self)
         bg_frame.setStyleSheet("background-color: #22222B; border-radius: 20px; border: 1px solid #33333F;")
         bg_layout = QVBoxLayout(bg_frame)
@@ -202,20 +226,14 @@ class ModernDialog(QDialog):
             btn_cancel = QPushButton(cancel_text)
             btn_cancel.setFixedHeight(45)
             btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_cancel.setStyleSheet("""
-                QPushButton { background: transparent; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; padding: 0 20px; }
-                QPushButton:hover { background-color: rgba(255,255,255,10); }
-            """)
+            btn_cancel.setStyleSheet("QPushButton { background: transparent; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; padding: 0 20px; } QPushButton:hover { background-color: rgba(255,255,255,10); }")
             btn_cancel.clicked.connect(self.reject)
             btn_layout.addWidget(btn_cancel)
 
         btn_accept = QPushButton(accept_text)
         btn_accept.setFixedHeight(45)
         btn_accept.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_accept.setStyleSheet("""
-            QPushButton { background-color: #E24A4A; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; border: none; padding: 0 25px; }
-            QPushButton:hover { background-color: #C0392B; }
-        """)
+        btn_accept.setStyleSheet("QPushButton { background-color: #E24A4A; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; border: none; padding: 0 25px; } QPushButton:hover { background-color: #C0392B; }")
         btn_accept.clicked.connect(self.accept)
         btn_layout.addWidget(btn_accept)
 
@@ -223,16 +241,92 @@ class ModernDialog(QDialog):
         layout.addWidget(bg_frame)
 
 
+class AlbumTransferDialog(QDialog):
+    def __init__(self, parent, current_album, target_options):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        self.setFixedSize(480, 360)
+        self.chosen_album = None
+        self.created_new_name = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        bg_frame = QFrame(self)
+        bg_frame.setStyleSheet("background-color: #22222B; border-radius: 24px; border: 1px solid #33333F;")
+        bg_layout = QVBoxLayout(bg_frame)
+        bg_layout.setContentsMargins(25, 25, 25, 20)
+
+        lbl_title = QLabel("Move File to Album")
+        lbl_title.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_title.setStyleSheet("color: white; border: none;")
+        bg_layout.addWidget(lbl_title)
+        bg_layout.addSpacing(10)
+
+        self.list_widget = QListWidget()
+        self.list_widget.setStyleSheet("""
+            QListWidget { background-color: #14141A; border-radius: 12px; border: 1px solid #2C2C35; padding: 5px; color: white; font-size: 15px; }
+            QListWidget::item { padding: 10px; border-radius: 8px; }
+            QListWidget::item:selected { background-color: #5A8DEF; color: white; }
+        """)
+        for album in target_options:
+            if album != current_album:
+                self.list_widget.addItem(album)
+        bg_layout.addWidget(self.list_widget)
+        bg_layout.addSpacing(10)
+
+        new_album_layout = QHBoxLayout()
+        self.input_new_album = QLineEdit()
+        self.input_new_album.setPlaceholderText("Or create a new album name...")
+        self.input_new_album.setStyleSheet("QLineEdit { background-color: #14141A; border: 1px solid #2C2C35; border-radius: 8px; padding: 8px; color: white; font-size: 14px; }")
+        new_album_layout.addWidget(self.input_new_album)
+        
+        btn_create = QPushButton("Create")
+        btn_create.setStyleSheet("QPushButton { background-color: #343440; color: white; border-radius: 8px; padding: 8px 15px; font-weight: bold; } QPushButton:hover { background-color: #444455; }")
+        btn_create.clicked.connect(self.create_custom_album)
+        new_album_layout.addWidget(btn_create)
+        bg_layout.addLayout(new_album_layout)
+        bg_layout.addSpacing(15)
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setStyleSheet("QPushButton { background: transparent; color: #888888; font-weight: bold; font-size: 15px; padding: 5px 15px; border: none; }")
+        btn_cancel.clicked.connect(self.reject)
+        actions.addWidget(btn_cancel)
+
+        btn_move = QPushButton("Move File")
+        btn_move.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; font-weight: bold; font-size: 15px; border-radius: 8px; padding: 8px 20px; }")
+        btn_move.clicked.connect(self.confirm_move)
+        actions.addWidget(btn_move)
+        bg_layout.addLayout(actions)
+
+        layout.addWidget(bg_frame)
+
+    def create_custom_album(self):
+        text = self.input_new_album.text().strip()
+        if text:
+            self.created_new_name = text
+            self.chosen_album = text
+            self.accept()
+
+    def confirm_move(self):
+        selected_items = self.list_widget.selectedItems()
+        if selected_items:
+            self.chosen_album = selected_items[0].text()
+            self.accept()
+        elif self.input_new_album.text().strip():
+            self.create_custom_album()
+
+
 class ImageButton(QPushButton):
     def __init__(self, img_path, click_cb):
         super().__init__()
         self.img_path = img_path
-        self.setFixedSize(200, 200)
+        self.setFixedSize(160, 160)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet("""
-            QPushButton { background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; }
-            QPushButton:hover { border-color: #5A8DEF; }
-        """)
+        self.setStyleSheet("QPushButton { background-color: #1C1C22; border-radius: 16px; border: 1px solid #2C2C35; } QPushButton:hover { border-color: #5A8DEF; }")
         
         pix = QPixmap(img_path)
         if not pix.isNull():
@@ -240,21 +334,19 @@ class ImageButton(QPushButton):
             x = (pix.width() - side) // 2
             y = (pix.height() - side) // 2
             cropped = pix.copy(x, y, side, side)
+            scaled_pix = cropped.scaled(156, 196, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
             
-            scaled_pix = cropped.scaled(196, 196, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-            
-            rounded = QPixmap(196, 196)
+            rounded = QPixmap(156, 156)
             rounded.fill(Qt.GlobalColor.transparent)
             painter = QPainter(rounded)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             path = QPainterPath()
-            path.addRoundedRect(0, 0, 196, 196, 11, 11)
+            path.addRoundedRect(0, 0, 156, 156, 14, 14)
             painter.setClipPath(path)
             painter.drawPixmap(0, 0, scaled_pix)
             painter.end()
-
             self.setIcon(QIcon(rounded))
-            self.setIconSize(QSize(196, 196))
+            self.setIconSize(QSize(156, 156))
             
         self.clicked.connect(lambda: click_cb(img_path))
 
@@ -270,19 +362,54 @@ class GalleryPage(QWidget):
         self.stack = QStackedWidget()
         layout.addWidget(self.stack)
         
-        # --- 1. Grid View ---
+        # Base Album Map Config
+        self.albums = ["Screenshots", "Photos", "Videos"]
+        self.current_selected_album = "Photos"
+        self.all_image_paths = []
+        
+        # --- 1. Dashboard View with Navigation Sidebar ---
         self.grid_page = QWidget()
-        grid_layout = QVBoxLayout(self.grid_page)
-        grid_layout.setContentsMargins(40, 25, 40, 30)
+        dashboard_layout = QHBoxLayout(self.grid_page)
+        dashboard_layout.setContentsMargins(0, 0, 0, 0)
+        dashboard_layout.setSpacing(0)
+
+        # Left Sidebar Navigation Panel
+        self.sidebar = QFrame()
+        self.sidebar.setFixedWidth(240)
+        self.sidebar.setStyleSheet("background-color: #14141A; border-right: 1px solid #22222A;")
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setContentsMargins(15, 30, 15, 20)
+        sidebar_layout.setSpacing(10)
+
+        lbl_sections = QLabel("Albums")
+        lbl_sections.setFont(QFont("Google Sans", 15, QFont.Weight.Bold))
+        lbl_sections.setStyleSheet("color: #666670; margin-left: 10px; margin-bottom: 5px;")
+        sidebar_layout.addWidget(lbl_sections)
+
+        self.album_list_widget = QListWidget()
+        self.album_list_widget.setStyleSheet("""
+            QListWidget { background: transparent; border: none; color: #AAAAAA; }
+            QListWidget::item { padding: 12px 15px; margin-bottom: 4px; border-radius: 10px; font-weight: bold; font-size: 15px; }
+            QListWidget::item:hover { background-color: rgba(255, 255, 255, 8); color: white; }
+            QListWidget::item:selected { background-color: rgba(90, 141, 239, 30); color: #5A8DEF; }
+        """)
+        self.album_list_widget.itemClicked.connect(self.on_album_nav_clicked)
+        sidebar_layout.addWidget(self.album_list_widget)
+        sidebar_layout.addStretch()
+
+        dashboard_layout.addWidget(self.sidebar)
+
+        # Right Panel Grid Content Space
+        self.main_content_frame = QWidget()
+        right_panel_layout = QVBoxLayout(self.main_content_frame)
+        right_panel_layout.setContentsMargins(30, 25, 30, 30)
         
         header = QHBoxLayout()
-        title = QLabel("Gallery")
-        title.setFont(QFont("Google Sans", 28, QFont.Weight.Bold))
-        header.addWidget(title)
-        
+        self.lbl_album_title = QLabel("Photos")
+        self.lbl_album_title.setFont(QFont("Google Sans", 28, QFont.Weight.Bold))
+        header.addWidget(self.lbl_album_title)
         header.addStretch()
         
-        # Connection Status Label
         self.lbl_connected = QLabel("📱 Device connected.")
         self.lbl_connected.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
         self.lbl_connected.setStyleSheet("color: #1ED760;")
@@ -290,10 +417,7 @@ class GalleryPage(QWidget):
         header.addWidget(self.lbl_connected)
         header.addSpacing(20)
         
-        # Upload Button Setup
         self.btn_upload = QPushButton("  Upload")
-        
-        # Programmatically draw the upload icon
         icon_pix = QPixmap(24, 24)
         icon_pix.fill(Qt.GlobalColor.transparent)
         painter = QPainter(icon_pix)
@@ -308,10 +432,7 @@ class GalleryPage(QWidget):
         self.btn_upload.setIcon(QIcon(icon_pix))
         self.btn_upload.setIconSize(QSize(20, 20))
         self.btn_upload.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_upload.setStyleSheet("""
-            QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; padding: 0px 20px; font-weight: bold; font-size: 16px; border: none; height: 45px; }
-            QPushButton:hover { background-color: #4A7DDF; }
-        """)
+        self.btn_upload.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; padding: 0px 20px; font-weight: bold; font-size: 16px; border: none; height: 45px; } QPushButton:hover { background-color: #4A7DDF; }")
         self.btn_upload.clicked.connect(self.show_qr_code)
         header.addWidget(self.btn_upload)
         
@@ -321,16 +442,12 @@ class GalleryPage(QWidget):
             btn_close.setFixedSize(45, 45)
             btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_close.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
-            btn_close.setStyleSheet("""
-                QPushButton { background-color: #2C2C35; color: #AAAAAA; border-radius: 22px; border: none; }
-                QPushButton:hover { background-color: #E24A4A; color: white; }
-            """)
+            btn_close.setStyleSheet("QPushButton { background-color: #2C2C35; color: #AAAAAA; border-radius: 22px; border: none; } QPushButton:hover { background-color: #E24A4A; color: white; }")
             btn_close.clicked.connect(self.shutdown_and_close)
             header.addWidget(btn_close)
             
-        grid_layout.addLayout(header)
+        right_panel_layout.addLayout(header)
         
-        # Gradient Loading Bar
         self.upload_progress = QProgressBar()
         self.upload_progress.setTextVisible(False)
         self.upload_progress.setFixedHeight(6)
@@ -339,7 +456,7 @@ class GalleryPage(QWidget):
             QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #5A8DEF, stop:1 #9B59B6); border-radius: 3px; }
         """)
         self.upload_progress.hide()
-        grid_layout.addWidget(self.upload_progress)
+        right_panel_layout.addWidget(self.upload_progress)
         
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -352,85 +469,93 @@ class GalleryPage(QWidget):
         self.grid_container.setStyleSheet("background: transparent;")
         self.grid = QGridLayout(self.grid_container)
         self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self.grid.setSpacing(25)
+        self.grid.setSpacing(20)
         
         self.scroll.setWidget(self.grid_container)
-        grid_layout.addWidget(self.scroll)
+        right_panel_layout.addWidget(self.scroll)
+        dashboard_layout.addWidget(self.main_content_frame)
         self.stack.addWidget(self.grid_page)
         
-        # --- 2. Fullscreen Viewer ---
+        # --- 2. Fullscreen Viewer Viewport ---
         self.fs_page = QWidget()
         self.fs_page.setStyleSheet("background-color: #000000;")
-        fs_layout = QVBoxLayout(self.fs_page)
-        fs_layout.setContentsMargins(20, 20, 20, 20)
+        fs_main_layout = QVBoxLayout(self.fs_page)
+        fs_main_layout.setContentsMargins(20, 20, 20, 20)
         
         fs_header = QHBoxLayout()
         self.btn_back = QPushButton("← Back")
         self.btn_back.setFixedSize(110, 45)
         self.btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_back.setStyleSheet("""
-            QPushButton { background-color: rgba(255,255,255,20); color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; }
-            QPushButton:hover { background-color: rgba(255,255,255,40); }
-        """)
+        self.btn_back.setStyleSheet("QPushButton { background-color: rgba(255,255,255,20); color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: rgba(255,255,255,40); }")
         self.btn_back.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+        fs_header.addWidget(self.btn_back)
+        fs_header.addStretch()
+
+        self.btn_edit = QPushButton("✏️ Edit")
+        self.btn_edit.setFixedSize(100, 45)
+        self.btn_edit.setStyleSheet("QPushButton { background-color: rgba(90, 141, 239, 30); color: #5A8DEF; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: #5A8DEF; color: white; }")
+        self.btn_edit.clicked.connect(self.trigger_image_editor)
+        fs_header.addWidget(self.btn_edit)
+        fs_header.addSpacing(10)
+
+        self.btn_move = QPushButton("📦 Move")
+        self.btn_move.setFixedSize(100, 45)
+        self.btn_move.setStyleSheet("QPushButton { background-color: rgba(255, 255, 255, 20); color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: rgba(255, 255, 255, 35); }")
+        self.btn_move.clicked.connect(self.trigger_album_migration)
+        fs_header.addWidget(self.btn_move)
+        fs_header.addSpacing(10)
         
         self.btn_del = QPushButton("🗑️ Delete")
         self.btn_del.setFixedSize(110, 45)
         self.btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_del.setStyleSheet("""
-            QPushButton { background-color: rgba(226, 74, 74, 40); color: #E24A4A; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; }
-            QPushButton:hover { background-color: #E24A4A; color: white; }
-        """)
+        self.btn_del.setStyleSheet("QPushButton { background-color: rgba(226, 74, 74, 40); color: #E24A4A; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: #E24A4A; color: white; }")
         self.btn_del.clicked.connect(self.delete_current_image)
-        
-        fs_header.addWidget(self.btn_back)
-        fs_header.addStretch()
         fs_header.addWidget(self.btn_del)
+        fs_main_layout.addLayout(fs_header)
         
-        self.lbl_fs_img = QLabel()
-        self.lbl_fs_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        fs_layout.addLayout(fs_header)
-        fs_layout.addWidget(self.lbl_fs_img, stretch=1)
+        # Modern Touch-Friendly Swipe Viewer
+        self.lbl_fs_img = SwipeableImageLabel()
+        self.lbl_fs_img.swiped_right.connect(self.navigate_previous_media)
+        self.lbl_fs_img.swiped_left.connect(self.navigate_next_media)
+        fs_main_layout.addWidget(self.lbl_fs_img, stretch=1)
+
         self.stack.addWidget(self.fs_page)
 
-        # --- 3. QR Code Page ---
+        # --- 3. QR Code Viewport Panel ---
         self.qr_page = QWidget()
         qr_layout = QVBoxLayout(self.qr_page)
         qr_layout.setContentsMargins(40, 30, 40, 30)
-        qr_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         btn_qr_back = QPushButton("← Back")
         btn_qr_back.setFixedSize(110, 45)
         btn_qr_back.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_qr_back.setStyleSheet("""
-            QPushButton { background-color: #2C2C35; color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; }
-            QPushButton:hover { background-color: #383845; }
-        """)
+        btn_qr_back.setStyleSheet("QPushButton { background-color: #2C2C35; color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: #383845; }")
         btn_qr_back.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+        
+        qr_layout.addWidget(btn_qr_back, alignment=Qt.AlignmentFlag.AlignLeft)
+        qr_layout.addStretch()
         
         self.lbl_qr = QLabel()
         self.lbl_qr.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_qr.setFixedSize(250, 250)
         self.lbl_qr.setStyleSheet("background-color: #1C1C22; border-radius: 16px;")
+        qr_layout.addWidget(self.lbl_qr, alignment=Qt.AlignmentFlag.AlignCenter)
+        qr_layout.addSpacing(20)
         
         lbl_qr_inst = QLabel("Scan this code with your phone to upload images.")
         lbl_qr_inst.setFont(QFont("Google Sans", 18))
         lbl_qr_inst.setStyleSheet("color: #AAAAAA;")
         lbl_qr_inst.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        qr_layout.addWidget(btn_qr_back, alignment=Qt.AlignmentFlag.AlignLeft)
-        qr_layout.addStretch()
-        qr_layout.addWidget(self.lbl_qr, alignment=Qt.AlignmentFlag.AlignCenter)
-        qr_layout.addSpacing(20)
         qr_layout.addWidget(lbl_qr_inst, alignment=Qt.AlignmentFlag.AlignCenter)
         qr_layout.addStretch()
         self.stack.addWidget(self.qr_page)
         
         self.current_img_path = None
+        self.scan_and_sync_local_albums()
+        self.populate_sidebar_items()
         self.load_images()
 
-        # Web Server Bootup
+        # Local Web Server Initializing Layer
         self.upload_signals = UploadSignals()
         self.upload_signals.client_connected.connect(self.on_client_connected)
         self.upload_signals.client_disconnected.connect(self.on_client_disconnected)
@@ -445,7 +570,7 @@ class GalleryPage(QWidget):
         self.ping_timer.timeout.connect(self.check_connection_timeout)
         self.ping_timer.start(2000)
 
-    # Server Event Handlers
+    # Server Event Mapping Handlers
     def on_client_connected(self):
         self.lbl_connected.show()
         if self.stack.currentIndex() == 2:
@@ -482,7 +607,7 @@ class GalleryPage(QWidget):
 
     def show_qr_code(self):
         ip = self.get_local_ip()
-        url = f"http://{ip}:8080"
+        url = f"http://{ip}:{SERVER_PORT}"
         api_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote(url)}&bgcolor=1C1C22&color=FFFFFF"
         
         self.lbl_qr.setText("Generating QR...")
@@ -491,39 +616,66 @@ class GalleryPage(QWidget):
         self.qr_thread = QRFetchThread(api_url)
         self.qr_thread.on_qr_ready.connect(self.set_qr_image)
         self.qr_thread.start()
-        
         self.stack.setCurrentIndex(2)
 
     def set_qr_image(self, pix):
         self.lbl_qr.setPixmap(pix)
         self.lbl_qr.setStyleSheet("background-color: transparent;")
 
+    # Album Allocation and Scan Methods
+    def scan_and_sync_local_albums(self):
+        """Scans directories to synchronize internal lists with disk state."""
+        base_directories = ["screenshots", "photos", "Pictures", "videos"]
+        for d in base_directories:
+            if not os.path.exists(d):
+                os.makedirs(d, exist_ok=True)
+            norm_name = d.title()
+            if norm_name not in self.albums:
+                self.albums.append(norm_name)
+                
+        for entry in os.listdir("."):
+            if os.path.isdir(entry) and entry not in base_directories and not entry.startswith((".", "__", "apps", "components", "fonts", "icons")):
+                if entry not in self.albums:
+                    self.albums.append(entry)
+
+    def populate_sidebar_items(self):
+        self.album_list_widget.clear()
+        for folder in self.albums:
+            item = QListWidgetItem(folder)
+            self.album_list_widget.addItem(item)
+            if folder == self.current_selected_album:
+                self.album_list_widget.setCurrentItem(item)
+
+    def on_album_nav_clicked(self, item):
+        self.current_selected_album = item.text()
+        self.lbl_album_title.setText(self.current_selected_album)
+        self.load_images()
+
     def load_images(self):
         for i in reversed(range(self.grid.count())):
             w = self.grid.itemAt(i).widget()
             if w: w.deleteLater()
             
-        directories = ["screenshots", "photos", "Pictures"]
-        image_files = []
+        target_dir = self.current_selected_album.lower() if self.current_selected_album in ["Screenshots", "Photos", "Videos"] else self.current_selected_album
+        self.all_image_paths = []
         
-        for d in directories:
-            if os.path.exists(d):
-                for f in os.listdir(d):
-                    if f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                        image_files.append(os.path.join(d, f))
+        if os.path.exists(target_dir):
+            for f in os.listdir(target_dir):
+                if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+                    self.all_image_paths.append(os.path.join(target_dir, f))
                         
-        image_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        self.all_image_paths.sort(key=lambda x: os.path.getmtime(x), reverse=True)
         
-        if not image_files:
-            lbl_empty = QLabel("No images found.\nTake a screenshot by pressing '\\' (Backslash).")
-            lbl_empty.setFont(QFont("Google Sans", 18))
+        if not self.all_image_paths:
+            lbl_empty = QLabel("No images in this album.")
+            lbl_empty.setFont(QFont("Google Sans", 16))
             lbl_empty.setStyleSheet("color: #666670;")
             lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.grid.addWidget(lbl_empty, 0, 0)
             return
             
         cols = 4
-        for i, path in enumerate(image_files):
+        for i, path in enumerate(self.all_image_paths):
             btn = ImageButton(path, self.open_image)
             self.grid.addWidget(btn, i // cols, i % cols)
             
@@ -535,6 +687,45 @@ class GalleryPage(QWidget):
             self.lbl_fs_img.setPixmap(scaled)
         self.stack.setCurrentIndex(1)
         
+    def navigate_previous_media(self):
+        if self.current_img_path in self.all_image_paths:
+            idx = self.all_image_paths.index(self.current_img_path)
+            if idx > 0:
+                self.open_image(self.all_image_paths[idx - 1])
+            else:
+                self.open_image(self.all_image_paths[-1])
+
+    def navigate_next_media(self):
+        if self.current_img_path in self.all_image_paths:
+            idx = self.all_image_paths.index(self.current_img_path)
+            if idx < len(self.all_image_paths) - 1:
+                self.open_image(self.all_image_paths[idx + 1])
+            else:
+                self.open_image(self.all_image_paths[0])
+
+    def trigger_image_editor(self):
+        pass
+
+    def trigger_album_migration(self):
+        if not self.current_img_path: return
+        
+        dialog = AlbumTransferDialog(self, self.current_selected_album, self.albums)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen_album:
+            dest_dir = dialog.chosen_album.lower() if dialog.chosen_album in ["Screenshots", "Photos", "Videos"] else dialog.chosen_album
+            os.makedirs(dest_dir, exist_ok=True)
+            
+            filename = os.path.basename(self.current_img_path)
+            dest_path = os.path.join(dest_dir, filename)
+            
+            try:
+                shutil.move(self.current_img_path, dest_path)
+                self.scan_and_sync_local_albums()
+                self.populate_sidebar_items()
+                self.load_images()
+                self.stack.setCurrentIndex(0)
+            except Exception as e:
+                print(f"Error transferring file: {e}")
+
     def delete_current_image(self):
         if self.current_img_path and os.path.exists(self.current_img_path):
             dialog = ModernDialog(self, "Delete Image", "Are you sure you want to permanently delete this image?", "Delete")

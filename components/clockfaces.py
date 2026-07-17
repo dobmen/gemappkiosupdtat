@@ -1,10 +1,10 @@
 import os
 from PyQt6.QtCore import Qt, QTime, QDate, QPoint, QRect, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, pyqtProperty
-from PyQt6.QtGui import QFont, QPainter, QPen, QColor, QBrush, QPolygon
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QStackedWidget, QPushButton
+from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPen, QColor, QBrush, QPolygon
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QPushButton
 
 class FadeOverlay(QWidget):
-    """A completely thread-safe fade overlay to replace buggy QGraphicsOpacityEffect."""
+    """A thread-safe fade overlay specifically for the background dimming."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -91,17 +91,14 @@ class AnalogClock(QWidget):
         painter.translate(self.width() / 2.0, self.height() / 2.0)
         painter.scale(side / 320.0, side / 320.0)
 
-        # Draw outer ring
         painter.setPen(QPen(QColor(40, 40, 50), 6))
         painter.drawEllipse(QPoint(0,0), 145, 145)
 
-        # Ticks
         painter.setPen(QPen(QColor(255, 255, 255, 150), 3))
         for i in range(12):
             painter.drawLine(0, -125, 0, -135)
             painter.rotate(30.0)
 
-        # Hour hand
         hour_hand = QPolygon([QPoint(6, 12), QPoint(-6, 12), QPoint(0, -75)])
         painter.setBrush(QBrush(QColor(255, 255, 255)))
         painter.setPen(Qt.PenStyle.NoPen)
@@ -110,7 +107,6 @@ class AnalogClock(QWidget):
         painter.drawPolygon(hour_hand)
         painter.restore()
 
-        # Minute hand
         min_hand = QPolygon([QPoint(4, 12), QPoint(-4, 12), QPoint(0, -115)])
         painter.setBrush(QBrush(QColor(90, 141, 239)))
         painter.save()
@@ -118,7 +114,6 @@ class AnalogClock(QWidget):
         painter.drawPolygon(min_hand)
         painter.restore()
 
-        # Second hand
         sec_hand = QPolygon([QPoint(2, 12), QPoint(-2, 12), QPoint(0, -125)])
         painter.setBrush(QBrush(QColor(226, 74, 74)))
         painter.save()
@@ -126,13 +121,17 @@ class AnalogClock(QWidget):
         painter.drawPolygon(sec_hand)
         painter.restore()
 
-        # Center dot
         painter.setBrush(QBrush(QColor(255, 255, 255)))
         painter.drawEllipse(QPoint(0,0), 6, 6)
         painter.end()
 
 
-CLOCKFACE_CLASSES = [ClassicClock, StackedClock, AnalogClock]
+# Mapped list defining the display names for each class
+CLOCKFACES = [
+    ("Classic Digital", ClassicClock),
+    ("Stacked Bold", StackedClock),
+    ("Minimal Analog", AnalogClock)
+]
 
 
 class ClockSelectorOverlay(QWidget):
@@ -145,27 +144,31 @@ class ClockSelectorOverlay(QWidget):
         self.main_container = QFrame(self)
         self.main_container.setGeometry(0, 0, 1024, 600)
         
-        # Hardware-safe background dimmer
         self.bg_fade = FadeOverlay(self.main_container)
         self.bg_fade.setGeometry(0, 0, 1024, 600)
-        self.bg_fade.show()
         
         self.lbl_title = QLabel("Swipe to browse • Tap to apply", self.main_container)
-        self.lbl_title.setGeometry(0, 30, 1024, 50)
+        self.lbl_title.setGeometry(0, 20, 1024, 30)
         self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_title.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
-        self.lbl_title.setStyleSheet("color: #AAAAAA; background: transparent;")
+        self.lbl_title.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        self.lbl_title.setStyleSheet("color: #888888; background: transparent;")
         self.lbl_title.hide()
+
+        self.lbl_name = QLabel("", self.main_container)
+        self.lbl_name.setGeometry(0, 50, 1024, 40)
+        self.lbl_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_name.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        self.lbl_name.setStyleSheet("color: white; background: transparent;")
+        self.lbl_name.hide()
         
-        self.preview_stack = QStackedWidget(self.main_container)
-        self.preview_stack.setGeometry(162, 90, 700, 420)
-        self.preview_stack.setStyleSheet("background: transparent;")
-        
+        self.current_idx = 0
         self.previews = []
-        for Cls in CLOCKFACE_CLASSES:
+        self.wrappers = []
+        
+        # True Wear OS Side-by-Side Carousel Generation
+        for i, (name, Cls) in enumerate(CLOCKFACES):
             inst = Cls()
-            wrapper = QFrame()
-            # Rectangular card shape without harsh borders
+            wrapper = QFrame(self.main_container)
             wrapper.setStyleSheet("background-color: #1A1A22; border-radius: 36px;")
             
             l = QVBoxLayout(wrapper)
@@ -173,12 +176,9 @@ class ClockSelectorOverlay(QWidget):
             l.addWidget(inst)
             
             self.previews.append(inst)
-            self.preview_stack.addWidget(wrapper)
+            self.wrappers.append(wrapper)
+            wrapper.hide()
 
-        # Fade overlay strictly over the clock stack for swiping transitions
-        self.fade_overlay = FadeOverlay(self.main_container)
-        self.fade_overlay.setGeometry(162, 90, 700, 420)
-            
         self.btn_close = QPushButton("✕", self.main_container)
         self.btn_close.setGeometry(30, 30, 50, 50)
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -188,64 +188,39 @@ class ClockSelectorOverlay(QWidget):
         
         self.swipe_start_x = None
         self.is_swiping = False
+        self.saved_idx = 0
 
     def update_time(self, t, d):
         for p in self.previews:
             p.update_time(t, d)
             
+    def update_labels(self, idx):
+        self.lbl_name.setText(CLOCKFACES[idx][0])
+
+    def slide_to(self, idx):
+        self.current_idx = idx
+        self.update_labels(idx)
+        
+        self.grp_slide = QParallelAnimationGroup()
+        for i, wrapper in enumerate(self.wrappers):
+            offset = i - self.current_idx
+            target_x = 162 + (offset * 740) # 740 = 700 width + 40 spacing
+            
+            anim = QPropertyAnimation(wrapper, b"geometry")
+            anim.setDuration(300)
+            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            anim.setEndValue(QRect(target_x, 110, 700, 420))
+            self.grp_slide.addAnimation(anim)
+            
+        self.grp_slide.start()
+
     def prev_face(self):
-        idx = self.preview_stack.currentIndex() - 1
-        if idx < 0: idx = self.preview_stack.count() - 1
-        self.slide_to(idx, "right")
+        if self.current_idx > 0:
+            self.slide_to(self.current_idx - 1)
         
     def next_face(self):
-        idx = self.preview_stack.currentIndex() + 1
-        if idx >= self.preview_stack.count(): idx = 0
-        self.slide_to(idx, "left")
-        
-    def slide_to(self, idx, direction):
-        base_pos = QPoint(162, 90)
-        offset = -100 if direction == "left" else 100
-        
-        self.anim_out = QPropertyAnimation(self.preview_stack, b"pos")
-        self.anim_out.setDuration(180)
-        self.anim_out.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self.anim_out.setStartValue(base_pos)
-        self.anim_out.setEndValue(base_pos + QPoint(offset, 0))
-        
-        self.fade_overlay.show()
-        self.fade_overlay.raise_()
-        self.fade_out = QPropertyAnimation(self.fade_overlay, b"alpha")
-        self.fade_out.setDuration(180)
-        self.fade_out.setStartValue(0)
-        self.fade_out.setEndValue(255)
-        
-        self.grp_out = QParallelAnimationGroup()
-        self.grp_out.addAnimation(self.anim_out)
-        self.grp_out.addAnimation(self.fade_out)
-        self.grp_out.finished.connect(lambda: self.mid_slide(idx, direction, base_pos))
-        self.grp_out.start()
-        
-    def mid_slide(self, idx, direction, base_pos):
-        self.preview_stack.setCurrentIndex(idx)
-        offset = 100 if direction == "left" else -100
-        
-        self.anim_in = QPropertyAnimation(self.preview_stack, b"pos")
-        self.anim_in.setDuration(180)
-        self.anim_in.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self.anim_in.setStartValue(base_pos + QPoint(offset, 0))
-        self.anim_in.setEndValue(base_pos)
-        
-        self.fade_in = QPropertyAnimation(self.fade_overlay, b"alpha")
-        self.fade_in.setDuration(180)
-        self.fade_in.setStartValue(255)
-        self.fade_in.setEndValue(0)
-        self.fade_in.finished.connect(self.fade_overlay.hide)
-        
-        self.grp_in = QParallelAnimationGroup()
-        self.grp_in.addAnimation(self.anim_in)
-        self.grp_in.addAnimation(self.fade_in)
-        self.grp_in.start()
+        if self.current_idx < len(self.wrappers) - 1:
+            self.slide_to(self.current_idx + 1)
 
     def mousePressEvent(self, event):
         self.swipe_start_x = event.position().toPoint().x()
@@ -260,14 +235,13 @@ class ClockSelectorOverlay(QWidget):
     def mouseReleaseEvent(self, event):
         if self.swipe_start_x is not None:
             dx = event.position().toPoint().x() - self.swipe_start_x
-            if abs(dx) > 60:
-                if dx > 0:
-                    self.prev_face()
-                else:
-                    self.next_face()
+            if dx > 60:
+                self.prev_face()
+            elif dx < -60:
+                self.next_face()
             elif not self.is_swiping:
-                # If the user tapped inside the clock card, apply it
-                rect = self.preview_stack.geometry()
+                # Tap to apply
+                rect = self.wrappers[self.current_idx].geometry()
                 if rect.contains(event.position().toPoint()):
                     self.apply()
         self.swipe_start_x = None
@@ -276,12 +250,16 @@ class ClockSelectorOverlay(QWidget):
     def apply(self):
         """Zooms the selected clockface back to full screen and applies it to OS."""
         self.lbl_title.hide()
+        self.lbl_name.hide()
         self.btn_close.hide()
         
-        self.zoom_anim = QPropertyAnimation(self.preview_stack, b"geometry")
+        active_wrapper = self.wrappers[self.current_idx]
+        active_wrapper.raise_()
+        
+        self.zoom_anim = QPropertyAnimation(active_wrapper, b"geometry")
         self.zoom_anim.setDuration(350)
         self.zoom_anim.setEasingCurve(QEasingCurve.Type.InCubic)
-        self.zoom_anim.setStartValue(QRect(162, 90, 700, 420))
+        self.zoom_anim.setStartValue(QRect(162, 110, 700, 420))
         self.zoom_anim.setEndValue(QRect(0, 0, 1024, 600))
         
         self.bg_fade_anim = QPropertyAnimation(self.bg_fade, b"alpha")
@@ -297,22 +275,37 @@ class ClockSelectorOverlay(QWidget):
         
     def _finalize_apply(self):
         self.hide()
-        self.apply_callback(self.preview_stack.currentIndex())
+        for wrapper in self.wrappers:
+            wrapper.hide()
+        self.apply_callback(self.current_idx)
         
     def show_selector(self, current_idx):
         """Starts full screen and smoothly 'backs up' into the carousel viewer."""
-        self.preview_stack.setCurrentIndex(current_idx)
+        self.saved_idx = current_idx
+        self.current_idx = current_idx
+        self.update_labels(current_idx)
+        
+        self.bg_fade.alpha = 0
+        self.bg_fade.show()
+        
+        for i, wrapper in enumerate(self.wrappers):
+            offset = i - self.current_idx
+            if offset == 0:
+                wrapper.setGeometry(0, 0, 1024, 600)
+                wrapper.show()
+                wrapper.raise_()
+            else:
+                wrapper.setGeometry(162 + (offset * 740), 110, 700, 420)
+                wrapper.show()
+
         self.show()
         self.raise_()
         
-        self.preview_stack.setGeometry(0, 0, 1024, 600)
-        self.fade_overlay.setGeometry(162, 90, 700, 420)
-        
-        self.zoom_anim = QPropertyAnimation(self.preview_stack, b"geometry")
+        self.zoom_anim = QPropertyAnimation(self.wrappers[self.current_idx], b"geometry")
         self.zoom_anim.setDuration(400)
         self.zoom_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.zoom_anim.setStartValue(QRect(0, 0, 1024, 600))
-        self.zoom_anim.setEndValue(QRect(162, 90, 700, 420))
+        self.zoom_anim.setEndValue(QRect(162, 110, 700, 420))
         
         self.bg_fade_anim = QPropertyAnimation(self.bg_fade, b"alpha")
         self.bg_fade_anim.setDuration(400)
@@ -327,17 +320,29 @@ class ClockSelectorOverlay(QWidget):
 
     def _on_show_finished(self):
         self.lbl_title.show()
+        self.lbl_name.show()
         self.btn_close.show()
         
     def close_selector(self):
-        """Cancels out of edit mode without saving changes."""
+        """Cancels out of edit mode, returning to the originally saved clockface."""
         self.lbl_title.hide()
+        self.lbl_name.hide()
         self.btn_close.hide()
         
-        self.zoom_anim = QPropertyAnimation(self.preview_stack, b"geometry")
+        # Snap back to the originally active clock before zooming out
+        if self.current_idx != self.saved_idx:
+            self.current_idx = self.saved_idx
+            for i, wrapper in enumerate(self.wrappers):
+                offset = i - self.current_idx
+                wrapper.setGeometry(162 + (offset * 740), 110, 700, 420)
+                
+        active_wrapper = self.wrappers[self.saved_idx]
+        active_wrapper.raise_()
+        
+        self.zoom_anim = QPropertyAnimation(active_wrapper, b"geometry")
         self.zoom_anim.setDuration(350)
         self.zoom_anim.setEasingCurve(QEasingCurve.Type.InCubic)
-        self.zoom_anim.setStartValue(QRect(162, 90, 700, 420))
+        self.zoom_anim.setStartValue(QRect(162, 110, 700, 420))
         self.zoom_anim.setEndValue(QRect(0, 0, 1024, 600))
         
         self.bg_fade_anim = QPropertyAnimation(self.bg_fade, b"alpha")
@@ -348,5 +353,10 @@ class ClockSelectorOverlay(QWidget):
         self.grp_hide = QParallelAnimationGroup()
         self.grp_hide.addAnimation(self.zoom_anim)
         self.grp_hide.addAnimation(self.bg_fade_anim)
-        self.grp_hide.finished.connect(self.hide)
+        self.grp_hide.finished.connect(self._finalize_close)
         self.grp_hide.start()
+        
+    def _finalize_close(self):
+        self.hide()
+        for wrapper in self.wrappers:
+            wrapper.hide()

@@ -5,7 +5,7 @@ import json
 import urllib.request
 import time
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect
-from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor, QPen
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog
@@ -107,7 +107,6 @@ class CategoryButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
         
-        # Load PNG icon if it exists
         if os.path.exists(icon_path):
             self.setIcon(QIcon(icon_path))
             self.setIconSize(QSize(28, 28))
@@ -226,10 +225,9 @@ class SettingsPage(QWidget):
         self.right_stack.setCurrentIndex(index)
         for i, btn in enumerate(self.category_buttons):
             btn.set_active(i == index)
-        # Refresh dynamic tabs when clicked
-        if index == 3: # Customize
+        if index == 3:
             self.update_clockface_preview()
-        elif index == 4: # Installed Apps
+        elif index == 4:
             self.refresh_apps_list()
 
     def get_saved_setting(self, key, default):
@@ -319,7 +317,6 @@ class SettingsPage(QWidget):
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
         card_layout = QVBoxLayout(card)
         
-        # Display Brightness with Percentage
         bright_header = QHBoxLayout()
         lbl_bright = QLabel("Screen Brightness")
         lbl_bright.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
@@ -416,14 +413,12 @@ class SettingsPage(QWidget):
 
         card_layout.addSpacing(10)
 
-        # Silent Mode Redesign
         self.is_silent = self.get_saved_setting("silent_mode", False)
         self.btn_silent = QPushButton()
         self.update_toggle_btn(self.btn_silent, "Silent Mode", self.is_silent, "silent")
         self.btn_silent.clicked.connect(self.toggle_silent)
         card_layout.addWidget(self.btn_silent)
 
-        # DND Mode Redesign
         self.is_dnd = self.get_saved_setting("dnd_mode", False)
         self.btn_dnd = QPushButton()
         self.update_toggle_btn(self.btn_dnd, "Do Not Disturb", self.is_dnd, "dnd")
@@ -446,22 +441,27 @@ class SettingsPage(QWidget):
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
         btn.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
         
+        icon_file = ""
         if mode_type == "silent":
             active_bg = "#E24A4A"  # Red
-            icon = "🔕"
+            icon_file = "icons/silent.png"
         elif mode_type == "dnd":
             active_bg = "#7B61FF"  # Blue-purple
-            icon = "🌙"
+            icon_file = "icons/dnd.png"
         else:
             active_bg = "#5A8DEF"
-            icon = "✓"
+
+        if os.path.exists(icon_file):
+            btn.setIcon(QIcon(icon_file))
+            btn.setIconSize(QSize(24, 24))
+            btn.setText(f"  {text} (ON)" if state else f"  {text} (OFF)")
+        else:
+            btn.setIcon(QIcon())
+            btn.setText(f"{text} (ON)" if state else f"{text} (OFF)")
 
         if state:
-            btn.setText(f"{icon}  {text} (ON)")
             btn.setStyleSheet(f"QPushButton {{ background-color: {active_bg}; color: white; border-radius: 12px; text-align: left; padding-left: 20px; border: none; }}")
         else:
-            icon_off = "✕" if mode_type == "default" else icon
-            btn.setText(f"{icon_off}  {text} (OFF)")
             btn.setStyleSheet("QPushButton { background-color: #2C2C35; color: #AAAAAA; border-radius: 12px; text-align: left; padding-left: 20px; border: none; }")
 
     def toggle_silent(self):
@@ -504,7 +504,6 @@ class SettingsPage(QWidget):
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
         c_layout = QVBoxLayout(card)
         
-        # App Drawer settings
         scale_header = QHBoxLayout()
         lbl_scale = QLabel("App Drawer Icon Scale")
         lbl_scale.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
@@ -561,7 +560,6 @@ class SettingsPage(QWidget):
         card_layout.addWidget(card)
         card_layout.addSpacing(20)
 
-        # Clockface Preview Sub-Card
         lbl_cf = QLabel("Watch Face")
         lbl_cf.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
         lbl_cf.setStyleSheet("color: white; border: none;")
@@ -575,7 +573,7 @@ class SettingsPage(QWidget):
         
         self.lbl_cf_preview = QLabel()
         self.lbl_cf_preview.setFixedSize(90, 90)
-        self.lbl_cf_preview.setStyleSheet("background-color: #0C0C0E; border-radius: 45px; border: 2px solid #5A8DEF;")
+        self.lbl_cf_preview.setStyleSheet("background: transparent;")
         self.lbl_cf_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cf_layout.addWidget(self.lbl_cf_preview)
         
@@ -610,14 +608,13 @@ class SettingsPage(QWidget):
         return page
 
     def update_clockface_preview(self):
-        """Dynamically instantiates and renders the active clockface to a miniature preview pixmap."""
         try:
-            from components.clockfaces import CLOCKFACE_CLASSES
+            from components.clockfaces import CLOCKFACES
             from PyQt6.QtCore import QTime, QDate
             
             idx = self.get_saved_setting("clockface_index", 0)
-            if idx < len(CLOCKFACE_CLASSES):
-                inst = CLOCKFACE_CLASSES[idx]()
+            if idx < len(CLOCKFACES):
+                inst = CLOCKFACES[idx][1]()
                 inst.setGeometry(0, 0, 360, 360)
                 inst.update_time(QTime.currentTime(), QDate.currentDate())
                 
@@ -625,17 +622,36 @@ class SettingsPage(QWidget):
                 pix.fill(Qt.GlobalColor.transparent)
                 inst.render(pix)
                 
-                scaled = pix.scaled(90, 90, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.lbl_cf_preview.setPixmap(scaled)
+                circular_pix = QPixmap(90, 90)
+                circular_pix.fill(Qt.GlobalColor.transparent)
+                
+                painter = QPainter(circular_pix)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                
+                painter.setPen(QPen(QColor("#5A8DEF"), 2))
+                painter.setBrush(QColor("#0C0C0E"))
+                painter.drawEllipse(1, 1, 88, 88)
+                
+                path = QPainterPath()
+                path.addEllipse(2, 2, 86, 86)
+                painter.setClipPath(path)
+                
+                scaled = pix.scaled(86, 86, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                x = (86 - scaled.width()) // 2 + 2
+                y = (86 - scaled.height()) // 2 + 2
+                painter.drawPixmap(x, y, scaled)
+                painter.end()
+                
+                self.lbl_cf_preview.setPixmap(circular_pix)
         except Exception as e:
             print(f"Could not load clockface preview: {e}")
 
     def open_clockface_selector(self):
-        """Triggers the wear-os style clockface selector from the main OS."""
         main_window = self.window()
         if hasattr(main_window, 'open_clockface_selector'):
             if self.on_close:
-                self.on_close()  # Slide settings away
+                self.on_close()
             main_window.open_clockface_selector()
 
     # =================================================================
@@ -679,14 +695,17 @@ class SettingsPage(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-        core_apps = ["settings.py", "app_store.py", "__init__.py", "kiosk.py", "local_music.py", "spotify.py", "web_app.py"]
+        # Added gallery.py firmly to core_apps
+        core_apps = ["settings.py", "app_store.py", "__init__.py", "kiosk.py", "local_music.py", "spotify.py", "web_app.py", "gallery.py"]
         
         try:
             if not os.path.exists("apps"):
                 os.makedirs("apps", exist_ok=True)
             
             files = [f for f in os.listdir("apps") if f.endswith(".py") and not f.startswith("__")]
-            files.sort(key=lambda x: (x not in core_apps, x.lower()))
+            
+            # Sort system apps to top, handling case sensitivity correctly
+            files.sort(key=lambda x: (x.lower() not in core_apps, x.lower()))
         except Exception as e:
             lbl_err = QLabel(f"Error loading apps: {e}")
             lbl_err.setStyleSheet("color: #E24A4A; font-size: 16px;")
@@ -709,10 +728,9 @@ class SettingsPage(QWidget):
             card_layout.setContentsMargins(0, 0, 0, 0)
             card_layout.setSpacing(15)
 
-            app_id = filename[:-3] 
+            app_id = filename[:-3].lower() 
             app_name = "Music" if app_id == "local_music" else app_id.replace("_", " ").title()
 
-            # Dynamic Icon Loading
             lbl_icon = QLabel()
             lbl_icon.setFixedSize(48, 48)
             lbl_icon.setStyleSheet("background: transparent; border: none;")
@@ -729,12 +747,13 @@ class SettingsPage(QWidget):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             
-            original_pix = QPixmap(icon_path) if icon_path else QPixmap()
+            original_pix = QIcon(icon_path).pixmap(QSize(48, 48)) if icon_path else QPixmap()
+            
             if not original_pix.isNull():
                 path = QPainterPath()
-                path.addEllipse(0, 0, 48, 48)
+                path.addRoundedRect(0, 0, 48, 48, 12, 12)
                 painter.setClipPath(path)
-                scaled = original_pix.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                scaled = original_pix.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 x = (48 - scaled.width()) // 2
                 y = (48 - scaled.height()) // 2
                 painter.drawPixmap(x, y, scaled)
@@ -758,7 +777,8 @@ class SettingsPage(QWidget):
                 except Exception:
                     pass
             
-            is_core = filename in core_apps
+            # Locked Case-Insensitive Core Match Check
+            is_core = filename.lower() in core_apps
 
             info_box = QVBoxLayout()
             info_box.setSpacing(4)

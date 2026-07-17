@@ -937,8 +937,8 @@ class NestKiosk(QMainWindow):
         # Added Gallery to Core Apps List
         core_apps = [
             ("App Store", "icons/appstore.png"),
-            ("Gallery", "icons/gallery.svg"),
-            ("Local Music", "icons/music.svg")
+            ("Gallery", "icons/gallery.png"),
+            ("Local Music", "icons/music.png")
         ]
 
         downloaded_apps = []

@@ -542,6 +542,11 @@ class AppStorePage(QWidget):
         normal_layout.addWidget(self.btn_search_open)
 
         # --- Page 1: Material You Search Pill ---
+        self.search_container = QWidget()
+        search_container_layout = QHBoxLayout(self.search_container)
+        search_container_layout.setContentsMargins(0, 0, 0, 0)
+        search_container_layout.addStretch() # Anchors the pill to the right edge
+        
         self.search_pill = QFrame()
         self.search_pill.setStyleSheet("""
             QFrame { background-color: #22222B; border: 2px solid #5A8DEF; border-radius: 27px; }
@@ -579,8 +584,10 @@ class AppStorePage(QWidget):
         self.btn_search_clear.clicked.connect(self.search_bar.clear)
         pill_layout.addWidget(self.btn_search_clear)
 
+        search_container_layout.addWidget(self.search_pill)
+
         self.header_stack.addWidget(header_normal)
-        self.header_stack.addWidget(self.search_pill)
+        self.header_stack.addWidget(self.search_container)
         layout.addWidget(self.header_stack)
 
         # =============================================================
@@ -643,12 +650,12 @@ class AppStorePage(QWidget):
     def open_search_bar(self):
         """Expands the Material search pill across the header."""
         self.header_stack.setCurrentIndex(1)
-        self.search_pill.setMinimumWidth(50)
-        self.search_pill.setMaximumWidth(50)
+        self.search_pill.setMinimumWidth(42)
+        self.search_pill.setMaximumWidth(42)
         
         self.search_anim = QPropertyAnimation(self.search_pill, b"maximumWidth")
         self.search_anim.setDuration(250)
-        self.search_anim.setStartValue(50)
+        self.search_anim.setStartValue(42)
         self.search_anim.setEndValue(3000) 
         self.search_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.search_anim.finished.connect(lambda: self.search_pill.setMinimumWidth(0))
@@ -661,7 +668,7 @@ class AppStorePage(QWidget):
         self.search_anim = QPropertyAnimation(self.search_pill, b"maximumWidth")
         self.search_anim.setDuration(200)
         self.search_anim.setStartValue(self.search_pill.width())
-        self.search_anim.setEndValue(50)
+        self.search_anim.setEndValue(42)
         self.search_anim.setEasingCurve(QEasingCurve.Type.InCubic)
         self.search_anim.finished.connect(lambda: self.header_stack.setCurrentIndex(0))
         self.search_anim.start()
