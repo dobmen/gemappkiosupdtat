@@ -423,7 +423,7 @@ class NestKiosk(QMainWindow):
         self.indicator = QLabel("▲ Swipe up for apps", self)
         self.indicator.setGeometry(0, 560, 1024, 40)
         self.indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold;")
+        self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold; background-color: transparent;")
 
         # -------------------------------------------------------------
         # 2. SPLIT-SCREEN CONTROL CENTER

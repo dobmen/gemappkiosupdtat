@@ -40,7 +40,6 @@ def draw_custom_background(painter, bg_val, w, h):
             grad.setColorAt(1.0, QColor(parts[2]))
             painter.fillRect(0, 0, w, h, grad)
     elif bg_val.startswith("img:"):
-        # Format: img:path|pan_x|pan_y|mode
         parts = bg_val.split("|")
         path = parts[0][4:]
         pan_x = float(parts[1]) if len(parts) > 1 else 0.0
@@ -160,17 +159,24 @@ class GalleryGridButton(QPushButton):
 class ClassicClock(QWidget):
     def __init__(self):
         super().__init__()
+        self.color = "#FFFFFF"
+        self.bg = "#0C0C0E"
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.clock_layout = QVBoxLayout(self)
+        self.clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.clock_layout.setSpacing(10)
+        
         self.lbl_time = QLabel()
         self.lbl_time.setFont(QFont("Google Sans", 95, QFont.Weight.Bold))
         self.lbl_time.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
         self.lbl_date = QLabel()
         self.lbl_date.setFont(QFont("Google Sans", 24))
         self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.lbl_time)
-        layout.addWidget(self.lbl_date)
+        
+        self.clock_layout.addWidget(self.lbl_time)
+        self.clock_layout.addWidget(self.lbl_date)
         self.load_settings()
 
     def sizeHint(self):
@@ -190,6 +196,16 @@ class ClassicClock(QWidget):
         self.lbl_time.setText(t.toString("HH:mm"))
         self.lbl_date.setText(d.toString("dddd, MMMM d"))
 
+    def resizeEvent(self, event):
+        """Dynamically shrink the fonts when squished by the editor drawer."""
+        factor = self.height() / 600.0
+        f_time = QFont("Google Sans", max(10, int(95 * factor)), QFont.Weight.Bold)
+        f_date = QFont("Google Sans", max(8, int(24 * factor)))
+        self.lbl_time.setFont(f_time)
+        self.lbl_date.setFont(f_date)
+        self.clock_layout.setSpacing(max(0, int(10 * factor)))
+        super().resizeEvent(event)
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -203,10 +219,14 @@ class ClassicClock(QWidget):
 class StackedClock(QWidget):
     def __init__(self):
         super().__init__()
+        self.hour_color = "#FFFFFF"
+        self.min_color = "#5A8DEF"
+        self.bg = "#0C0C0E"
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(0)
+        
+        self.clock_layout = QVBoxLayout(self)
+        self.clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.clock_layout.setSpacing(15)
         
         self.lbl_hour = QLabel()
         self.lbl_hour.setFont(QFont("Google Sans", 115, QFont.Weight.Bold))
@@ -220,10 +240,9 @@ class StackedClock(QWidget):
         self.lbl_date.setFont(QFont("Google Sans", 20))
         self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        layout.addWidget(self.lbl_hour)
-        layout.addWidget(self.lbl_minute)
-        layout.addSpacing(15) 
-        layout.addWidget(self.lbl_date)
+        self.clock_layout.addWidget(self.lbl_hour)
+        self.clock_layout.addWidget(self.lbl_minute)
+        self.clock_layout.addWidget(self.lbl_date)
         self.load_settings()
 
     def sizeHint(self):
@@ -236,15 +255,34 @@ class StackedClock(QWidget):
         self.hour_color = get_setting("stacked_hour", "#FFFFFF")
         self.min_color = get_setting("stacked_min", "#5A8DEF")
         self.bg = get_setting("stacked_bg", "#0C0C0E")
-        self.lbl_hour.setStyleSheet(f"color: {self.hour_color}; background: transparent; margin-bottom: -25px;")
-        self.lbl_minute.setStyleSheet(f"color: {self.min_color}; background: transparent; margin-top: -25px;")
         self.lbl_date.setStyleSheet("color: #AAAAAA; background: transparent;")
+        self.resizeEvent(None)
         self.update()
 
     def update_time(self, t, d):
         self.lbl_hour.setText(t.toString("HH"))
         self.lbl_minute.setText(t.toString("mm"))
         self.lbl_date.setText(d.toString("dddd, MMM d"))
+
+    def resizeEvent(self, event):
+        """Dynamically shrink the fonts and overlapping margins when squished by the editor drawer."""
+        factor = self.height() / 600.0
+        f_time = QFont("Google Sans", max(10, int(115 * factor)), QFont.Weight.Bold)
+        f_date = QFont("Google Sans", max(8, int(20 * factor)))
+        self.lbl_hour.setFont(f_time)
+        self.lbl_minute.setFont(f_time)
+        self.lbl_date.setFont(f_date)
+
+        margin = int(-25 * factor)
+        hc = getattr(self, 'hour_color', '#FFFFFF')
+        mc = getattr(self, 'min_color', '#5A8DEF')
+        
+        self.lbl_hour.setStyleSheet(f"color: {hc}; background: transparent; margin-bottom: {margin}px;")
+        self.lbl_minute.setStyleSheet(f"color: {mc}; background: transparent; margin-top: {margin}px;")
+        self.clock_layout.setSpacing(max(0, int(15 * factor)))
+        
+        if event:
+            super().resizeEvent(event)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -362,7 +400,6 @@ class ImageAdjusterOverlay(QFrame):
         self.pix = QPixmap()
         self.last_mouse = None
         
-        # Transparent UI Overlays
         top_bar = QWidget(self)
         top_bar.setGeometry(0, 0, 1024, 90)
         top_bar.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(0,0,0,180), stop:1 rgba(0,0,0,0));")
@@ -488,7 +525,6 @@ class GalleryPickerOverlay(QFrame):
         self.current_selected_album = "Photos"
         self.ignored_folders = [".", "__", "apps", "components", "fonts", "icons", "venv", "browser_data"]
         
-        # Sidebar
         self.sidebar = QFrame()
         self.sidebar.setFixedWidth(240)
         self.sidebar.setStyleSheet("background-color: #14141A; border-right: 1px solid #22222A;")
@@ -520,7 +556,6 @@ class GalleryPickerOverlay(QFrame):
         
         layout.addWidget(self.sidebar)
         
-        # Grid
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(30, 25, 30, 30)
@@ -718,13 +753,13 @@ class ClockSelectorOverlay(QWidget):
 
         page0 = self.build_editor_page({
             "Clock Color": self.create_color_grid("classic_color"),
-            "Colors & Gradients": self.create_bg_grid("classic_bg"),
+            "Backgrounds": self.create_bg_grid("classic_bg"),
             "My Photos": self.create_photo_grid("classic_bg")
         })
         page1 = self.build_editor_page({
             "Hour Color": self.create_color_grid("stacked_hour"),
             "Minute Color": self.create_color_grid("stacked_min"),
-            "Colors & Gradients": self.create_bg_grid("stacked_bg"),
+            "Backgrounds": self.create_bg_grid("stacked_bg"),
             "My Photos": self.create_photo_grid("stacked_bg")
         })
         page2 = self.build_editor_page({
@@ -737,9 +772,9 @@ class ClockSelectorOverlay(QWidget):
 
     def _apply_tab_style(self, btn, active):
         if active:
-            btn.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px;")
+            btn.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px; font-size: 13px;")
         else:
-            btn.setStyleSheet("background-color: transparent; color: #AAAAAA; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px;")
+            btn.setStyleSheet("background-color: transparent; color: #AAAAAA; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px; font-size: 13px;")
 
     def _switch_editor_tab(self, idx, stack, buttons):
         stack.setCurrentIndex(idx)
@@ -753,7 +788,7 @@ class ClockSelectorOverlay(QWidget):
         layout.setSpacing(15)
         
         tab_container = QWidget()
-        tab_container.setFixedWidth(150)
+        tab_container.setFixedWidth(210)
         tab_layout = QVBoxLayout(tab_container)
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(5)
@@ -762,7 +797,7 @@ class ClockSelectorOverlay(QWidget):
         buttons = []
         for i, (name, widget) in enumerate(sections_dict.items()):
             btn = QPushButton(name)
-            btn.setFixedSize(140, 36)
+            btn.setFixedSize(200, 45)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._apply_tab_style(btn, i == 0)
             btn.clicked.connect(lambda checked, idx=i: self._switch_editor_tab(idx, stack, buttons))
