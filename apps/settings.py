@@ -286,8 +286,9 @@ class SettingsPage(QWidget):
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
         
         ip_address = self.get_local_ip()
         lbl_status = QLabel("Status: Connected")
@@ -326,8 +327,9 @@ class SettingsPage(QWidget):
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
         
         bright_header = QHBoxLayout()
         lbl_bright = QLabel("Screen Brightness")
@@ -392,8 +394,9 @@ class SettingsPage(QWidget):
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
         card_layout.setSpacing(15)
         
         vol_header = QHBoxLayout()
@@ -513,8 +516,9 @@ class SettingsPage(QWidget):
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         c_layout = QVBoxLayout(card)
+        c_layout.setContentsMargins(20, 20, 20, 20)
         
         scale_header = QHBoxLayout()
         lbl_scale = QLabel("App Drawer Icon Scale")
@@ -733,9 +737,9 @@ class SettingsPage(QWidget):
         for filename in files:
             card = QFrame()
             card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-            card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 16px 20px;")
+            card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
             card_layout = QHBoxLayout(card)
-            card_layout.setContentsMargins(0, 0, 0, 0)
+            card_layout.setContentsMargins(20, 16, 20, 16)
             card_layout.setSpacing(15)
 
             app_id = filename[:-3].lower() 
@@ -787,6 +791,7 @@ class SettingsPage(QWidget):
                 except Exception:
                     pass
             
+            # Locked Case-Insensitive Core Match Check
             is_core = filename.lower() in core_apps
 
             info_box = QVBoxLayout()
@@ -873,8 +878,9 @@ class SettingsPage(QWidget):
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
         
         storage_info = self.get_storage_info()
         lbl_sys = QLabel(storage_info)
@@ -903,8 +909,9 @@ class SettingsPage(QWidget):
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35; padding: 20px;")
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 20, 20, 20)
         
         self.current_os_version = self.get_saved_setting("os_version", "0.1.0")
         

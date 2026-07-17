@@ -1,7 +1,57 @@
 import os
+import json
 from PyQt6.QtCore import Qt, QTime, QDate, QPoint, QRect, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, pyqtProperty
-from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPen, QColor, QBrush, QPolygon
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QPushButton
+from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPen, QColor, QBrush, QPolygon, QLinearGradient, QPixmap
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QStackedWidget
+
+# =================================================================
+# GLOBAL SETTINGS ENGINE
+# =================================================================
+def get_setting(key, default=None):
+    try:
+        if os.path.exists("config.json"):
+            with open("config.json", "r") as f:
+                return json.load(f).get(key, default)
+    except Exception: pass
+    return default
+
+def save_setting(key, value):
+    cfg = {}
+    try:
+        if os.path.exists("config.json"):
+            with open("config.json", "r") as f:
+                cfg = json.load(f)
+    except Exception: pass
+    cfg[key] = value
+    try:
+        with open("config.json", "w") as f:
+            json.dump(cfg, f)
+    except Exception: pass
+
+def draw_custom_background(painter, bg_val, w, h):
+    """Dynamically parses and paints Hex, Gradients, or Images to the clockface."""
+    if bg_val.startswith("#"):
+        painter.fillRect(0, 0, w, h, QColor(bg_val))
+    elif bg_val.startswith("grad:"):
+        parts = bg_val.split(":")
+        if len(parts) == 3:
+            grad = QLinearGradient(0, 0, w, h)
+            grad.setColorAt(0.0, QColor(parts[1]))
+            grad.setColorAt(1.0, QColor(parts[2]))
+            painter.fillRect(0, 0, w, h, grad)
+    elif bg_val.startswith("img:"):
+        path = bg_val[4:]
+        if os.path.exists(path):
+            pix = QPixmap(path)
+            scaled = pix.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            x = (scaled.width() - w) // 2
+            y = (scaled.height() - h) // 2
+            painter.drawPixmap(0, 0, scaled, x, y, w, h)
+        else:
+            painter.fillRect(0, 0, w, h, QColor(12, 12, 14))
+    else:
+        painter.fillRect(0, 0, w, h, QColor(12, 12, 14))
+
 
 class FadeOverlay(QWidget):
     """A thread-safe fade overlay specifically for the background dimming."""
@@ -26,6 +76,9 @@ class FadeOverlay(QWidget):
         painter.fillRect(self.rect(), QColor(12, 12, 14, self._alpha))
 
 
+# =================================================================
+# CLOCKFACE RENDERING ENGINES
+# =================================================================
 class ClassicClock(QWidget):
     def __init__(self):
         super().__init__()
@@ -36,14 +89,30 @@ class ClassicClock(QWidget):
         self.lbl_time.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_date = QLabel()
         self.lbl_date.setFont(QFont("Google Sans", 24))
-        self.lbl_date.setStyleSheet("color: #888888;")
         self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_time)
         layout.addWidget(self.lbl_date)
+        self.load_settings()
+
+    def load_settings(self):
+        self.color = get_setting("classic_color", "#FFFFFF")
+        self.bg = get_setting("classic_bg", "#0C0C0E")
+        self.lbl_time.setStyleSheet(f"color: {self.color}; background: transparent;")
+        self.lbl_date.setStyleSheet(f"color: {self.color}; background: transparent;")
+        self.update()
 
     def update_time(self, t, d):
         self.lbl_time.setText(t.toString("HH:mm"))
         self.lbl_date.setText(d.toString("dddd, MMMM d"))
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        radius = 36 if self.width() < 1000 else 0
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+        painter.setClipPath(path)
+        draw_custom_background(painter, self.bg, self.width(), self.height())
 
 
 class StackedClock(QWidget):
@@ -57,20 +126,37 @@ class StackedClock(QWidget):
         self.lbl_hour.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_minute = QLabel()
         self.lbl_minute.setFont(QFont("Google Sans", 115, QFont.Weight.Bold))
-        self.lbl_minute.setStyleSheet("color: #5A8DEF;")
         self.lbl_minute.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_date = QLabel()
         self.lbl_date.setFont(QFont("Google Sans", 20))
-        self.lbl_date.setStyleSheet("color: #AAAAAA; margin-top: 15px;")
         self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_hour)
         layout.addWidget(self.lbl_minute)
         layout.addWidget(self.lbl_date)
+        self.load_settings()
+
+    def load_settings(self):
+        self.hour_color = get_setting("stacked_hour", "#FFFFFF")
+        self.min_color = get_setting("stacked_min", "#5A8DEF")
+        self.bg = get_setting("stacked_bg", "#0C0C0E")
+        self.lbl_hour.setStyleSheet(f"color: {self.hour_color}; background: transparent;")
+        self.lbl_minute.setStyleSheet(f"color: {self.min_color}; background: transparent;")
+        self.lbl_date.setStyleSheet("color: #AAAAAA; margin-top: 15px; background: transparent;")
+        self.update()
 
     def update_time(self, t, d):
         self.lbl_hour.setText(t.toString("HH"))
         self.lbl_minute.setText(t.toString("mm"))
         self.lbl_date.setText(d.toString("dddd, MMM d"))
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        radius = 36 if self.width() < 1000 else 0
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+        painter.setClipPath(path)
+        draw_custom_background(painter, self.bg, self.width(), self.height())
 
 
 class AnalogClock(QWidget):
@@ -78,6 +164,11 @@ class AnalogClock(QWidget):
         super().__init__()
         self.time = QTime.currentTime()
         self.date = QDate.currentDate()
+        self.load_settings()
+
+    def load_settings(self):
+        self.theme = get_setting("analog_theme", "dark")
+        self.update()
 
     def update_time(self, t, d):
         self.time = t
@@ -85,22 +176,35 @@ class AnalogClock(QWidget):
         self.update()
 
     def paintEvent(self, event):
-        side = min(self.width(), self.height())
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        radius = 36 if self.width() < 1000 else 0
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+        painter.setClipPath(path)
+        
+        is_light = (self.theme == "light")
+        bg_col = QColor(245, 245, 245) if is_light else QColor(12, 12, 14)
+        painter.fillRect(0, 0, self.width(), self.height(), bg_col)
+        
+        side = min(self.width(), self.height())
         painter.translate(self.width() / 2.0, self.height() / 2.0)
         painter.scale(side / 320.0, side / 320.0)
 
-        painter.setPen(QPen(QColor(40, 40, 50), 6))
+        ring_col = QColor(200, 200, 200) if is_light else QColor(40, 40, 50)
+        painter.setPen(QPen(ring_col, 6))
         painter.drawEllipse(QPoint(0,0), 145, 145)
 
-        painter.setPen(QPen(QColor(255, 255, 255, 150), 3))
+        tick_col = QColor(100, 100, 100) if is_light else QColor(255, 255, 255, 150)
+        painter.setPen(QPen(tick_col, 3))
         for i in range(12):
             painter.drawLine(0, -125, 0, -135)
             painter.rotate(30.0)
 
         hour_hand = QPolygon([QPoint(6, 12), QPoint(-6, 12), QPoint(0, -75)])
-        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        h_col = QColor(40, 40, 40) if is_light else QColor(255, 255, 255)
+        painter.setBrush(QBrush(h_col))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.save()
         painter.rotate(30.0 * ((self.time.hour() + self.time.minute() / 60.0)))
@@ -121,7 +225,8 @@ class AnalogClock(QWidget):
         painter.drawPolygon(sec_hand)
         painter.restore()
 
-        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        c_col = QColor(40, 40, 40) if is_light else QColor(255, 255, 255)
+        painter.setBrush(QBrush(c_col))
         painter.drawEllipse(QPoint(0,0), 6, 6)
         painter.end()
 
@@ -133,7 +238,12 @@ CLOCKFACES = [
     ("Minimal Analog", AnalogClock)
 ]
 
+CLOCKFACE_CLASSES = [cls for name, cls in CLOCKFACES]
 
+
+# =================================================================
+# WEAR OS STYLE CAROUSEL SELECTOR & EDITOR OVERLAY
+# =================================================================
 class ClockSelectorOverlay(QWidget):
     def __init__(self, parent, apply_callback):
         super().__init__(parent)
@@ -153,30 +263,30 @@ class ClockSelectorOverlay(QWidget):
         self.lbl_title.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
         self.lbl_title.setStyleSheet("color: #888888; background: transparent;")
         self.lbl_title.hide()
-
-        self.lbl_name = QLabel("", self.main_container)
-        self.lbl_name.setGeometry(0, 50, 1024, 40)
-        self.lbl_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_name.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
-        self.lbl_name.setStyleSheet("color: white; background: transparent;")
-        self.lbl_name.hide()
         
         self.current_idx = 0
         self.previews = []
         self.wrappers = []
+        self.name_labels = []
         
-        # True Wear OS Side-by-Side Carousel Generation
         for i, (name, Cls) in enumerate(CLOCKFACES):
             inst = Cls()
             wrapper = QFrame(self.main_container)
-            wrapper.setStyleSheet("background-color: #1A1A22; border-radius: 36px;")
+            wrapper.setStyleSheet("background-color: transparent;")
             
-            l = QVBoxLayout(wrapper)
+            l = QGridLayout(wrapper)
             l.setContentsMargins(0, 0, 0, 0)
-            l.addWidget(inst)
+            
+            lbl_card_name = QLabel(name)
+            lbl_card_name.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+            lbl_card_name.setStyleSheet("color: white; background: transparent; border: none; padding-top: 40px;")
+            
+            l.addWidget(inst, 0, 0)
+            l.addWidget(lbl_card_name, 0, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
             
             self.previews.append(inst)
             self.wrappers.append(wrapper)
+            self.name_labels.append(lbl_card_name)
             wrapper.hide()
 
         self.btn_close = QPushButton("✕", self.main_container)
@@ -185,26 +295,165 @@ class ClockSelectorOverlay(QWidget):
         self.btn_close.setStyleSheet("background: rgba(255,255,255,10); color: white; border-radius: 25px; font-size: 20px; border: none;")
         self.btn_close.clicked.connect(self.close_selector)
         self.btn_close.hide()
+
+        self.btn_customize = QPushButton("⚙️ Customize", self.main_container)
+        self.btn_customize.setGeometry(1024//2 - 80, 540, 160, 45)
+        self.btn_customize.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_customize.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 22px; font-weight: bold; font-size: 15px; border: none;")
+        self.btn_customize.clicked.connect(self.open_editor)
+        self.btn_customize.hide()
+
+        self.setup_editor_panel()
         
         self.swipe_start_x = None
         self.is_swiping = False
+        self.is_editing = False
         self.saved_idx = 0
+
+    def setup_editor_panel(self):
+        """Builds the slide-up editor drawer for deep customizing the active clock."""
+        self.edit_panel = QFrame(self.main_container)
+        self.edit_panel.setGeometry(0, 600, 1024, 180)
+        self.edit_panel.setStyleSheet("background-color: rgba(20, 20, 26, 250); border-top-left-radius: 24px; border-top-right-radius: 24px;")
+        
+        btn_done = QPushButton("Done", self.edit_panel)
+        btn_done.setGeometry(1024 - 110, 20, 80, 35)
+        btn_done.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_done.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 17px; font-weight: bold; border: none;")
+        btn_done.clicked.connect(self.close_editor)
+        
+        self.edit_stack = QStackedWidget(self.edit_panel)
+        self.edit_stack.setGeometry(30, 20, 1024 - 160, 140)
+        self.edit_stack.setStyleSheet("background: transparent;")
+
+        colors = ["#FFFFFF", "#E24A4A", "#5A8DEF", "#1ED760", "#F39C12", "#9B59B6"]
+        bgs = [
+            ("#0C0C0E", "background-color: #0C0C0E;"),
+            ("grad:#5A8DEF:#9B59B6", "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #5A8DEF,stop:1 #9B59B6);"),
+            ("grad:#E24A4A:#F39C12", "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #E24A4A,stop:1 #F39C12);")
+        ]
+        
+        if os.path.exists("photos"):
+            imgs = [f for f in os.listdir("photos") if f.lower().endswith(('.png', '.jpg', '.jpeg'))][:3]
+            for img in imgs:
+                path = f"photos/{img}"
+                bgs.append((f"img:{path}", f"background-image: url({path}); background-position: center;"))
+
+        # --- 0: Classic Digital Settings ---
+        page0 = QWidget()
+        l0 = QHBoxLayout(page0)
+        l0.setSpacing(40)
+        
+        col_box = QVBoxLayout()
+        col_box.addWidget(QLabel("Clock Color", styleSheet="color: #888; font-weight: bold;"))
+        col_btns = QHBoxLayout()
+        for c in colors:
+            btn = QPushButton()
+            btn.setFixedSize(36, 36)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"background-color: {c}; border-radius: 18px;")
+            btn.clicked.connect(lambda checked, val=c: self.set_setting("classic_color", val))
+            col_btns.addWidget(btn)
+        col_box.addLayout(col_btns)
+        l0.addLayout(col_box)
+
+        bg_box = QVBoxLayout()
+        bg_box.addWidget(QLabel("Background", styleSheet="color: #888; font-weight: bold;"))
+        bg_btns = QHBoxLayout()
+        for val, css in bgs:
+            btn = QPushButton()
+            btn.setFixedSize(45, 45)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"QPushButton {{ {css} border-radius: 12px; border: 1px solid #444; }}")
+            btn.clicked.connect(lambda checked, v=val: self.set_setting("classic_bg", v))
+            bg_btns.addWidget(btn)
+        bg_box.addLayout(bg_btns)
+        l0.addLayout(bg_box)
+        l0.addStretch()
+        self.edit_stack.addWidget(page0)
+
+        # --- 1: Stacked Bold Settings ---
+        page1 = QWidget()
+        l1 = QHBoxLayout(page1)
+        l1.setSpacing(25)
+        
+        h_box = QVBoxLayout()
+        h_box.addWidget(QLabel("Hour Color", styleSheet="color: #888; font-weight: bold;"))
+        h_row = QHBoxLayout()
+        for c in colors:
+            btn = QPushButton()
+            btn.setFixedSize(30, 30)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"background-color: {c}; border-radius: 15px;")
+            btn.clicked.connect(lambda checked, val=c: self.set_setting("stacked_hour", val))
+            h_row.addWidget(btn)
+        h_box.addLayout(h_row)
+        l1.addLayout(h_box)
+        
+        m_box = QVBoxLayout()
+        m_box.addWidget(QLabel("Minute Color", styleSheet="color: #888; font-weight: bold;"))
+        m_row = QHBoxLayout()
+        for c in colors:
+            btn = QPushButton()
+            btn.setFixedSize(30, 30)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"background-color: {c}; border-radius: 15px;")
+            btn.clicked.connect(lambda checked, val=c: self.set_setting("stacked_min", val))
+            m_row.addWidget(btn)
+        m_box.addLayout(m_row)
+        l1.addLayout(m_box)
+
+        b1_box = QVBoxLayout()
+        b1_box.addWidget(QLabel("Background", styleSheet="color: #888; font-weight: bold;"))
+        b1_row = QHBoxLayout()
+        for val, css in bgs:
+            btn = QPushButton()
+            btn.setFixedSize(36, 36)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(f"QPushButton {{ {css} border-radius: 10px; border: 1px solid #444; }}")
+            btn.clicked.connect(lambda checked, v=val: self.set_setting("stacked_bg", v))
+            b1_row.addWidget(btn)
+        b1_box.addLayout(b1_row)
+        l1.addLayout(b1_box)
+        l1.addStretch()
+        self.edit_stack.addWidget(page1)
+
+        # --- 2: Analog Theme Settings ---
+        page2 = QWidget()
+        l2 = QHBoxLayout(page2)
+        l2.addWidget(QLabel("Clock Theme", styleSheet="color:#888; font-weight:bold;"))
+        
+        btn_dark = QPushButton("Dark Mode")
+        btn_dark.setFixedSize(120, 40)
+        btn_dark.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_dark.setStyleSheet("background: #0C0C0E; color: white; border-radius: 12px; border: 1px solid #444;")
+        btn_dark.clicked.connect(lambda: self.set_setting("analog_theme", "dark"))
+        
+        btn_light = QPushButton("Light Mode")
+        btn_light.setFixedSize(120, 40)
+        btn_light.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_light.setStyleSheet("background: #FFFFFF; color: black; border-radius: 12px; border: 1px solid #444;")
+        btn_light.clicked.connect(lambda: self.set_setting("analog_theme", "light"))
+        
+        l2.addWidget(btn_dark)
+        l2.addWidget(btn_light)
+        l2.addStretch()
+        self.edit_stack.addWidget(page2)
+
+    def set_setting(self, key, value):
+        save_setting(key, value)
+        self.previews[self.current_idx].load_settings()
 
     def update_time(self, t, d):
         for p in self.previews:
             p.update_time(t, d)
-            
-    def update_labels(self, idx):
-        self.lbl_name.setText(CLOCKFACES[idx][0])
 
     def slide_to(self, idx):
         self.current_idx = idx
-        self.update_labels(idx)
-        
         self.grp_slide = QParallelAnimationGroup()
         for i, wrapper in enumerate(self.wrappers):
             offset = i - self.current_idx
-            target_x = 162 + (offset * 740) # 740 = 700 width + 40 spacing
+            target_x = 162 + (offset * 740) 
             
             anim = QPropertyAnimation(wrapper, b"geometry")
             anim.setDuration(300)
@@ -223,16 +472,19 @@ class ClockSelectorOverlay(QWidget):
             self.slide_to(self.current_idx + 1)
 
     def mousePressEvent(self, event):
+        if self.is_editing: return
         self.swipe_start_x = event.position().toPoint().x()
         self.is_swiping = False
         
     def mouseMoveEvent(self, event):
+        if self.is_editing: return
         if self.swipe_start_x is not None:
             dx = event.position().toPoint().x() - self.swipe_start_x
             if abs(dx) > 15:
                 self.is_swiping = True
                 
     def mouseReleaseEvent(self, event):
+        if self.is_editing: return
         if self.swipe_start_x is not None:
             dx = event.position().toPoint().x() - self.swipe_start_x
             if dx > 60:
@@ -240,19 +492,76 @@ class ClockSelectorOverlay(QWidget):
             elif dx < -60:
                 self.next_face()
             elif not self.is_swiping:
-                # Tap to apply
                 rect = self.wrappers[self.current_idx].geometry()
                 if rect.contains(event.position().toPoint()):
                     self.apply()
         self.swipe_start_x = None
         self.is_swiping = False
 
-    def apply(self):
-        """Zooms the selected clockface back to full screen and applies it to OS."""
+    def open_editor(self):
+        self.is_editing = True
         self.lbl_title.hide()
-        self.lbl_name.hide()
+        for lbl in self.name_labels: lbl.hide()
         self.btn_close.hide()
+        self.btn_customize.hide()
         
+        self.edit_stack.setCurrentIndex(self.current_idx)
+        
+        active_wrapper = self.wrappers[self.current_idx]
+        self.grp_edit = QParallelAnimationGroup()
+        
+        anim_w = QPropertyAnimation(active_wrapper, b"geometry")
+        anim_w.setDuration(300)
+        anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim_w.setStartValue(active_wrapper.geometry())
+        anim_w.setEndValue(QRect(162, 20, 700, 420))
+        self.grp_edit.addAnimation(anim_w)
+        
+        anim_e = QPropertyAnimation(self.edit_panel, b"geometry")
+        anim_e.setDuration(300)
+        anim_e.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim_e.setStartValue(QRect(0, 600, 1024, 180))
+        anim_e.setEndValue(QRect(0, 420, 1024, 180))
+        self.grp_edit.addAnimation(anim_e)
+        
+        self.grp_edit.start()
+
+    def close_editor(self):
+        self.is_editing = False
+        active_wrapper = self.wrappers[self.current_idx]
+        self.grp_edit = QParallelAnimationGroup()
+        
+        anim_w = QPropertyAnimation(active_wrapper, b"geometry")
+        anim_w.setDuration(300)
+        anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim_w.setStartValue(active_wrapper.geometry())
+        anim_w.setEndValue(QRect(162, 110, 700, 420))
+        self.grp_edit.addAnimation(anim_w)
+        
+        anim_e = QPropertyAnimation(self.edit_panel, b"geometry")
+        anim_e.setDuration(300)
+        anim_e.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim_e.setStartValue(self.edit_panel.geometry())
+        anim_e.setEndValue(QRect(0, 600, 1024, 180))
+        self.grp_edit.addAnimation(anim_e)
+        
+        self.grp_edit.finished.connect(self._on_editor_closed)
+        self.grp_edit.start()
+        
+    def _on_editor_closed(self):
+        self.lbl_title.show()
+        for lbl in self.name_labels: lbl.show()
+        self.btn_close.show()
+        self.btn_customize.show()
+
+    def apply(self):
+        self.lbl_title.hide()
+        self.btn_close.hide()
+        self.btn_customize.hide()
+        
+        for lbl in self.name_labels:
+            lbl.hide()
+            
         active_wrapper = self.wrappers[self.current_idx]
         active_wrapper.raise_()
         
@@ -280,15 +589,14 @@ class ClockSelectorOverlay(QWidget):
         self.apply_callback(self.current_idx)
         
     def show_selector(self, current_idx):
-        """Starts full screen and smoothly 'backs up' into the carousel viewer."""
         self.saved_idx = current_idx
         self.current_idx = current_idx
-        self.update_labels(current_idx)
         
         self.bg_fade.alpha = 0
         self.bg_fade.show()
         
         for i, wrapper in enumerate(self.wrappers):
+            self.name_labels[i].hide() 
             offset = i - self.current_idx
             if offset == 0:
                 wrapper.setGeometry(0, 0, 1024, 600)
@@ -320,16 +628,18 @@ class ClockSelectorOverlay(QWidget):
 
     def _on_show_finished(self):
         self.lbl_title.show()
-        self.lbl_name.show()
         self.btn_close.show()
+        self.btn_customize.show()
+        for lbl in self.name_labels:
+            lbl.show()
         
     def close_selector(self):
-        """Cancels out of edit mode, returning to the originally saved clockface."""
         self.lbl_title.hide()
-        self.lbl_name.hide()
         self.btn_close.hide()
+        self.btn_customize.hide()
+        for lbl in self.name_labels:
+            lbl.hide()
         
-        # Snap back to the originally active clock before zooming out
         if self.current_idx != self.saved_idx:
             self.current_idx = self.saved_idx
             for i, wrapper in enumerate(self.wrappers):

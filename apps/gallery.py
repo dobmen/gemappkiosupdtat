@@ -43,7 +43,7 @@ class UploadHandler(http.server.BaseHTTPRequestHandler):
             
         if self.path == '/':
             self.send_response(200)
-            self.send_header('Content-type', 'text/html')
+            self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
             html = f"""<!DOCTYPE html>
             <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -56,7 +56,7 @@ class UploadHandler(http.server.BaseHTTPRequestHandler):
             </style>
             </head><body>
             <h2 style="font-size: 28px; margin-bottom: 10px;">Upload Photos</h2>
-            <p style="color: #888888; font-size: 16px; line-height: 1.5; margin-bottom: 40px;">Select images from your device to beam them directly to the Kiosk OS.</p>
+            <p style="color: #888888; font-size: 16px; line-height: 1.5; margin-bottom: 40px;">Select images from your device to beam them directly to Kiosk OS over your local network.</p>
             <label for="fileInput" class="btn">Select Images</label>
             <input type="file" id="fileInput" multiple accept="image/*" onchange="upload()">
             <div id="progress"></div>
@@ -181,9 +181,9 @@ class SwipeableImageLabel(QLabel):
         if self.swipe_start_x is not None:
             dx = event.position().toPoint().x() - self.swipe_start_x
             if dx > 60:
-                self.swiped_right.emit() # Swiped right to go back
+                self.swiped_right.emit() 
             elif dx < -60:
-                self.swiped_left.emit() # Swiped left to go forward
+                self.swiped_left.emit()
         self.swipe_start_x = None
         super().mouseReleaseEvent(event)
 
@@ -265,11 +265,13 @@ class AlbumTransferDialog(QDialog):
         bg_layout.addSpacing(10)
 
         self.list_widget = QListWidget()
+        QScroller.grabGesture(self.list_widget.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         self.list_widget.setStyleSheet("""
-            QListWidget { background-color: #14141A; border-radius: 12px; border: 1px solid #2C2C35; padding: 5px; color: white; font-size: 15px; }
+            QListWidget { background-color: #14141A; border-radius: 12px; border: 1px solid #2C2C35; padding: 5px; color: white; font-size: 15px; outline: 0; }
             QListWidget::item { padding: 10px; border-radius: 8px; }
             QListWidget::item:selected { background-color: #5A8DEF; color: white; }
         """)
+        
         for album in target_options:
             if album != current_album:
                 self.list_widget.addItem(album)
@@ -363,9 +365,12 @@ class GalleryPage(QWidget):
         layout.addWidget(self.stack)
         
         # Base Album Map Config
-        self.albums = ["Screenshots", "Photos", "Videos"]
+        self.albums = ["Photos", "Screenshots", "Videos"]
         self.current_selected_album = "Photos"
         self.all_image_paths = []
+        
+        # System Folders to completely ignore during scanning
+        self.ignored_folders = [".", "__", "apps", "components", "fonts", "icons", "venv", "browser_data"]
         
         # --- 1. Dashboard View with Navigation Sidebar ---
         self.grid_page = QWidget()
@@ -387,8 +392,9 @@ class GalleryPage(QWidget):
         sidebar_layout.addWidget(lbl_sections)
 
         self.album_list_widget = QListWidget()
+        QScroller.grabGesture(self.album_list_widget.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         self.album_list_widget.setStyleSheet("""
-            QListWidget { background: transparent; border: none; color: #AAAAAA; }
+            QListWidget { background: transparent; border: none; color: #AAAAAA; outline: 0; }
             QListWidget::item { padding: 12px 15px; margin-bottom: 4px; border-radius: 10px; font-weight: bold; font-size: 15px; }
             QListWidget::item:hover { background-color: rgba(255, 255, 255, 8); color: white; }
             QListWidget::item:selected { background-color: rgba(90, 141, 239, 30); color: #5A8DEF; }
@@ -542,11 +548,11 @@ class GalleryPage(QWidget):
         qr_layout.addWidget(self.lbl_qr, alignment=Qt.AlignmentFlag.AlignCenter)
         qr_layout.addSpacing(20)
         
-        lbl_qr_inst = QLabel("Scan this code with your phone to upload images.")
-        lbl_qr_inst.setFont(QFont("Google Sans", 18))
-        lbl_qr_inst.setStyleSheet("color: #AAAAAA;")
-        lbl_qr_inst.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        qr_layout.addWidget(lbl_qr_inst, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.lbl_qr_inst = QLabel("Scan this code with your phone to upload images.")
+        self.lbl_qr_inst.setFont(QFont("Google Sans", 18))
+        self.lbl_qr_inst.setStyleSheet("color: #AAAAAA;")
+        self.lbl_qr_inst.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        qr_layout.addWidget(self.lbl_qr_inst, alignment=Qt.AlignmentFlag.AlignCenter)
         qr_layout.addStretch()
         self.stack.addWidget(self.qr_page)
         
@@ -602,7 +608,9 @@ class GalleryPage(QWidget):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.connect(('10.254.254.254', 1))
-            return s.getsockname()[0]
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
         except Exception: return '127.0.0.1'
 
     def show_qr_code(self):
@@ -612,6 +620,8 @@ class GalleryPage(QWidget):
         
         self.lbl_qr.setText("Generating QR...")
         self.lbl_qr.setStyleSheet("background-color: #1C1C22; color: #5A8DEF; font-size: 16px; border-radius: 16px;")
+        
+        self.lbl_qr_inst.setText(f"Scan the QR code or visit this local address:\n{url}")
         
         self.qr_thread = QRFetchThread(api_url)
         self.qr_thread.on_qr_ready.connect(self.set_qr_image)
@@ -625,7 +635,14 @@ class GalleryPage(QWidget):
     # Album Allocation and Scan Methods
     def scan_and_sync_local_albums(self):
         """Scans directories to synchronize internal lists with disk state."""
-        base_directories = ["screenshots", "photos", "Pictures", "videos"]
+        # Collapse 'Pictures' into 'Photos'
+        if os.path.exists("Pictures") and not os.path.exists("photos"):
+            try:
+                os.rename("Pictures", "photos")
+            except Exception:
+                pass
+                
+        base_directories = ["photos", "screenshots", "videos"]
         for d in base_directories:
             if not os.path.exists(d):
                 os.makedirs(d, exist_ok=True)
@@ -634,9 +651,15 @@ class GalleryPage(QWidget):
                 self.albums.append(norm_name)
                 
         for entry in os.listdir("."):
-            if os.path.isdir(entry) and entry not in base_directories and not entry.startswith((".", "__", "apps", "components", "fonts", "icons")):
-                if entry not in self.albums:
-                    self.albums.append(entry)
+            if os.path.isdir(entry):
+                should_ignore = False
+                for ig in self.ignored_folders:
+                    if entry.startswith(ig):
+                        should_ignore = True
+                        break
+                if not should_ignore and entry not in base_directories:
+                    if entry not in self.albums:
+                        self.albums.append(entry)
 
     def populate_sidebar_items(self):
         self.album_list_widget.clear()
@@ -670,7 +693,7 @@ class GalleryPage(QWidget):
             lbl_empty = QLabel("No images in this album.")
             lbl_empty.setFont(QFont("Google Sans", 16))
             lbl_empty.setStyleSheet("color: #666670;")
-            lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_empty.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
             self.grid.addWidget(lbl_empty, 0, 0)
             return
             

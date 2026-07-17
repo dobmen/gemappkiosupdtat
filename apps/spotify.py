@@ -1220,12 +1220,12 @@ class SpotifyPage(QWidget):
         layout.setSpacing(15)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         top_bar = QHBoxLayout()
-        btn_exit = QPushButton("Home")
-        btn_exit.setFixedSize(110, 38)
+        btn_exit = QPushButton("✕")
+        btn_exit.setFixedSize(50, 50)
         btn_exit.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_exit.setStyleSheet("""
-            QPushButton { background-color: rgba(28, 28, 36, 200); color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: 1px solid rgba(255,255,255,50); }
-            QPushButton:hover { background-color: #E24A4A; border-color: #E24A4A; }
+            QPushButton { background-color: rgba(28, 28, 36, 200); color: #AAAAAA; font-size: 20px; font-weight: bold; border-radius: 25px; border: 1px solid rgba(255,255,255,50); }
+            QPushButton:hover { background-color: #E24A4A; color: white; border-color: #E24A4A; }
         """)
         if self.on_close: btn_exit.clicked.connect(self.exit_app)
         top_bar.addWidget(btn_exit)
@@ -1296,12 +1296,12 @@ class SpotifyPage(QWidget):
         layout.setSpacing(15)
 
         top_bar = QHBoxLayout()
-        self.btn_exit = QPushButton("Home")
-        self.btn_exit.setFixedSize(100, 38)
+        self.btn_exit = QPushButton("✕")
+        self.btn_exit.setFixedSize(45, 45)
         self.btn_exit.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_exit.setStyleSheet("""
-            QPushButton { background-color: rgba(28, 28, 36, 150); color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: 1px solid rgba(255,255,255,30); }
-            QPushButton:hover { background-color: #E24A4A; border-color: #E24A4A; }
+            QPushButton { background-color: rgba(28, 28, 36, 150); color: #AAAAAA; font-size: 20px; font-weight: bold; border-radius: 22px; border: 1px solid rgba(255,255,255,30); }
+            QPushButton:hover { background-color: #E24A4A; color: white; border-color: #E24A4A; }
         """)
         if self.on_close: self.btn_exit.clicked.connect(self.exit_app)
         top_bar.addWidget(self.btn_exit)
@@ -1355,7 +1355,7 @@ class SpotifyPage(QWidget):
         self.lbl_art.setFixedSize(300, 300)
         self.lbl_art.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 20px; border: 1px solid rgba(255,255,255,20);")
         self.lbl_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_art.setText("No Artwork")
+        self.lbl_art.setText("")
         self.lbl_art.setFont(QFont("Google Sans", 18))
         left_col.addWidget(self.lbl_art)
 
@@ -1364,12 +1364,12 @@ class SpotifyPage(QWidget):
         meta_box = QVBoxLayout()
         meta_box.setSpacing(2)
         
-        self.lbl_title = ScrollLabel("Select a track")
+        self.lbl_title = ScrollLabel("")
         self.lbl_title.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
         self.lbl_title.setTextColor("#FFFFFF")
         meta_box.addWidget(self.lbl_title)
 
-        self.lbl_artist = ScrollLabel("Apple Music Player")
+        self.lbl_artist = ScrollLabel("Spotify Player")
         self.lbl_artist.setFont(QFont("Google Sans", 15))
         self.lbl_artist.setTextColor("#DDDDDD")
         meta_box.addWidget(self.lbl_artist)
@@ -1949,19 +1949,19 @@ class SpotifyPage(QWidget):
 
     def load_demo_state(self):
         self.btn_device.setText("🎧 AirPlay / Connect Ready")
-        self.lbl_title.setText("NEVER A MEMORY")
-        self.lbl_artist.setText("Odetari")
-        self.is_playing = True
-        self.btn_play.setIcon(self.get_icon("pause", "#0E0E12", 64))
-        self.track_duration_ms = 110000
-        self.track_progress_ms = 8000
+        self.lbl_title.setText("")
+        self.lbl_artist.setText("Spotify Player")
+        self.is_playing = False
+        self.btn_play.setIcon(self.get_icon("play", "#0E0E12", 64))
+        self.track_duration_ms = 0
+        self.track_progress_ms = 0
 
-        self.is_liked = True
-        self.btn_star.setText("♥")
-        self.btn_star.setStyleSheet("color: #FFFFFF; background: transparent; border: none;")
+        self.is_liked = False
+        self.btn_star.setText("♡")
+        self.btn_star.setStyleSheet("color: #DDDDDD; background: transparent; border: none;")
 
         self.refresh_progress_display()
-        self.load_song_lyrics("NEVER A MEMORY", "Odetari", 110000)
+        self.lyrics_panel.set_lyrics([(0, "", [])])
 
         pix = QPixmap(300, 300)
         pix.fill(Qt.GlobalColor.transparent)
@@ -1971,26 +1971,11 @@ class SpotifyPage(QWidget):
             clip = QPainterPath()
             clip.addRoundedRect(0, 0, 300, 300, 20, 20)
             painter.setClipPath(clip)
-
-            painter.fillRect(0, 0, 300, 300, QColor("#0A0A10"))
-            painter.setBrush(QColor("#1A2035"))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(-50, -50, 250, 250)
-            painter.setBrush(QColor("#25355A"))
-            painter.drawEllipse(120, 120, 220, 220)
-
-            painter.setPen(QColor("#FFFFFF"))
-            painter.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
-            painter.drawText(QRect(0, 0, 300, 300), Qt.AlignmentFlag.AlignCenter, "NEVER A MEMORY\n\nOdetari")
+            painter.fillRect(0, 0, 300, 300, QColor(26, 26, 34, 150))
         finally:
             painter.end()
 
         bg_pix = QPixmap(1800, 1800)
         bg_pix.fill(QColor(0, 0, 0))
-        bg_painter = QPainter(bg_pix)
-        bg_painter.setBrush(QColor(26, 32, 53, 150))
-        bg_painter.setPen(Qt.PenStyle.NoPen)
-        bg_painter.drawEllipse(200, 200, 1400, 1400)
-        bg_painter.end()
 
         self.update_artwork(pix, bg_pix)
