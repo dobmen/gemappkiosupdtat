@@ -11,20 +11,20 @@ from PyQt6.QtWidgets import (
     QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog
 )
 
-# =================================================================
-# ⚙️ OS UPDATE CONFIGURATION
-# =================================================================
-UPDATE_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/main/os_version.json"
-
-
 class CheckUpdateThread(QThread):
-    """Background thread to fetch the latest OS version from GitHub."""
+    """Background thread to fetch the latest OS version from the selected GitHub branch."""
     on_success = pyqtSignal(dict)
     on_error = pyqtSignal(str)
 
+    def __init__(self, channel="main"):
+        super().__init__()
+        self.channel = channel
+
     def run(self):
         try:
-            cache_busting_url = f"{UPDATE_URL}?t={int(time.time())}"
+            # Dynamically fetches from the 'main' or 'beta' branch based on user settings
+            update_url = f"https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/{self.channel}/os_version.json"
+            cache_busting_url = f"{update_url}?t={int(time.time())}"
             req = urllib.request.Request(cache_busting_url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode('utf-8'))
@@ -40,56 +40,53 @@ class ModernDialog(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        # Increased size to comfortably fit longer word-wrapped messages
-        self.setFixedSize(460, 260)
+        
+        self.setFixedSize(520, 300)
 
-        # Main Layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        # Background Frame
         bg_frame = QFrame(self)
         bg_frame.setStyleSheet("background-color: #22222B; border-radius: 20px; border: 1px solid #33333F;")
         bg_layout = QVBoxLayout(bg_frame)
-        bg_layout.setContentsMargins(25, 25, 25, 20)
+        bg_layout.setContentsMargins(30, 30, 30, 25)
         bg_layout.setSpacing(15)
 
-        # Title
         lbl_title = QLabel(title)
-        lbl_title.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: white; border: none;")
 
-        # Message
         lbl_msg = QLabel(message)
-        lbl_msg.setFont(QFont("Google Sans", 14))
-        lbl_msg.setStyleSheet("color: #AAAAAA; border: none;")
+        lbl_msg.setFont(QFont("Google Sans", 15))
+        lbl_msg.setStyleSheet("color: #CCCCCC; border: none;")
         lbl_msg.setWordWrap(True)
+        lbl_msg.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        lbl_msg.setMinimumHeight(80) 
 
         bg_layout.addWidget(lbl_title)
         bg_layout.addWidget(lbl_msg)
         bg_layout.addStretch()
 
-        # Buttons Setup
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(15)
         btn_layout.addStretch()
 
         if cancel_text:
             btn_cancel = QPushButton(cancel_text)
-            btn_cancel.setFixedHeight(40)
+            btn_cancel.setFixedHeight(45)
             btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_cancel.setStyleSheet("""
-                QPushButton { background: transparent; color: white; border-radius: 8px; font-size: 15px; font-weight: bold; padding: 0 15px; }
+                QPushButton { background: transparent; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; padding: 0 20px; }
                 QPushButton:hover { background-color: rgba(255,255,255,10); }
             """)
             btn_cancel.clicked.connect(self.reject)
             btn_layout.addWidget(btn_cancel)
 
         btn_accept = QPushButton(accept_text)
-        btn_accept.setFixedHeight(40)
+        btn_accept.setFixedHeight(45)
         btn_accept.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_accept.setStyleSheet("""
-            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-size: 15px; font-weight: bold; border: none; padding: 0 20px; }
+            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; border: none; padding: 0 25px; }
             QPushButton:hover { background-color: #4A7DDF; }
         """)
         btn_accept.clicked.connect(self.accept)
@@ -219,7 +216,6 @@ class SettingsPage(QWidget):
         self.right_stack.setCurrentIndex(index)
         for i, btn in enumerate(self.category_buttons):
             btn.set_active(i == index)
-        # Refresh apps list dynamically if the Apps tab is opened
         if index == 4:
             self.refresh_apps_list()
 
@@ -286,9 +282,7 @@ class SettingsPage(QWidget):
         btn_wifi = QPushButton("Scan Networks")
         btn_wifi.setFixedSize(200, 60) 
         btn_wifi.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
-        btn_wifi.setStyleSheet("""
-            QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; }
-        """)
+        btn_wifi.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; }")
         layout.addSpacing(20)
         layout.addWidget(btn_wifi)
         
@@ -518,9 +512,6 @@ class SettingsPage(QWidget):
         self.set_app_layout(saved_layout, save=False)
         return page
 
-    # =================================================================
-    # INSTALLED APPS PAGE & UNINSTALLER
-    # =================================================================
     def create_apps_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -554,13 +545,11 @@ class SettingsPage(QWidget):
         return page
 
     def refresh_apps_list(self):
-        """Scans the filesystem and dynamically populates the installed apps list."""
         while self.apps_layout.count():
             item = self.apps_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-        # Added web_app.py, spotify.py, and local_music.py as protected core apps
         core_apps = ["settings.py", "app_store.py", "__init__.py", "kiosk.py", "local_music.py", "spotify.py", "web_app.py"]
         
         try:
@@ -568,7 +557,6 @@ class SettingsPage(QWidget):
                 os.makedirs("apps", exist_ok=True)
             
             files = [f for f in os.listdir("apps") if f.endswith(".py") and not f.startswith("__")]
-            # Sort system apps to top, then alphabetical
             files.sort(key=lambda x: (x not in core_apps, x.lower()))
         except Exception as e:
             lbl_err = QLabel(f"Error loading apps: {e}")
@@ -593,12 +581,7 @@ class SettingsPage(QWidget):
             card_layout.setSpacing(15)
 
             app_id = filename[:-3] 
-            
-            # Custom name overrides for specific modules
-            if app_id == "local_music":
-                app_name = "Music"
-            else:
-                app_name = app_id.replace("_", " ").title()
+            app_name = "Music" if app_id == "local_music" else app_id.replace("_", " ").title()
 
             ver_file = os.path.join("apps", f"{app_id}.ver")
             version_str = ""
@@ -650,7 +633,6 @@ class SettingsPage(QWidget):
             self.apps_layout.addWidget(card)
 
     def uninstall_app(self, filename, app_name):
-        """Triggers confirmation popup and cleans up script, version, and icon files."""
         dialog = ModernDialog(
             self,
             "Uninstall Application",
@@ -669,23 +651,17 @@ class SettingsPage(QWidget):
                 if os.path.exists(ver_path):
                     os.remove(ver_path)
                     
-                # Clean up orphaned icons
                 if os.path.exists("icons"):
                     for icon_file in os.listdir("icons"):
                         if os.path.splitext(icon_file)[0] == app_id:
-                            try:
-                                os.remove(os.path.join("icons", icon_file))
-                            except Exception:
-                                pass
+                            try: os.remove(os.path.join("icons", icon_file))
+                            except Exception: pass
                                 
                 self.refresh_apps_list()
             except Exception as e:
                 err_dialog = ModernDialog(self, "Uninstall Failed", f"Could not remove {app_name}: {str(e)}", "OK", "")
                 err_dialog.exec()
 
-    # =================================================================
-    # REMAINING CATEGORY PAGES
-    # =================================================================
     def create_storage_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -713,6 +689,9 @@ class SettingsPage(QWidget):
         layout.addStretch()
         return page
 
+    # =================================================================
+    # UPDATE PAGE W/ BETA TOGGLE
+    # =================================================================
     def create_update_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -746,8 +725,17 @@ class SettingsPage(QWidget):
             QProgressBar::chunk { background: #5A8DEF; border-radius: 3px; }
         """)
         self.update_progress.hide()
+        
         card_layout.addSpacing(10)
         card_layout.addWidget(self.update_progress)
+        card_layout.addSpacing(15)
+
+        # BETA TOGGLE SWITCH
+        self.is_beta = self.get_saved_setting("update_channel", "main") == "beta"
+        self.btn_beta = QPushButton()
+        self.update_toggle_btn(self.btn_beta, "Receive Beta Updates", self.is_beta)
+        self.btn_beta.clicked.connect(self.toggle_beta)
+        card_layout.addWidget(self.btn_beta)
         
         layout.addWidget(card)
 
@@ -767,14 +755,34 @@ class SettingsPage(QWidget):
         layout.addStretch()
         return page
 
+    def toggle_beta(self):
+        self.is_beta = not self.is_beta
+        channel = "beta" if self.is_beta else "main"
+        self.save_setting("update_channel", channel)
+        self.update_toggle_btn(self.btn_beta, "Receive Beta Updates", self.is_beta)
+        
+        # Reset UI
+        self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Switched to {channel.upper()} channel.")
+        self.btn_check_update.setText("Check for Updates")
+        self.btn_check_update.setStyleSheet("""
+            QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; }
+            QPushButton:disabled { background-color: #2C2C35; color: #555555; }
+        """)
+        try:
+            self.btn_check_update.clicked.disconnect()
+        except Exception:
+            pass
+        self.btn_check_update.clicked.connect(self.trigger_update_check)
+
     def trigger_update_check(self):
         self.btn_check_update.setEnabled(False)
         self.btn_check_update.setText("Checking GitHub...")
         
-        self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Connecting to update server...")
+        channel = "beta" if self.is_beta else "main"
+        self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Connecting to {channel} update server...")
         self.update_progress.show()
         
-        self.checker = CheckUpdateThread()
+        self.checker = CheckUpdateThread(channel)
         self.checker.on_success.connect(self.on_update_checked)
         self.checker.on_error.connect(self.on_update_error)
         self.checker.start()
@@ -806,10 +814,11 @@ class SettingsPage(QWidget):
         self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Update failed.\nError: {err_msg}")
 
     def install_update(self, new_version):
+        channel = "beta" if self.is_beta else "main"
         dialog = ModernDialog(
             self, 
             "Confirm Update", 
-            f"Installing version {new_version} will automatically reboot the Kiosk system.\n\nDo you want to proceed?",
+            f"Installing version {new_version} from the {channel} channel will automatically reboot the Kiosk system.\n\nDo you want to proceed?",
             "Install & Reboot"
         )
         
@@ -820,7 +829,9 @@ class SettingsPage(QWidget):
             self.lbl_update_status.setText(f"Status: Pulling latest code from GitHub...\nPlease do not turn off the device.")
             
             self.save_setting("os_version", new_version)
-            QTimer.singleShot(1500, lambda: os.system("git fetch origin && git reset --hard origin/main && sudo reboot"))
+            # Safely fetches, switches to the correct channel (creating it locally if needed), and hard resets
+            git_cmd = f"git fetch origin && git switch -C {channel} origin/{channel} && sudo reboot"
+            QTimer.singleShot(1500, lambda: os.system(git_cmd))
 
     def create_power_page(self):
         page = QWidget()
