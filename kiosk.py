@@ -351,6 +351,41 @@ class DynamicAppButton(QFrame):
             self.callback(self.name)
 
 
+class VoiceOverlay(QFrame):
+    """Full-screen dimmed overlay for voice assistant feedback."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setGeometry(0, 0, 1024, 600)
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 200);")
+        self.hide()
+        
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.icon = QLabel("🎙️")
+        self.icon.setFont(QFont("Google Sans", 64))
+        self.icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon.setStyleSheet("background: transparent; color: white;")
+        
+        self.lbl_text = QLabel("Listening...")
+        self.lbl_text.setFont(QFont("Google Sans", 36, QFont.Weight.Bold))
+        self.lbl_text.setStyleSheet("color: white; background: transparent;")
+        self.lbl_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_text.setWordWrap(True)
+        
+        layout.addWidget(self.icon)
+        layout.addSpacing(20)
+        layout.addWidget(self.lbl_text)
+
+    def show_listening(self):
+        self.lbl_text.setText("Listening...")
+        self.raise_()
+        self.show()
+
+    def update_text(self, text):
+        self.lbl_text.setText(text)
+
+
 class NestKiosk(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -645,10 +680,18 @@ class NestKiosk(QMainWindow):
         QTimer.singleShot(8000, self.check_for_app_updates)
 
         # -------------------------------------------------------------
-        # 6. VOICE ASSISTANT BACKGROUND WORKER
+        # 6. VOICE ASSISTANT BACKGROUND WORKER & VISUAL OVERLAY
         # -------------------------------------------------------------
+        self.voice_overlay = VoiceOverlay(self)
+        
         self.voice_thread = VoiceAssistantThread()
         self.voice_thread.command_recognized.connect(self.handle_voice_intent)
+        
+        # Bind the thread signals to the UI overly
+        self.voice_thread.wake_word_detected.connect(self.voice_overlay.show_listening)
+        self.voice_thread.transcription_update.connect(self.voice_overlay.update_text)
+        self.voice_thread.sleep_mode.connect(self.voice_overlay.hide)
+        
         self.voice_thread.start()
 
     def show_toast(self, app_name, title, desc, icon):
@@ -678,7 +721,6 @@ class NestKiosk(QMainWindow):
             self.selector_overlay.update_time(t, d)
 
     def apply_clockface(self, idx):
-        # Always check against the live hot-swapped list
         if idx >= len(cf.CLOCKFACE_CLASSES) or idx < 0:
             idx = 0
             
@@ -1173,7 +1215,6 @@ class NestKiosk(QMainWindow):
             self.selector_overlay.update_time(t, d)
 
     def apply_clockface(self, idx):
-        # Always check against the live hot-swapped list
         if idx >= len(cf.CLOCKFACE_CLASSES) or idx < 0:
             idx = 0
             
