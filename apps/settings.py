@@ -198,6 +198,14 @@ class DeleteClockfaceDialog(QDialog):
                     self.list_widget.addItem("No custom clockfaces downloaded.")
                     self.list_widget.setEnabled(False)
                     self.btn_del.hide()
+
+                main_win = self.window()
+                if hasattr(main_win, 'selector_overlay'):
+                    main_win.selector_overlay.reload_custom_clockfaces()
+                    main_win.apply_clockface(0)
+                    
+                if hasattr(self.parent(), 'update_clockface_preview'):
+                    self.parent().update_clockface_preview()
             except Exception as e:
                 print("Error deleting", e)
 
@@ -778,19 +786,12 @@ class SettingsPage(QWidget):
         dialog = DeleteClockfaceDialog(self)
         dialog.exec()
         if dialog.deleted_any:
-            # Immediately snap back to the Classic Clock as a failsafe
             self.save_setting("clockface_index", 0)
+            main_win = self.window()
+            if hasattr(main_win, 'selector_overlay'):
+                main_win.selector_overlay.reload_custom_clockfaces()
+                main_win.apply_clockface(0)
             self.update_clockface_preview()
-            
-            reboot_dialog = ModernDialog(
-                self,
-                "Reboot Required",
-                "A system reboot is required to fully unload the custom clockface from active memory.",
-                "Reboot Now",
-                "Later"
-            )
-            if reboot_dialog.exec() == QDialog.DialogCode.Accepted:
-                os.system("sudo reboot")
 
     # =================================================================
     # INSTALLED APPS PAGE W/ ICONS & UNINSTALLER

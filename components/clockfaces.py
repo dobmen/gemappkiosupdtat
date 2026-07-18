@@ -1,5 +1,6 @@
 import os
 import json
+import importlib.util
 from PyQt6.QtCore import Qt, QTime, QDate, QPoint, QRect, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, pyqtProperty, QSize
 from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPen, QColor, QBrush, QPolygon, QLinearGradient, QPixmap, QIcon
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QStackedWidget, QScrollArea, QScroller, QSizePolicy, QListWidget, QListWidgetItem
@@ -90,7 +91,6 @@ class FadeOverlay(QWidget):
 # CUSTOM UI WIDGETS
 # =================================================================
 class ImagePickerButton(QPushButton):
-    """Small button for the 5-recent photos row."""
     def __init__(self, path, callback):
         super().__init__()
         self.callback = callback
@@ -122,7 +122,6 @@ class ImagePickerButton(QPushButton):
         self.clicked.connect(lambda: self.callback(self.path))
 
 class GalleryGridButton(QPushButton):
-    """Large button for the 'All Photos' gallery overlay grid."""
     def __init__(self, path, click_cb):
         super().__init__()
         self.path = path
@@ -373,41 +372,48 @@ class AnalogClock(QWidget):
 
 
 # =================================================================
-# DYNAMIC CLOCKFACE REGISTRY
+# DYNAMIC CLOCKFACE REGISTRY & HOT-SWAP ENGINE
 # =================================================================
-CLOCKFACES = [
-    ("Classic Digital", ClassicClock),
-    ("Stacked Bold", StackedClock),
-    ("Minimal Analog", AnalogClock)
-]
+CLOCKFACES = []
+CLOCKFACE_CLASSES = []
 
-# Dynamically loads any clockfaces downloaded from the App Store
-if os.path.exists("clockfaces"):
-    import importlib.util
-    for filename in sorted(os.listdir("clockfaces")):
-        if filename.endswith(".py") and not filename.startswith("__"):
-            try:
-                mod_name = filename[:-3]
-                spec = importlib.util.spec_from_file_location(mod_name, os.path.join("clockfaces", filename))
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                
-                # Scan module for a valid QWidget clockface class
-                for attr_name in dir(mod):
-                    attr = getattr(mod, attr_name)
-                    if isinstance(attr, type) and issubclass(attr, QWidget) and hasattr(attr, 'update_time'):
-                        if attr_name not in ['QWidget', 'ClassicClock', 'StackedClock', 'AnalogClock']:
-                            face_name = getattr(mod, 'FACE_NAME', attr_name.replace("Clock", "").strip())
-                            CLOCKFACES.append((face_name, attr))
-                            break
-            except Exception as e:
-                print(f"Failed to load custom clockface {filename}: {e}")
+def load_dynamic_clockfaces():
+    """Scans the clockfaces folder and injects Python files directly into active memory."""
+    global CLOCKFACES, CLOCKFACE_CLASSES
+    CLOCKFACES = [
+        ("Classic Digital", ClassicClock),
+        ("Stacked Bold", StackedClock),
+        ("Minimal Analog", AnalogClock)
+    ]
+    
+    if os.path.exists("clockfaces"):
+        for filename in sorted(os.listdir("clockfaces")):
+            if filename.endswith(".py") and not filename.startswith("__"):
+                try:
+                    mod_name = filename[:-3]
+                    spec = importlib.util.spec_from_file_location(mod_name, os.path.join("clockfaces", filename))
+                    mod = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(mod)
+                    
+                    for attr_name in dir(mod):
+                        attr = getattr(mod, attr_name)
+                        if isinstance(attr, type) and issubclass(attr, QWidget) and hasattr(attr, 'update_time'):
+                            if attr_name not in ['QWidget', 'ClassicClock', 'StackedClock', 'AnalogClock']:
+                                face_name = getattr(attr, 'FACE_NAME', attr_name.replace("Clock", "").strip())
+                                CLOCKFACES.append((face_name, attr))
+                                break
+                except Exception as e:
+                    print(f"Failed to load custom clockface {filename}: {e}")
 
-CLOCKFACE_CLASSES = [cls for name, cls in CLOCKFACES]
+    CLOCKFACE_CLASSES.clear()
+    CLOCKFACE_CLASSES.extend([cls for name, cls in CLOCKFACES])
+
+# Initialize once at boot
+load_dynamic_clockfaces()
 
 
 # =================================================================
-# PHOTO ADJUSTMENT OVERLAY (Drag to Pan & Fit/Fill)
+# PHOTO ADJUSTMENT OVERLAY
 # =================================================================
 class ImageAdjusterOverlay(QFrame):
     def __init__(self, parent, apply_callback):
@@ -692,34 +698,6 @@ class ClockSelectorOverlay(QWidget):
         self.name_labels = []
         self.border_frames = []
         
-        for i, (name, Cls) in enumerate(CLOCKFACES):
-            inst = Cls()
-            wrapper = QFrame(self.main_container)
-            wrapper.setStyleSheet("background-color: transparent;")
-            
-            l = QGridLayout(wrapper)
-            l.setContentsMargins(0, 0, 0, 0)
-            
-            lbl_card_name = QLabel(name, self.main_container)
-            lbl_card_name.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
-            lbl_card_name.setStyleSheet("color: white; background: transparent; border: none;")
-            lbl_card_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_card_name.hide()
-            
-            border_frame = QFrame()
-            border_frame.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-            border_frame.setStyleSheet("border: 2px solid #33333F; border-radius: 36px;")
-            border_frame.hide()
-            
-            l.addWidget(inst, 0, 0)
-            l.addWidget(border_frame, 0, 0)
-            
-            self.previews.append(inst)
-            self.wrappers.append(wrapper)
-            self.name_labels.append(lbl_card_name)
-            self.border_frames.append(border_frame)
-            wrapper.hide()
-
         self.btn_close = QPushButton("✕", self.main_container)
         self.btn_close.setGeometry(30, 30, 50, 50)
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -734,17 +712,6 @@ class ClockSelectorOverlay(QWidget):
         self.btn_customize.clicked.connect(self.open_editor)
         self.btn_customize.hide()
 
-        self.setup_editor_panel()
-        
-        self.adjuster_overlay = ImageAdjusterOverlay(self.main_container, self.apply_adjusted_photo)
-        self.gallery_picker = GalleryPickerOverlay(self.main_container, self.open_adjuster)
-        
-        self.swipe_start_x = None
-        self.is_swiping = False
-        self.is_editing = False
-        self.saved_idx = 0
-
-    def setup_editor_panel(self):
         self.edit_panel = QFrame(self.main_container)
         self.edit_panel.setGeometry(0, 600, 1024, 210)
         self.edit_panel.setStyleSheet("background-color: rgba(20, 20, 26, 250); border-top-left-radius: 24px; border-top-right-radius: 24px;")
@@ -776,6 +743,69 @@ class ClockSelectorOverlay(QWidget):
             ("grad:#FF9800:#E24A4A", "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #FF9800,stop:1 #E24A4A);")
         ]
 
+        self.adjuster_overlay = ImageAdjusterOverlay(self.main_container, self.apply_adjusted_photo)
+        self.gallery_picker = GalleryPickerOverlay(self.main_container, self.open_adjuster)
+
+        self.swipe_start_x = None
+        self.is_swiping = False
+        self.is_editing = False
+        self.saved_idx = 0
+
+        # Build the initial state
+        self.reload_custom_clockfaces()
+
+    def reload_custom_clockfaces(self):
+        """Hot-swaps clockfaces directly from disk and rebuilds the entire UI stack live."""
+        load_dynamic_clockfaces()
+        
+        for w in self.wrappers:
+            w.setParent(None)
+            w.deleteLater()
+        for lbl in self.name_labels:
+            lbl.setParent(None)
+            lbl.deleteLater()
+            
+        self.previews.clear()
+        self.wrappers.clear()
+        self.name_labels.clear()
+        self.border_frames.clear()
+
+        # Build rendering wrappers
+        for i, (name, Cls) in enumerate(CLOCKFACES):
+            inst = Cls()
+            wrapper = QFrame(self.main_container)
+            wrapper.setStyleSheet("background-color: transparent;")
+            
+            l = QGridLayout(wrapper)
+            l.setContentsMargins(0, 0, 0, 0)
+            
+            lbl_card_name = QLabel(name, self.main_container)
+            lbl_card_name.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+            lbl_card_name.setStyleSheet("color: white; background: transparent; border: none;")
+            lbl_card_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_card_name.hide()
+            
+            border_frame = QFrame()
+            border_frame.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            border_frame.setStyleSheet("border: 2px solid #33333F; border-radius: 36px;")
+            border_frame.hide()
+            
+            l.addWidget(inst, 0, 0)
+            l.addWidget(border_frame, 0, 0)
+            
+            self.previews.append(inst)
+            self.wrappers.append(wrapper)
+            self.name_labels.append(lbl_card_name)
+            self.border_frames.append(border_frame)
+            wrapper.hide()
+
+        # Purge old customization tabs
+        while self.edit_stack.count() > 0:
+            widget = self.edit_stack.widget(0)
+            self.edit_stack.removeWidget(widget)
+            widget.deleteLater()
+
+        # Re-inject default tabs
         page0 = self.build_editor_page({
             "Clock Color": self.create_color_grid("classic_color"),
             "Backgrounds": self.create_bg_grid("classic_bg"),
@@ -790,12 +820,11 @@ class ClockSelectorOverlay(QWidget):
         page2 = self.build_editor_page({
             "Theme": self.create_analog_theme_widget()
         })
-        
         self.edit_stack.addWidget(page0)
         self.edit_stack.addWidget(page1)
         self.edit_stack.addWidget(page2)
 
-        # Dynamically auto-generate editor pages for ANY downloaded clockfaces!
+        # Build dynamic tabs for all downloaded clocks!
         for i in range(3, len(CLOCKFACES)):
             name, cls = CLOCKFACES[i]
             prefix = name.lower().replace(" ", "_")
@@ -805,6 +834,19 @@ class ClockSelectorOverlay(QWidget):
                 "My Photos": self.create_photo_grid(f"{prefix}_bg")
             })
             self.edit_stack.addWidget(custom_page)
+            
+        # Z-Index guarantees
+        self.btn_close.raise_()
+        self.btn_customize.raise_()
+        self.edit_panel.raise_()
+        self.adjuster_overlay.raise_()
+        if hasattr(self, 'gallery_picker'):
+            self.gallery_picker.raise_()
+
+        # Prevent out-of-bounds error if active clock was deleted
+        if self.current_idx >= len(CLOCKFACES):
+            self.current_idx = 0
+            self.saved_idx = 0
 
     def _apply_tab_style(self, btn, active):
         if active:

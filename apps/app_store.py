@@ -7,10 +7,9 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropert
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QImage
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout, QLineEdit
+    QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout, QLineEdit, QDialog
 )
 
-# Raw GitHub URL of your store manifest
 MANIFEST_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosstor/main/store_manifest.json"
 
 
@@ -92,7 +91,6 @@ class DownloadAppThread(QThread):
             
             self.on_progress.emit(50)
 
-            # Route file dynamically based on its type
             target_dir = "clockfaces" if self.app_data.get("type") == "clockface" else "apps"
             os.makedirs(target_dir, exist_ok=True)
             
@@ -219,7 +217,6 @@ class AppCard(QFrame):
         info_layout.addWidget(lbl_author)
         info_layout.addWidget(lbl_desc)
 
-        # Look in the correct directory based on type
         target_dir = "clockfaces" if app_data.get("type") == "clockface" else "apps"
         local_script = os.path.join(target_dir, app_data["filename"])
         ver_path = local_script.replace(".py", ".ver")
@@ -499,13 +496,9 @@ class AppStorePage(QWidget):
         layout.setContentsMargins(40, 20, 40, 30)
         layout.setSpacing(15)
 
-        # =============================================================
-        # 1. HEADER STACK (Transforms into Material You Search Bar)
-        # =============================================================
         self.header_stack = QStackedWidget()
         self.header_stack.setFixedHeight(54)
         
-        # --- Page 0: Normal Header ---
         header_normal = QWidget()
         normal_layout = QHBoxLayout(header_normal)
         normal_layout.setContentsMargins(0, 0, 0, 0)
@@ -549,11 +542,10 @@ class AppStorePage(QWidget):
         self.btn_search_open.clicked.connect(self.open_search_bar)
         normal_layout.addWidget(self.btn_search_open)
 
-        # --- Page 1: Material You Search Pill ---
         self.search_container = QWidget()
         search_container_layout = QHBoxLayout(self.search_container)
         search_container_layout.setContentsMargins(0, 0, 0, 0)
-        search_container_layout.addStretch() # Anchors the pill to the right edge
+        search_container_layout.addStretch() 
         
         self.search_pill = QFrame()
         self.search_pill.setStyleSheet("""
@@ -598,9 +590,6 @@ class AppStorePage(QWidget):
         self.header_stack.addWidget(self.search_container)
         layout.addWidget(self.header_stack)
 
-        # =============================================================
-        # 2. PROGRESS BAR
-        # =============================================================
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedHeight(6)
         self.progress_bar.setTextVisible(False)
@@ -608,9 +597,6 @@ class AppStorePage(QWidget):
         self.progress_bar.hide()
         layout.addWidget(self.progress_bar)
 
-        # =============================================================
-        # 3. PAGE STACK
-        # =============================================================
         self.page_stack = QStackedWidget()
         
         self.scroll_area = QScrollArea()
@@ -871,7 +857,14 @@ class AppStorePage(QWidget):
         if self.on_install_success:
             self.on_install_success()
             
-        QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']} v{app_data['version']}!")
+        if app_data.get("type") == "clockface":
+            main_win = self.window()
+            if hasattr(main_win, 'selector_overlay'):
+                main_win.selector_overlay.reload_custom_clockfaces()
+                
+            QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']}! It is now available in your Clockfaces menu.")
+        else:
+            QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']} v{app_data['version']}!")
         
         if self.current_filter != "all" or self.search_bar.text():
             self.populate_catalog(self.full_catalog_cache)

@@ -19,9 +19,9 @@ try:
 except ImportError:
     MULTIMEDIA_AVAILABLE = False
 
-# Import our custom modules
+# Import our custom modules dynamically for hot-swapping
+import components.clockfaces as cf
 from components import SlidingPanel
-from components.clockfaces import CLOCKFACE_CLASSES, ClockSelectorOverlay
 from apps.local_music import LocalMusicPage
 from apps.web_app import create_web_app_view
 from apps.app_store import AppStorePage
@@ -628,7 +628,7 @@ class NestKiosk(QMainWindow):
         self.edge_interceptor.setStyleSheet("background-color: transparent;")
         self.edge_interceptor.raise_() 
         
-        self.selector_overlay = ClockSelectorOverlay(self, self.apply_clockface)
+        self.selector_overlay = cf.ClockSelectorOverlay(self, self.apply_clockface)
 
         # -------------------------------------------------------------
         # 5. DUAL BACKGROUND RECURRING ENGINE UPDATERS
@@ -670,11 +670,15 @@ class NestKiosk(QMainWindow):
             self.selector_overlay.update_time(t, d)
 
     def apply_clockface(self, idx):
+        # Failsafe: If the requested clockface was deleted, snap back to Classic Digital
+        if idx >= len(cf.CLOCKFACE_CLASSES) or idx < 0:
+            idx = 0
+            
         if self.active_clock_widget:
             self.active_clock_widget.setParent(None)
             self.active_clock_widget.deleteLater()
             
-        self.active_clock_widget = CLOCKFACE_CLASSES[idx]()
+        self.active_clock_widget = cf.CLOCKFACE_CLASSES[idx]()
         self.clock_layout.addWidget(self.active_clock_widget)
         save_system_setting("clockface_index", idx)
         self.update_clock()
@@ -1128,11 +1132,15 @@ class NestKiosk(QMainWindow):
             self.selector_overlay.update_time(t, d)
 
     def apply_clockface(self, idx):
+        # Always check against the live hot-swapped list
+        if idx >= len(cf.CLOCKFACE_CLASSES) or idx < 0:
+            idx = 0
+            
         if self.active_clock_widget:
             self.active_clock_widget.setParent(None)
             self.active_clock_widget.deleteLater()
             
-        self.active_clock_widget = CLOCKFACE_CLASSES[idx]()
+        self.active_clock_widget = cf.CLOCKFACE_CLASSES[idx]()
         self.clock_layout.addWidget(self.active_clock_widget)
         save_system_setting("clockface_index", idx)
         self.update_clock()
