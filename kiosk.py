@@ -25,6 +25,7 @@ from components import SlidingPanel
 from apps.local_music import LocalMusicPage
 from apps.web_app import create_web_app_view
 from apps.app_store import AppStorePage
+from components.voice_assistant import VoiceAssistantThread
 
 
 def get_system_setting(key, default=None):
@@ -643,6 +644,13 @@ class NestKiosk(QMainWindow):
         self.app_update_timer.start(86400000) 
         QTimer.singleShot(8000, self.check_for_app_updates)
 
+        # -------------------------------------------------------------
+        # 6. VOICE ASSISTANT BACKGROUND WORKER
+        # -------------------------------------------------------------
+        self.voice_thread = VoiceAssistantThread()
+        self.voice_thread.command_recognized.connect(self.handle_voice_intent)
+        self.voice_thread.start()
+
     def show_toast(self, app_name, title, desc, icon):
         dnd_mode = get_system_setting("dnd_mode", False)
         if dnd_mode: return  
@@ -670,7 +678,7 @@ class NestKiosk(QMainWindow):
             self.selector_overlay.update_time(t, d)
 
     def apply_clockface(self, idx):
-        # Failsafe: If the requested clockface was deleted, snap back to Classic Digital
+        # Always check against the live hot-swapped list
         if idx >= len(cf.CLOCKFACE_CLASSES) or idx < 0:
             idx = 0
             
@@ -1119,6 +1127,39 @@ class NestKiosk(QMainWindow):
             self.anim_next.start()
             if new_index is not None:
                 self.home_index = new_index
+
+    # =================================================================
+    # VOICE ASSISTANT ROUTING
+    # =================================================================
+    def handle_voice_intent(self, intent, argument):
+        """Executes hot-swapped UI commands triggered by voice thread signals."""
+        print(f"[Core Router] Executing voice intent: {intent} ({argument})")
+        
+        if intent == "launch_app":
+            self.launch_app(argument)
+            self.show_toast("Voice Assistant", f"Launched App", f"Opened {argument}", "🎙️")
+            
+        elif intent == "close_app":
+            self.minimize_app()
+            
+        elif intent == "change_clock":
+            idx = int(argument)
+            self.apply_clockface(idx)
+            if hasattr(self, 'selector_overlay'):
+                self.selector_overlay.current_idx = idx
+            self.show_toast("Voice Assistant", "Changed Watchface", "New clock layout applied", "🎙️")
+                
+        elif intent == "system":
+            if argument == "reboot":
+                os.system("sudo reboot")
+            elif argument == "shutdown":
+                os.system("sudo shutdown now")
+
+    def closeEvent(self, event):
+        if hasattr(self, 'voice_thread'):
+            self.voice_thread.stop()
+            self.voice_thread.wait()
+        super().closeEvent(event)
 
     # =================================================================
     # APP LAUNCHING & ROUTING
