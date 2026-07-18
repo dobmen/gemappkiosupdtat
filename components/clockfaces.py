@@ -197,14 +197,14 @@ class ClassicClock(QWidget):
         self.lbl_date.setText(d.toString("dddd, MMMM d"))
 
     def resizeEvent(self, event):
-        """Dynamically shrink the fonts when squished by the editor drawer."""
         factor = self.height() / 600.0
         f_time = QFont("Google Sans", max(10, int(95 * factor)), QFont.Weight.Bold)
         f_date = QFont("Google Sans", max(8, int(24 * factor)))
         self.lbl_time.setFont(f_time)
         self.lbl_date.setFont(f_date)
         self.clock_layout.setSpacing(max(0, int(10 * factor)))
-        super().resizeEvent(event)
+        if event:
+            super().resizeEvent(event)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -265,7 +265,6 @@ class StackedClock(QWidget):
         self.lbl_date.setText(d.toString("dddd, MMM d"))
 
     def resizeEvent(self, event):
-        """Dynamically shrink the fonts and overlapping margins when squished by the editor drawer."""
         factor = self.height() / 600.0
         f_time = QFont("Google Sans", max(10, int(115 * factor)), QFont.Weight.Bold)
         f_date = QFont("Google Sans", max(8, int(20 * factor)))
@@ -373,11 +372,37 @@ class AnalogClock(QWidget):
         painter.end()
 
 
+# =================================================================
+# DYNAMIC CLOCKFACE REGISTRY
+# =================================================================
 CLOCKFACES = [
     ("Classic Digital", ClassicClock),
     ("Stacked Bold", StackedClock),
     ("Minimal Analog", AnalogClock)
 ]
+
+# Dynamically loads any clockfaces downloaded from the App Store
+if os.path.exists("clockfaces"):
+    import importlib.util
+    for filename in sorted(os.listdir("clockfaces")):
+        if filename.endswith(".py") and not filename.startswith("__"):
+            try:
+                mod_name = filename[:-3]
+                spec = importlib.util.spec_from_file_location(mod_name, os.path.join("clockfaces", filename))
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                
+                # Scan module for a valid QWidget clockface class
+                for attr_name in dir(mod):
+                    attr = getattr(mod, attr_name)
+                    if isinstance(attr, type) and issubclass(attr, QWidget) and hasattr(attr, 'update_time'):
+                        if attr_name not in ['QWidget', 'ClassicClock', 'StackedClock', 'AnalogClock']:
+                            face_name = getattr(mod, 'FACE_NAME', attr_name.replace("Clock", "").strip())
+                            CLOCKFACES.append((face_name, attr))
+                            break
+            except Exception as e:
+                print(f"Failed to load custom clockface {filename}: {e}")
+
 CLOCKFACE_CLASSES = [cls for name, cls in CLOCKFACES]
 
 
@@ -638,6 +663,9 @@ class GalleryPickerOverlay(QFrame):
             self.grid.addWidget(btn, i // cols, i % cols)
 
 
+# =================================================================
+# WEAR OS STYLE CAROUSEL SELECTOR & SECTIONED EDITOR
+# =================================================================
 class ClockSelectorOverlay(QWidget):
     def __init__(self, parent, apply_callback):
         super().__init__(parent)
@@ -716,9 +744,6 @@ class ClockSelectorOverlay(QWidget):
         self.is_editing = False
         self.saved_idx = 0
 
-    # -----------------------------------------------------------------
-    # CUSTOM EDITOR UI BUILDERS
-    # -----------------------------------------------------------------
     def setup_editor_panel(self):
         self.edit_panel = QFrame(self.main_container)
         self.edit_panel.setGeometry(0, 600, 1024, 210)
@@ -770,11 +795,22 @@ class ClockSelectorOverlay(QWidget):
         self.edit_stack.addWidget(page1)
         self.edit_stack.addWidget(page2)
 
+        # Dynamically auto-generate editor pages for ANY downloaded clockfaces!
+        for i in range(3, len(CLOCKFACES)):
+            name, cls = CLOCKFACES[i]
+            prefix = name.lower().replace(" ", "_")
+            custom_page = self.build_editor_page({
+                "Text Color": self.create_color_grid(f"{prefix}_color"),
+                "Backgrounds": self.create_bg_grid(f"{prefix}_bg"),
+                "My Photos": self.create_photo_grid(f"{prefix}_bg")
+            })
+            self.edit_stack.addWidget(custom_page)
+
     def _apply_tab_style(self, btn, active):
         if active:
-            btn.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px; font-size: 13px;")
+            btn.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px; font-size: 14px;")
         else:
-            btn.setStyleSheet("background-color: transparent; color: #AAAAAA; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px; font-size: 13px;")
+            btn.setStyleSheet("background-color: transparent; color: #AAAAAA; border-radius: 8px; font-weight: bold; text-align: left; padding-left: 15px; font-size: 14px;")
 
     def _switch_editor_tab(self, idx, stack, buttons):
         stack.setCurrentIndex(idx)
@@ -788,7 +824,7 @@ class ClockSelectorOverlay(QWidget):
         layout.setSpacing(15)
         
         tab_container = QWidget()
-        tab_container.setFixedWidth(210)
+        tab_container.setFixedWidth(190)
         tab_layout = QVBoxLayout(tab_container)
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(5)
@@ -797,7 +833,7 @@ class ClockSelectorOverlay(QWidget):
         buttons = []
         for i, (name, widget) in enumerate(sections_dict.items()):
             btn = QPushButton(name)
-            btn.setFixedSize(200, 45)
+            btn.setFixedSize(180, 42)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._apply_tab_style(btn, i == 0)
             btn.clicked.connect(lambda checked, idx=i: self._switch_editor_tab(idx, stack, buttons))
@@ -926,9 +962,6 @@ class ClockSelectorOverlay(QWidget):
         for p in self.previews:
             p.update_time(t, d)
 
-    # -----------------------------------------------------------------
-    # CUSTOM PHOTO OVERLAY MANAGERS
-    # -----------------------------------------------------------------
     def open_adjuster(self, path_str, setting_key):
         path = path_str[4:] if path_str.startswith("img:") else path_str
         self.adjuster_overlay.setup(path, setting_key)
@@ -944,9 +977,6 @@ class ClockSelectorOverlay(QWidget):
         self.adjuster_overlay.hide()
         self.gallery_picker.hide()
 
-    # -----------------------------------------------------------------
-    # CAROUSEL ANIMATIONS
-    # -----------------------------------------------------------------
     def slide_to(self, idx):
         self.current_idx = idx
         

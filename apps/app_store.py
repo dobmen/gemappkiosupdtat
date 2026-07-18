@@ -15,7 +15,6 @@ MANIFEST_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosstor/main/sto
 
 
 class FadeOverlay(QWidget):
-    """A completely thread-safe fade overlay to replace buggy QGraphicsOpacityEffect."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -34,7 +33,6 @@ class FadeOverlay(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        # Using the exact background color of the App Store for a seamless blend
         painter.fillRect(self.rect(), QColor(12, 12, 14, self._alpha))
 
 
@@ -94,9 +92,12 @@ class DownloadAppThread(QThread):
             
             self.on_progress.emit(50)
 
+            # Route file dynamically based on its type
+            target_dir = "clockfaces" if self.app_data.get("type") == "clockface" else "apps"
+            os.makedirs(target_dir, exist_ok=True)
+            
             failed_url = script_url
-            os.makedirs("apps", exist_ok=True)
-            temp_script = os.path.join("apps", "update.tmp")
+            temp_script = os.path.join(target_dir, "update.tmp")
             
             req_script = urllib.request.Request(script_url, headers={'User-Agent': 'KioskOS'})
             with urllib.request.urlopen(req_script, timeout=10, context=ctx) as response:
@@ -105,7 +106,7 @@ class DownloadAppThread(QThread):
                     
             self.on_progress.emit(80)
             
-            target_script = os.path.join("apps", self.app_data["filename"])
+            target_script = os.path.join(target_dir, self.app_data["filename"])
             os.replace(temp_script, target_script)
             
             ver_path = target_script.replace(".py", ".ver")
@@ -161,7 +162,7 @@ class NetworkImageThread(QThread):
                 
                 self.on_image_ready.emit(self.target_widget, thumb_img, orig_img)
         except Exception as e:
-            print(f"Image download exception trace for {self.url}: {e}")
+            pass
 
 
 class ClickableScreenshot(QLabel):
@@ -218,7 +219,9 @@ class AppCard(QFrame):
         info_layout.addWidget(lbl_author)
         info_layout.addWidget(lbl_desc)
 
-        local_script = os.path.join("apps", app_data["filename"])
+        # Look in the correct directory based on type
+        target_dir = "clockfaces" if app_data.get("type") == "clockface" else "apps"
+        local_script = os.path.join(target_dir, app_data["filename"])
         ver_path = local_script.replace(".py", ".ver")
         
         self.is_installed = os.path.exists(local_script)
@@ -415,7 +418,9 @@ class AppDetailsSection(QWidget):
         self.active_threads.clear()
 
         self.lbl_name.setText(app_data['name'])
-        self.lbl_author_cat.setText(f"By {app_data.get('author', 'Unknown')} • {app_data.get('category', 'Utility')}")
+        
+        cat_text = "Clockface" if app_data.get('type') == 'clockface' else app_data.get('category', 'Utility')
+        self.lbl_author_cat.setText(f"By {app_data.get('author', 'Unknown')} • {cat_text}")
         
         desc_text = app_data.get('expanded_description') or app_data.get('description', '')
         self.lbl_desc.setText(desc_text)
@@ -512,22 +517,25 @@ class AppStorePage(QWidget):
         normal_layout.addWidget(self.title_lbl)
         normal_layout.addStretch()
 
-        self.btn_tab_all = QPushButton("Catalog")
+        self.btn_tab_all = QPushButton("Apps")
+        self.btn_tab_faces = QPushButton("Clockfaces")
         self.btn_tab_installed = QPushButton("Installed")
-        self.btn_tab_updates = QPushButton("Need Updating")
+        self.btn_tab_updates = QPushButton("Updates")
         
         self.tab_active_css = "background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 13px; padding: 6px 14px; border: none;"
         self.tab_inactive_css = "background-color: #2C2C35; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 13px; padding: 6px 14px; border: none;"
         
         self.btn_tab_all.setStyleSheet(self.tab_active_css)
+        self.btn_tab_faces.setStyleSheet(self.tab_inactive_css)
         self.btn_tab_installed.setStyleSheet(self.tab_inactive_css)
         self.btn_tab_updates.setStyleSheet(self.tab_inactive_css)
 
-        for btn in [self.btn_tab_all, self.btn_tab_installed, self.btn_tab_updates]:
+        for btn in [self.btn_tab_all, self.btn_tab_faces, self.btn_tab_installed, self.btn_tab_updates]:
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             normal_layout.addWidget(btn)
 
         self.btn_tab_all.clicked.connect(lambda: self.switch_view_filter("all"))
+        self.btn_tab_faces.clicked.connect(lambda: self.switch_view_filter("faces"))
         self.btn_tab_installed.clicked.connect(lambda: self.switch_view_filter("installed"))
         self.btn_tab_updates.clicked.connect(lambda: self.switch_view_filter("updates"))
         
@@ -629,7 +637,6 @@ class AppStorePage(QWidget):
         self.page_stack.addWidget(self.details_section)
         layout.addWidget(self.page_stack)
 
-        # 100% hardware-safe fade overlay overlay to prevent QPainter crashes
         self.fade_overlay = FadeOverlay(self)
 
         self.current_filter = "all"
@@ -641,14 +648,9 @@ class AppStorePage(QWidget):
         if hasattr(self, 'fullscreen_view'):
             self.fullscreen_view.setGeometry(self.rect())
         if hasattr(self, 'fade_overlay'):
-            # The fade overlay sits directly over the content stack
             self.fade_overlay.setGeometry(self.page_stack.geometry())
 
-    # =============================================================
-    # MATERIAL YOU SEARCH BAR HELPERS
-    # =============================================================
     def open_search_bar(self):
-        """Expands the Material search pill across the header."""
         self.header_stack.setCurrentIndex(1)
         self.search_pill.setMinimumWidth(42)
         self.search_pill.setMaximumWidth(42)
@@ -663,7 +665,6 @@ class AppStorePage(QWidget):
         self.search_bar.setFocus()
 
     def close_search_bar(self):
-        """Collapses search pill and restores title and tabs."""
         self.search_bar.clear()
         self.search_anim = QPropertyAnimation(self.search_pill, b"maximumWidth")
         self.search_anim.setDuration(200)
@@ -676,11 +677,9 @@ class AppStorePage(QWidget):
     def on_search_query_changed(self, text):
         self.populate_catalog(self.full_catalog_cache)
 
-    # =============================================================
-    # HARDWARE-SAFE BUFFERED ANIMATIONS
-    # =============================================================
     def _update_tab_styles(self, filter_mode):
         self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
+        self.btn_tab_faces.setStyleSheet(self.tab_active_css if filter_mode == "faces" else self.tab_inactive_css)
         self.btn_tab_installed.setStyleSheet(self.tab_active_css if filter_mode == "installed" else self.tab_inactive_css)
         self.btn_tab_updates.setStyleSheet(self.tab_active_css if filter_mode == "updates" else self.tab_inactive_css)
 
@@ -732,9 +731,6 @@ class AppStorePage(QWidget):
     def switch_view_filter(self, filter_mode):
         self.transition_to(0, filter_mode=filter_mode)
 
-    # =============================================================
-    # OVERLAYS & CATALOG MANAGEMENT
-    # =============================================================
     def setup_fullscreen_overlay(self):
         self.fullscreen_view = QFrame(self)
         self.fullscreen_view.setStyleSheet("background-color: rgba(0, 0, 0, 240);")
@@ -807,6 +803,11 @@ class AppStorePage(QWidget):
                 search_text = f"{app_data.get('name','')} {app_data.get('author','')} {app_data.get('category','')} {app_data.get('description','')} {app_data.get('expanded_description','')}".lower()
                 if query not in search_text:
                     continue
+
+            is_face = app_data.get('type') == 'clockface'
+            
+            if self.current_filter == "all" and is_face: continue
+            if self.current_filter == "faces" and not is_face: continue
 
             card = AppCard(app_data, self.start_install, self.open_app_profile_details)
             

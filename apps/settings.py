@@ -8,7 +8,8 @@ from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect, QPropert
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor, QPen
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit
+    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit,
+    QListWidget, QListWidgetItem
 )
 
 # =================================================================
@@ -32,7 +33,6 @@ class CheckUpdateThread(QThread):
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode('utf-8'))
                 
-                # Dynamically calculate the payload size of the upcoming main.py file
                 size_mb = "Unknown"
                 if "main_script_url" in data:
                     try:
@@ -110,6 +110,96 @@ class ModernDialog(QDialog):
 
         bg_layout.addLayout(btn_layout)
         layout.addWidget(bg_frame)
+
+
+class DeleteClockfaceDialog(QDialog):
+    """Custom dialog dedicated to safely uninstalling downloaded clockfaces."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setModal(True)
+        self.setFixedSize(480, 360)
+        self.deleted_any = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        bg_frame = QFrame(self)
+        bg_frame.setStyleSheet("background-color: #22222B; border-radius: 24px; border: 1px solid #33333F;")
+        bg_layout = QVBoxLayout(bg_frame)
+        bg_layout.setContentsMargins(25, 25, 25, 20)
+
+        lbl_title = QLabel("Delete Downloaded Clockfaces")
+        lbl_title.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_title.setStyleSheet("color: white; border: none;")
+        bg_layout.addWidget(lbl_title)
+        bg_layout.addSpacing(10)
+
+        self.list_widget = QListWidget()
+        QScroller.grabGesture(self.list_widget.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        self.list_widget.setStyleSheet("""
+            QListWidget { background-color: #14141A; border-radius: 12px; border: 1px solid #2C2C35; padding: 5px; color: white; font-size: 15px; outline: 0; }
+            QListWidget::item { padding: 10px; border-radius: 8px; }
+            QListWidget::item:selected { background-color: rgba(226, 74, 74, 40); color: #E24A4A; }
+        """)
+        
+        self.files_map = {}
+        if os.path.exists("clockfaces"):
+            for f in sorted(os.listdir("clockfaces")):
+                if f.endswith(".py") and not f.startswith("__"):
+                    clean_name = f.replace(".py", "").replace("_", " ").title()
+                    self.list_widget.addItem(clean_name)
+                    self.files_map[clean_name] = f
+                    
+        if not self.files_map:
+            self.list_widget.addItem("No custom clockfaces downloaded.")
+            self.list_widget.setEnabled(False)
+            
+        bg_layout.addWidget(self.list_widget)
+        bg_layout.addSpacing(15)
+        
+        actions = QHBoxLayout()
+        actions.addStretch()
+        
+        btn_cancel = QPushButton("Close")
+        btn_cancel.setStyleSheet("QPushButton { background: transparent; color: #888888; font-weight: bold; font-size: 15px; padding: 5px 15px; border: none; }")
+        btn_cancel.clicked.connect(self.accept)
+        actions.addWidget(btn_cancel)
+
+        self.btn_del = QPushButton("Delete Selected")
+        self.btn_del.setStyleSheet("QPushButton { background-color: #E24A4A; color: white; font-weight: bold; font-size: 15px; border-radius: 8px; padding: 8px 20px; border: none; }")
+        self.btn_del.clicked.connect(self.confirm_delete)
+        if not self.files_map:
+            self.btn_del.hide()
+        actions.addWidget(self.btn_del)
+        
+        bg_layout.addLayout(actions)
+        layout.addWidget(bg_frame)
+
+    def confirm_delete(self):
+        selected = self.list_widget.selectedItems()
+        if not selected: return
+        
+        name = selected[0].text()
+        filename = self.files_map.get(name)
+        if filename:
+            try:
+                os.remove(os.path.join("clockfaces", filename))
+                ver_file = filename.replace(".py", ".ver")
+                if os.path.exists(os.path.join("clockfaces", ver_file)):
+                    os.remove(os.path.join("clockfaces", ver_file))
+                    
+                self.deleted_any = True
+                self.list_widget.takeItem(self.list_widget.row(selected[0]))
+                del self.files_map[name]
+                
+                if not self.files_map:
+                    self.list_widget.clear()
+                    self.list_widget.addItem("No custom clockfaces downloaded.")
+                    self.list_widget.setEnabled(False)
+                    self.btn_del.hide()
+            except Exception as e:
+                print("Error deleting", e)
 
 
 class CategoryButton(QPushButton):
@@ -594,7 +684,8 @@ class SettingsPage(QWidget):
         cf_layout.addWidget(self.lbl_cf_preview)
         
         cf_info = QVBoxLayout()
-        cf_name = QLabel("Current Clockface")
+        cf_info.setSpacing(10)
+        cf_name = QLabel("Clockface Settings")
         cf_name.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
         cf_name.setStyleSheet("color: white; border: none; background: transparent;")
         
@@ -605,9 +696,22 @@ class SettingsPage(QWidget):
             QPushButton:hover { background-color: #4A7DDF; }
         """)
         btn_change_cf.clicked.connect(self.open_clockface_selector)
+
+        btn_delete_cf = QPushButton("🗑️ Delete")
+        btn_delete_cf.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_delete_cf.setStyleSheet("""
+            QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border-radius: 8px; font-size: 13px; font-weight: bold; padding: 8px 14px; border: 1px solid rgba(226, 74, 74, 100); }
+            QPushButton:hover { background-color: #E24A4A; color: white; }
+        """)
+        btn_delete_cf.clicked.connect(self.open_delete_clockface_dialog)
         
+        btns_layout = QHBoxLayout()
+        btns_layout.addWidget(btn_change_cf)
+        btns_layout.addWidget(btn_delete_cf)
+        btns_layout.addStretch()
+
         cf_info.addWidget(cf_name)
-        cf_info.addWidget(btn_change_cf)
+        cf_info.addLayout(btns_layout)
         cf_info.addStretch()
         
         cf_layout.addLayout(cf_info)
@@ -669,6 +773,24 @@ class SettingsPage(QWidget):
             if self.on_close:
                 self.on_close()
             main_window.open_clockface_selector()
+
+    def open_delete_clockface_dialog(self):
+        dialog = DeleteClockfaceDialog(self)
+        dialog.exec()
+        if dialog.deleted_any:
+            # Immediately snap back to the Classic Clock as a failsafe
+            self.save_setting("clockface_index", 0)
+            self.update_clockface_preview()
+            
+            reboot_dialog = ModernDialog(
+                self,
+                "Reboot Required",
+                "A system reboot is required to fully unload the custom clockface from active memory.",
+                "Reboot Now",
+                "Later"
+            )
+            if reboot_dialog.exec() == QDialog.DialogCode.Accepted:
+                os.system("sudo reboot")
 
     # =================================================================
     # INSTALLED APPS PAGE W/ ICONS & UNINSTALLER
