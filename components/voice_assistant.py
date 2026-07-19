@@ -1,29 +1,25 @@
 import os
 import sys
-from ctypes import *
 from contextlib import contextmanager
 from PyQt6.QtCore import QThread, pyqtSignal
 import speech_recognition as sr
 
 # =================================================================
-# ALSA ERROR SUPPRESSOR (Hides Linux Audio Spam)
+# DEEP C-LEVEL ERROR SUPPRESSOR (Hides JACK/ALSA Spam)
 # =================================================================
-def py_error_handler(filename, line, function, err, fmt):
-    pass  # Do absolutely nothing when ALSA complains
-
-ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
-c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
-
 @contextmanager
-def silence_alsa():
-    """Temporarily gags the C-level ALSA audio driver during initialization."""
+def silence_audio_warnings():
+    """Temporarily redirects all C-level stderr to /dev/null during initialization."""
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    old_stderr = os.dup(2)
+    sys.stderr.flush()
+    os.dup2(devnull, 2)
     try:
-        asound = cdll.LoadLibrary('libasound.so.2')
-        asound.snd_lib_error_set_handler(c_error_handler)
         yield
-        asound.snd_lib_error_set_handler(None)
-    except Exception:
-        yield
+    finally:
+        os.dup2(old_stderr, 2)
+        os.close(devnull)
+        os.close(old_stderr)
 
 
 # =================================================================
@@ -43,8 +39,8 @@ class VoiceAssistantThread(QThread):
         super().__init__()
         self.recognizer = sr.Recognizer()
         
-        # Wrap the microphone initialization in our silencer
-        with silence_alsa():
+        # Wrap the microphone initialization in our deep silencer
+        with silence_audio_warnings():
             self.microphone = sr.Microphone()
             
         self.is_running = True
@@ -70,7 +66,7 @@ class VoiceAssistantThread(QThread):
                             self.is_awake = True
                             self.wake_word_detected.emit() 
                             
-                            # Did they say the command in the same breath? (e.g., "Hey Ghost open gallery")
+                            # Did they say the command in the same breath?
                             wake_idx = text.find("ghost") + len("ghost")
                             remaining_command = text[wake_idx:].strip()
                             
