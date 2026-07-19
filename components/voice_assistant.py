@@ -38,11 +38,7 @@ class VoiceAssistantThread(QThread):
     def __init__(self):
         super().__init__()
         self.recognizer = sr.Recognizer()
-        
-        # Wrap the microphone initialization in our deep silencer
-        with silence_audio_warnings():
-            self.microphone = sr.Microphone()
-            
+        self.microphone = None
         self.is_running = True
         self.is_awake = False  
 
@@ -50,7 +46,12 @@ class VoiceAssistantThread(QThread):
         self.recognizer.pause_threshold = 0.8
 
     def run(self):
-        with self.microphone as source:
+        # We must silence BOTH the instantiation AND the stream opening!
+        with silence_audio_warnings():
+            self.microphone = sr.Microphone()
+            source = self.microphone.__enter__()
+            
+        try:
             self.status_changed.emit("Calibrating microphone...")
             self.recognizer.adjust_for_ambient_noise(source, duration=1.5)
             
@@ -116,6 +117,9 @@ class VoiceAssistantThread(QThread):
                     if self.is_awake:
                         self.is_awake = False
                         self.sleep_mode.emit()
+        finally:
+            if self.microphone:
+                self.microphone.__exit__(None, None, None)
 
     def stop(self):
         self.is_running = False
