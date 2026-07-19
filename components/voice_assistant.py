@@ -1,7 +1,34 @@
 import os
+import sys
+from ctypes import *
+from contextlib import contextmanager
 from PyQt6.QtCore import QThread, pyqtSignal
 import speech_recognition as sr
 
+# =================================================================
+# ALSA ERROR SUPPRESSOR (Hides Linux Audio Spam)
+# =================================================================
+def py_error_handler(filename, line, function, err, fmt):
+    pass  # Do absolutely nothing when ALSA complains
+
+ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+
+@contextmanager
+def silence_alsa():
+    """Temporarily gags the C-level ALSA audio driver during initialization."""
+    try:
+        asound = cdll.LoadLibrary('libasound.so.2')
+        asound.snd_lib_error_set_handler(c_error_handler)
+        yield
+        asound.snd_lib_error_set_handler(None)
+    except Exception:
+        yield
+
+
+# =================================================================
+# VOICE ASSISTANT THREAD
+# =================================================================
 class VoiceAssistantThread(QThread):
     # Signals to communicate cleanly with the core Kiosk window
     command_recognized = pyqtSignal(str, str)  
@@ -15,7 +42,11 @@ class VoiceAssistantThread(QThread):
     def __init__(self):
         super().__init__()
         self.recognizer = sr.Recognizer()
-        self.microphone = sr.Microphone()
+        
+        # Wrap the microphone initialization in our silencer
+        with silence_alsa():
+            self.microphone = sr.Microphone()
+            
         self.is_running = True
         self.is_awake = False  
 
