@@ -81,7 +81,6 @@ pip install --upgrade pip --quiet
 pip install --quiet \
     PyQt6 \
     PyQt6-WebEngine \
-    PyQt6-QtMultimedia \
     speechrecognition \
     pyaudio \
     spotipy \
