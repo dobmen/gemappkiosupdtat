@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =================================================================
-# KIOSK OS - STANDALONE BOOTSTRAP HARDWARE INSTALLER
+# KIOSK OS - STANDALONE BOOTSTRAP HARDWARE INSTALLER (DEBIAN 13)
 # =================================================================
 
 set -e
@@ -25,7 +25,7 @@ INSTALL_DIR="$REAL_HOME/kiosk_os"
 # The GitHub repository to clone the entire Kiosk OS system from
 GITHUB_REPO_URL="https://github.com/dobmen/gemappkiosupdtat.git"
 
-echo "[1/7] Configuring passwordless sudo for system power & update commands..."
+echo "[1/8] Configuring passwordless sudo for system power & update commands..."
 SUDOERS_FILE="/etc/sudoers.d/kiosk_nopasswd"
 cat <<EOF > "$SUDOERS_FILE"
 # Allow Kiosk OS user to reboot, shut down, and manage services without a password
@@ -34,7 +34,7 @@ EOF
 chmod 0440 "$SUDOERS_FILE"
 echo " -> Passwordless sudo configured successfully."
 
-echo "[2/7] Updating system and installing Linux audio/display/git dependencies..."
+echo "[2/8] Updating system and installing Linux audio/display/window manager dependencies..."
 apt-get update -qq
 apt-get install -y -qq \
     python3-pip \
@@ -55,10 +55,28 @@ apt-get install -y -qq \
     libxcb-xinerama0 \
     libxcb-xfixes0 \
     x11-xserver-utils \
+    lightdm \
+    openbox \
     git \
     curl
 
-echo "[3/7] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
+echo "[3/8] Configuring LightDM Auto-Login for user: $REAL_USER..."
+LIGHTDM_CONF="/etc/lightdm/lightdm.conf"
+if [ -f "$LIGHTDM_CONF" ]; then
+    # Uncomment or set auto-login fields in lightdm.conf
+    sed -i "s/#autologin-user=/autologin-user=$REAL_USER/" "$LIGHTDM_CONF"
+    sed -i "s/#autologin-user-timeout=0/autologin-user-timeout=0/" "$LIGHTDM_CONF"
+    
+    # If lines don't exist under [Seat:*], ensure they are added
+    if ! grep -q "autologin-user=$REAL_USER" "$LIGHTDM_CONF"; then
+        sed -i "/\[Seat:\*\]/a autologin-user=$REAL_USER\nautologin-user-timeout=0" "$LIGHTDM_CONF"
+    fi
+    echo " -> Auto-login enabled via LightDM."
+else
+    echo " ⚠ LightDM config not found. Skipping auto-login configuration."
+fi
+
+echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo " -> Existing Git repo found at $INSTALL_DIR. Pulling latest changes..."
     sudo -u $REAL_USER git -C "$INSTALL_DIR" fetch origin
@@ -69,14 +87,13 @@ else
     sudo -u $REAL_USER git clone -b main "$GITHUB_REPO_URL" "$INSTALL_DIR"
 fi
 
-# Move into the newly cloned installation directory for all subsequent steps
 cd "$INSTALL_DIR"
 
-echo "[4/7] Creating Python virtual environment..."
+echo "[5/8] Creating Python virtual environment..."
 sudo -u $REAL_USER python3 -m venv venv
 source venv/bin/activate
 
-echo "[5/7] Installing Python libraries..."
+echo "[6/8] Installing Python libraries..."
 pip install --upgrade pip --quiet
 pip install --quiet \
     PyQt6 \
@@ -86,7 +103,7 @@ pip install --quiet \
     spotipy \
     requests
 
-echo "[6/7] Creating runtime directories & generating default config..."
+echo "[7/8] Creating runtime directories & generating default config..."
 sudo -u $REAL_USER mkdir -p apps clockfaces photos screenshots videos browser_data web_app_data icons fonts
 
 CONFIG_FILE="$INSTALL_DIR/config.json"
@@ -113,45 +130,32 @@ if [ ! -f "$CONFIG_FILE" ]; then
 }
 EOF
     echo " -> Created fresh config.json."
-else
-    echo " -> Existing config.json preserved."
 fi
 
 # Make launcher executable and fix recursive file ownership
 chmod +x "$INSTALL_DIR/launch.sh"
 chown -R $REAL_USER:$REAL_USER "$INSTALL_DIR"
 
-echo "[7/7] Registering Kiosk OS as an automatic startup service..."
-SERVICE_FILE="/etc/systemd/system/kiosk.service"
+echo "[8/8] Configuring Openbox session to auto-launch Kiosk OS..."
+# Create an XDG autostart entry for openbox so it runs launch.sh right when the GUI boots
+AUTOSTART_DIR="$REAL_HOME/.config/openbox"
+sudo -u $REAL_USER mkdir -p "$AUTOSTART_DIR"
 
-cat <<EOF > "$SERVICE_FILE"
-[Unit]
-Description=Kiosk OS Touchscreen Interface
-After=network.target graphical.target systemd-user-sessions.service
-
-[Service]
-User=$REAL_USER
-Group=$REAL_USER
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/launch.sh
-Restart=always
-RestartSec=3
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=$REAL_HOME/.Xauthority
-
-[Install]
-WantedBy=graphical.target
+cat <<EOF > "$AUTOSTART_DIR/autostart"
+# Launch Kiosk OS automatically inside the lightweight Openbox session
+$INSTALL_DIR/launch.sh &
 EOF
+chown -R $REAL_USER:$REAL_USER "$REAL_HOME/.config"
 
-systemctl daemon-reload
-systemctl enable kiosk.service
+# Ensure LightDM starts on boot
+systemctl enable lightdm.service
 
 echo "================================================="
-echo "   INSTALLATION & CLONING COMPLETE!              "
+echo "   INSTALLATION & KIOSK ENVIRONMENT COMPLETE!    "
 echo "================================================="
 echo "Kiosk OS has been installed to: $INSTALL_DIR"
 echo ""
-echo "You can now reboot the device. It will boot directly"
-echo "into Kiosk OS with auto-detected hardware scaling:"
+echo "When you reboot, Debian 13 will auto-login into LightDM,"
+echo "spawn Openbox, and launch your Kiosk application full-screen."
 echo "   sudo reboot"
 echo "================================================="
