@@ -4,13 +4,18 @@ import urllib.request
 import json
 import time  
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup, QTimer, pyqtProperty
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QImage
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QPainterPath, QColor, QImage, QGuiApplication
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QScrollArea, QFrame, QProgressBar, QMessageBox, QScroller, QStackedWidget, QGridLayout, QLineEdit, QDialog
 )
 
 MANIFEST_URL = "https://raw.githubusercontent.com/dobmen/gemappkiosstor/main/store_manifest.json"
+
+
+def get_scale_factor():
+    screen = QGuiApplication.primaryScreen()
+    return max(1.0, screen.size().width() / 1024.0) if screen else 1.0
 
 
 class FadeOverlay(QWidget):
@@ -186,30 +191,31 @@ class AppCard(QFrame):
         self.app_data = app_data
         self.install_callback = install_callback
         self.open_details_callback = open_details_callback
+        scale = get_scale_factor()
         
-        self.setMinimumHeight(145)
+        self.setMinimumHeight(int(145 * scale))
         self.setStyleSheet("""
             AppCard { background-color: #1C1C22; border: 1px solid #2C2C35; border-radius: 12px; }
             AppCard:hover { background-color: #24242E; border-color: #3C3C45; }
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(15)
+        layout.setContentsMargins(int(20 * scale), int(18 * scale), int(20 * scale), int(18 * scale))
+        layout.setSpacing(int(15 * scale))
 
         info_layout = QVBoxLayout()
         info_layout.setSpacing(6)
         
         lbl_name = QLabel(f"{app_data['name']} (v{app_data['version']})")
-        lbl_name.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_name.setFont(QFont("Google Sans", int(18 * scale), QFont.Weight.Bold))
         lbl_name.setStyleSheet("color: white; border: none; background: transparent;")
         
         lbl_author = QLabel(f"By {app_data.get('author', 'Unknown')}")
-        lbl_author.setFont(QFont("Google Sans", 12))
+        lbl_author.setFont(QFont("Google Sans", int(12 * scale)))
         lbl_author.setStyleSheet("color: #888888; border: none; background: transparent;")
         
         lbl_desc = QLabel(app_data['description'])
-        lbl_desc.setFont(QFont("Google Sans", 14))
+        lbl_desc.setFont(QFont("Google Sans", int(14 * scale)))
         lbl_desc.setStyleSheet("color: #CCCCCC; border: none; background: transparent;")
         lbl_desc.setWordWrap(True)
 
@@ -230,7 +236,7 @@ class AppCard(QFrame):
         self.needs_update = self.is_installed and (str(app_data["version"]) > installed_version)
 
         self.btn_install = QPushButton()
-        self.btn_install.setFixedSize(130, 45)
+        self.btn_install.setFixedSize(int(130 * scale), int(45 * scale))
         self.btn_install.setCursor(Qt.CursorShape.PointingHandCursor)
         self.update_button_style()
         self.btn_install.clicked.connect(self.on_install_click)
@@ -240,23 +246,24 @@ class AppCard(QFrame):
         layout.addWidget(self.btn_install, alignment=Qt.AlignmentFlag.AlignVCenter)
 
     def update_button_style(self):
+        scale = get_scale_factor()
         if self.needs_update:
             self.btn_install.setText("⬆ Update")
-            self.btn_install.setStyleSheet("""
-                QPushButton { background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none; }
-                QPushButton:hover { background-color: #E67E22; }
+            self.btn_install.setStyleSheet(f"""
+                QPushButton {{ background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: {int(15 * scale)}px; border: none; }}
+                QPushButton:hover {{ background-color: #E67E22; }}
             """)
         elif self.is_installed:
             self.btn_install.setText("Installed")
-            self.btn_install.setStyleSheet("""
-                QPushButton { background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 15px; border: none; }
-                QPushButton:hover { background-color: #383845; color: white; }
+            self.btn_install.setStyleSheet(f"""
+                QPushButton {{ background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: {int(15 * scale)}px; border: none; }}
+                QPushButton:hover {{ background-color: #383845; color: white; }}
             """)
         else:
             self.btn_install.setText("⬇ Install")
-            self.btn_install.setStyleSheet("""
-                QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none; }
-                QPushButton:hover { background-color: #4A7DDF; }
+            self.btn_install.setStyleSheet(f"""
+                QPushButton {{ background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: {int(15 * scale)}px; border: none; }}
+                QPushButton:hover {{ background-color: #4A7DDF; }}
             """)
 
     def on_install_click(self):
@@ -279,6 +286,7 @@ class AppDetailsSection(QWidget):
         self.active_card = None
         self.app_data = None
         self.active_threads = []
+        self.scale = get_scale_factor()
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 10, 0, 0)
@@ -286,9 +294,9 @@ class AppDetailsSection(QWidget):
 
         nav_layout = QHBoxLayout()
         btn_back = QPushButton("◀ Catalog")
-        btn_back.setFixedSize(110, 36)
+        btn_back.setFixedSize(int(110 * self.scale), int(36 * self.scale))
         btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_back.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 8px; font-weight: bold; border: none;")
+        btn_back.setStyleSheet(f"background-color: #2C2C35; color: white; border-radius: 8px; font-weight: bold; font-size: {int(14 * self.scale)}px; border: none;")
         btn_back.clicked.connect(on_back_callback)
         nav_layout.addWidget(btn_back)
         nav_layout.addStretch()
@@ -305,34 +313,35 @@ class AppDetailsSection(QWidget):
         container.setStyleSheet("background: transparent;")
         self.content_layout = QVBoxLayout(container)
         self.content_layout.setContentsMargins(10, 10, 10, 50)
-        self.content_layout.setSpacing(25)
+        self.content_layout.setSpacing(int(25 * self.scale))
         self.content_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.identity_card = QFrame()
         self.identity_card.setStyleSheet("background-color: #1C1C22; border: 1px solid #2C2C35; border-radius: 16px;")
         id_layout = QHBoxLayout(self.identity_card)
-        id_layout.setContentsMargins(20, 20, 20, 20)
-        id_layout.setSpacing(20)
+        id_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
+        id_layout.setSpacing(int(20 * self.scale))
 
+        icon_size = int(80 * self.scale)
         self.lbl_icon = QLabel()
-        self.lbl_icon.setFixedSize(80, 80)
-        self.lbl_icon.setStyleSheet("background-color: #2C2C35; border-radius: 40px;")
+        self.lbl_icon.setFixedSize(icon_size, icon_size)
+        self.lbl_icon.setStyleSheet(f"background-color: #2C2C35; border-radius: {icon_size//2}px;")
         self.lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         title_box = QVBoxLayout()
         title_box.setSpacing(4)
         self.lbl_name = QLabel()
-        self.lbl_name.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        self.lbl_name.setFont(QFont("Google Sans", int(22 * self.scale), QFont.Weight.Bold))
         self.lbl_name.setStyleSheet("color: white; border: none;")
         
         self.lbl_author_cat = QLabel()
-        self.lbl_author_cat.setFont(QFont("Google Sans", 13))
+        self.lbl_author_cat.setFont(QFont("Google Sans", int(13 * self.scale)))
         self.lbl_author_cat.setStyleSheet("color: #888888; border: none;")
         title_box.addWidget(self.lbl_name)
         title_box.addWidget(self.lbl_author_cat)
 
         self.btn_action = QPushButton()
-        self.btn_action.setFixedSize(140, 48)
+        self.btn_action.setFixedSize(int(140 * self.scale), int(48 * self.scale))
         self.btn_action.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_action.clicked.connect(self.on_action_clicked)
 
@@ -342,7 +351,7 @@ class AppDetailsSection(QWidget):
         self.content_layout.addWidget(self.identity_card)
 
         self.scr_scroll = QScrollArea()
-        self.scr_scroll.setFixedHeight(170)
+        self.scr_scroll.setFixedHeight(int(170 * self.scale))
         self.scr_scroll.setWidgetResizable(True)
         self.scr_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self.scr_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -352,14 +361,14 @@ class AppDetailsSection(QWidget):
         self.scr_container = QWidget()
         self.scr_layout = QHBoxLayout(self.scr_container)
         self.scr_layout.setContentsMargins(0, 0, 0, 0)
-        self.scr_layout.setSpacing(14)
+        self.scr_layout.setSpacing(int(14 * self.scale))
         self.scr_scroll.setWidget(self.scr_container)
         self.content_layout.addWidget(self.scr_scroll)
 
         self.lbl_desc_title = QLabel("About this application")
-        self.lbl_desc_title.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        self.lbl_desc_title.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         self.lbl_desc = QLabel()
-        self.lbl_desc.setFont(QFont("Google Sans", 14))
+        self.lbl_desc.setFont(QFont("Google Sans", int(14 * self.scale)))
         self.lbl_desc.setStyleSheet("color: #CCCCCC; line-height: 22px;")
         self.lbl_desc.setWordWrap(True)
         self.content_layout.addWidget(self.lbl_desc_title)
@@ -368,18 +377,18 @@ class AppDetailsSection(QWidget):
         self.spec_card = QFrame()
         self.spec_card.setStyleSheet("background-color: #14141A; border-radius: 12px; border: 1px solid #22222A;")
         spec_layout = QGridLayout(self.spec_card)
-        spec_layout.setContentsMargins(20, 15, 20, 15)
-        spec_layout.setSpacing(15)
+        spec_layout.setContentsMargins(int(20 * self.scale), int(15 * self.scale), int(20 * self.scale), int(15 * self.scale))
+        spec_layout.setSpacing(int(15 * self.scale))
 
         self.lbl_meta_ver_title = QLabel("Version")
-        self.lbl_meta_ver_title.setStyleSheet("color: #666670; font-size: 13px; font-weight: bold; border: none;")
+        self.lbl_meta_ver_title.setStyleSheet(f"color: #666670; font-size: {int(13 * self.scale)}px; font-weight: bold; border: none;")
         self.lbl_meta_ver = QLabel()
-        self.lbl_meta_ver.setStyleSheet("color: white; font-size: 14px; border: none;")
+        self.lbl_meta_ver.setStyleSheet(f"color: white; font-size: {int(14 * self.scale)}px; border: none;")
         
         self.lbl_meta_size_title = QLabel("Storage Needed")
-        self.lbl_meta_size_title.setStyleSheet("color: #666670; font-size: 13px; font-weight: bold; border: none;")
+        self.lbl_meta_size_title.setStyleSheet(f"color: #666670; font-size: {int(13 * self.scale)}px; font-weight: bold; border: none;")
         self.lbl_meta_size = QLabel()
-        self.lbl_meta_size.setStyleSheet("color: white; font-size: 14px; border: none;")
+        self.lbl_meta_size.setStyleSheet(f"color: white; font-size: {int(14 * self.scale)}px; border: none;")
 
         spec_layout.addWidget(self.lbl_meta_ver_title, 0, 0)
         spec_layout.addWidget(self.lbl_meta_ver, 1, 0)
@@ -425,21 +434,22 @@ class AppDetailsSection(QWidget):
         self.lbl_meta_ver.setText(str(app_data['version']))
         self.lbl_meta_size.setText(app_data.get('storage_needed', 'Unknown Size'))
 
-        icon_pix = QPixmap(80, 80)
+        icon_size = int(80 * self.scale)
+        icon_pix = QPixmap(icon_size, icon_size)
         icon_pix.fill(Qt.GlobalColor.transparent)
         p = QPainter(icon_pix)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setBrush(QColor("#5A8DEF"))
         p.setPen(Qt.PenStyle.NoPen)
-        p.drawEllipse(0, 0, 80, 80)
+        p.drawEllipse(0, 0, icon_size, icon_size)
         p.setPen(QColor("white"))
-        p.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
-        p.drawText(QRect(0, 0, 80, 80), Qt.AlignmentFlag.AlignCenter, app_data['name'][0].upper())
+        p.setFont(QFont("Google Sans", int(26 * self.scale), QFont.Weight.Bold))
+        p.drawText(QRect(0, 0, icon_size, icon_size), Qt.AlignmentFlag.AlignCenter, app_data['name'][0].upper())
         p.end()
         self.lbl_icon.setPixmap(icon_pix)
 
         if app_data.get('icon_url'):
-            icon_thread = NetworkImageThread(app_data['icon_url'], self.lbl_icon, 80, 80, radius=40)
+            icon_thread = NetworkImageThread(app_data['icon_url'], self.lbl_icon, icon_size, icon_size, radius=icon_size//2)
             icon_thread.on_image_ready.connect(self.apply_downloaded_image)
             icon_thread.start()
             self.active_threads.append(icon_thread)
@@ -450,15 +460,17 @@ class AppDetailsSection(QWidget):
         screenshots = app_data.get('screenshots', [])
         if screenshots:
             self.scr_scroll.show()
+            scr_w = int(240 * self.scale)
+            scr_h = int(140 * self.scale)
             for s_url in screenshots:
                 scr_lbl = ClickableScreenshot()
                 scr_lbl.clicked.connect(self.on_screenshot_click)
-                scr_lbl.setFixedSize(240, 140)
+                scr_lbl.setFixedSize(scr_w, scr_h)
                 scr_lbl.setStyleSheet("background-color: #2C2C35; border-radius: 8px; border: 1px solid #3C3C45;")
                 scr_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.scr_layout.addWidget(scr_lbl)
                 
-                scr_thread = NetworkImageThread(s_url, scr_lbl, 240, 140, radius=8)
+                scr_thread = NetworkImageThread(s_url, scr_lbl, scr_w, scr_h, radius=8)
                 scr_thread.on_image_ready.connect(self.apply_downloaded_image)
                 scr_thread.start()
                 self.active_threads.append(scr_thread)
@@ -472,13 +484,13 @@ class AppDetailsSection(QWidget):
         self.btn_action.setEnabled(True)
         if self.active_card.needs_update:
             self.btn_action.setText("⬆ Update")
-            self.btn_action.setStyleSheet("background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none;")
+            self.btn_action.setStyleSheet(f"background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: {int(15 * self.scale)}px; border: none;")
         elif self.active_card.is_installed:
             self.btn_action.setText("Installed")
-            self.btn_action.setStyleSheet("background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 15px; border: none;")
+            self.btn_action.setStyleSheet(f"background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: {int(15 * self.scale)}px; border: none;")
         else:
             self.btn_action.setText("⬇ Install")
-            self.btn_action.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 15px; border: none;")
+            self.btn_action.setStyleSheet(f"background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: {int(15 * self.scale)}px; border: none;")
 
     def on_action_clicked(self):
         self.btn_action.setEnabled(False)
@@ -491,21 +503,22 @@ class AppStorePage(QWidget):
         super().__init__()
         self.on_install_success = on_install_success
         self.full_catalog_cache = []
+        self.scale = get_scale_factor()
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 20, 40, 30)
-        layout.setSpacing(15)
+        layout.setContentsMargins(int(40 * self.scale), int(20 * self.scale), int(40 * self.scale), int(30 * self.scale))
+        layout.setSpacing(int(15 * self.scale))
 
         self.header_stack = QStackedWidget()
-        self.header_stack.setFixedHeight(54)
+        self.header_stack.setFixedHeight(int(54 * self.scale))
         
         header_normal = QWidget()
         normal_layout = QHBoxLayout(header_normal)
         normal_layout.setContentsMargins(0, 0, 0, 0)
-        normal_layout.setSpacing(10)
+        normal_layout.setSpacing(int(10 * self.scale))
 
         self.title_lbl = QLabel("App Store")
-        self.title_lbl.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
+        self.title_lbl.setFont(QFont("Google Sans", int(26 * self.scale), QFont.Weight.Bold))
         self.title_lbl.setStyleSheet("color: white;")
         normal_layout.addWidget(self.title_lbl)
         normal_layout.addStretch()
@@ -515,8 +528,8 @@ class AppStorePage(QWidget):
         self.btn_tab_installed = QPushButton("Installed")
         self.btn_tab_updates = QPushButton("Updates")
         
-        self.tab_active_css = "background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: 13px; padding: 6px 14px; border: none;"
-        self.tab_inactive_css = "background-color: #2C2C35; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: 13px; padding: 6px 14px; border: none;"
+        self.tab_active_css = f"background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: {int(13 * self.scale)}px; padding: 6px 14px; border: none;"
+        self.tab_inactive_css = f"background-color: #2C2C35; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: {int(13 * self.scale)}px; padding: 6px 14px; border: none;"
         
         self.btn_tab_all.setStyleSheet(self.tab_active_css)
         self.btn_tab_faces.setStyleSheet(self.tab_inactive_css)
@@ -532,12 +545,13 @@ class AppStorePage(QWidget):
         self.btn_tab_installed.clicked.connect(lambda: self.switch_view_filter("installed"))
         self.btn_tab_updates.clicked.connect(lambda: self.switch_view_filter("updates"))
         
+        btn_size = int(42 * self.scale)
         self.btn_search_open = QPushButton("🔍")
-        self.btn_search_open.setFixedSize(42, 42)
+        self.btn_search_open.setFixedSize(btn_size, btn_size)
         self.btn_search_open.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_search_open.setStyleSheet("""
-            QPushButton { background-color: #2C2C35; color: white; border-radius: 21px; font-size: 18px; border: none;}
-            QPushButton:hover { background-color: #383845; }
+        self.btn_search_open.setStyleSheet(f"""
+            QPushButton {{ background-color: #2C2C35; color: white; border-radius: {btn_size//2}px; font-size: {int(18 * self.scale)}px; border: none;}}
+            QPushButton:hover {{ background-color: #383845; }}
         """)
         self.btn_search_open.clicked.connect(self.open_search_bar)
         normal_layout.addWidget(self.btn_search_open)
@@ -556,18 +570,18 @@ class AppStorePage(QWidget):
         pill_layout.setSpacing(10)
 
         self.btn_search_back = QPushButton("←")
-        self.btn_search_back.setFixedSize(38, 38)
+        self.btn_search_back.setFixedSize(int(38 * self.scale), int(38 * self.scale))
         self.btn_search_back.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_search_back.setStyleSheet("""
-            QPushButton { background: transparent; color: white; border-radius: 19px; font-size: 20px; font-weight: bold; border: none; }
-            QPushButton:hover { background-color: rgba(255,255,255,15); }
+        self.btn_search_back.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: white; border-radius: 19px; font-size: {int(20 * self.scale)}px; font-weight: bold; border: none; }}
+            QPushButton:hover {{ background-color: rgba(255,255,255,15); }}
         """)
         self.btn_search_back.clicked.connect(self.close_search_bar)
         pill_layout.addWidget(self.btn_search_back)
 
         self.search_bar = QLineEdit()
         self.search_bar.setPlaceholderText("Search apps, categories, authors...")
-        self.search_bar.setFont(QFont("Google Sans", 16))
+        self.search_bar.setFont(QFont("Google Sans", int(16 * self.scale)))
         self.search_bar.setStyleSheet("""
             QLineEdit { background: transparent; color: white; border: none; padding-left: 5px; }
         """)
@@ -575,11 +589,11 @@ class AppStorePage(QWidget):
         pill_layout.addWidget(self.search_bar, stretch=1)
 
         self.btn_search_clear = QPushButton("✕")
-        self.btn_search_clear.setFixedSize(34, 34)
+        self.btn_search_clear.setFixedSize(int(34 * self.scale), int(34 * self.scale))
         self.btn_search_clear.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_search_clear.setStyleSheet("""
-            QPushButton { background: transparent; color: #AAAAAA; border-radius: 17px; font-size: 16px; border: none; }
-            QPushButton:hover { background-color: rgba(255,255,255,15); color: white; }
+        self.btn_search_clear.setStyleSheet(f"""
+            QPushButton {{ background: transparent; color: #AAAAAA; border-radius: 17px; font-size: {int(16 * self.scale)}px; border: none; }}
+            QPushButton:hover {{ background-color: rgba(255,255,255,15); color: white; }}
         """)
         self.btn_search_clear.clicked.connect(self.search_bar.clear)
         pill_layout.addWidget(self.btn_search_clear)
@@ -610,7 +624,7 @@ class AppStorePage(QWidget):
         self.list_container.setStyleSheet("background: transparent;")
         self.list_layout = QVBoxLayout(self.list_container)
         self.list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.list_layout.setSpacing(14)
+        self.list_layout.setSpacing(int(14 * self.scale))
         self.scroll_area.setWidget(self.list_container)
         
         self.details_section = AppDetailsSection(
@@ -638,12 +652,12 @@ class AppStorePage(QWidget):
 
     def open_search_bar(self):
         self.header_stack.setCurrentIndex(1)
-        self.search_pill.setMinimumWidth(42)
-        self.search_pill.setMaximumWidth(42)
+        self.search_pill.setMinimumWidth(int(42 * self.scale))
+        self.search_pill.setMaximumWidth(int(42 * self.scale))
         
         self.search_anim = QPropertyAnimation(self.search_pill, b"maximumWidth")
         self.search_anim.setDuration(250)
-        self.search_anim.setStartValue(42)
+        self.search_anim.setStartValue(int(42 * self.scale))
         self.search_anim.setEndValue(3000) 
         self.search_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.search_anim.finished.connect(lambda: self.search_pill.setMinimumWidth(0))
@@ -655,7 +669,7 @@ class AppStorePage(QWidget):
         self.search_anim = QPropertyAnimation(self.search_pill, b"maximumWidth")
         self.search_anim.setDuration(200)
         self.search_anim.setStartValue(self.search_pill.width())
-        self.search_anim.setEndValue(42)
+        self.search_anim.setEndValue(int(42 * self.scale))
         self.search_anim.setEasingCurve(QEasingCurve.Type.InCubic)
         self.search_anim.finished.connect(lambda: self.header_stack.setCurrentIndex(0))
         self.search_anim.start()
@@ -757,7 +771,7 @@ class AppStorePage(QWidget):
             self.list_layout.itemAt(i).widget().setParent(None)
 
         lbl_loading = QLabel("Fetching apps from GitHub repository...")
-        lbl_loading.setFont(QFont("Google Sans", 16))
+        lbl_loading.setFont(QFont("Google Sans", int(16 * self.scale)))
         lbl_loading.setStyleSheet("color: #888888; margin-top: 50px;")
         lbl_loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.list_layout.addWidget(lbl_loading)
@@ -777,7 +791,7 @@ class AppStorePage(QWidget):
 
         if not apps_list:
             lbl_empty = QLabel("No apps found in the repository manifest.")
-            lbl_empty.setStyleSheet("color: #AAAAAA; font-size: 16px;")
+            lbl_empty.setStyleSheet(f"color: #AAAAAA; font-size: {int(16 * self.scale)}px;")
             self.list_layout.addWidget(lbl_empty)
             return
 
@@ -814,7 +828,7 @@ class AppStorePage(QWidget):
                 msg = "No installed applications found." if self.current_filter == "installed" else "All your applications are fully up to date! ✨"
                 
             lbl_empty = QLabel(msg)
-            lbl_empty.setFont(QFont("Google Sans", 16))
+            lbl_empty.setFont(QFont("Google Sans", int(16 * self.scale)))
             lbl_empty.setStyleSheet("color: #666670; margin-top: 60px;")
             lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.list_layout.addWidget(lbl_empty)
@@ -828,7 +842,7 @@ class AppStorePage(QWidget):
             self.list_layout.itemAt(i).widget().setParent(None)
         
         lbl_err = QLabel(f"Failed to connect to GitHub Repo:\n{error_msg}")
-        lbl_err.setFont(QFont("Google Sans", 16))
+        lbl_err.setFont(QFont("Google Sans", int(16 * self.scale)))
         lbl_err.setStyleSheet("color: #E24A4A;")
         lbl_err.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.list_layout.addWidget(lbl_err)

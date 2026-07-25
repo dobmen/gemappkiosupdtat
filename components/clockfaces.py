@@ -2,8 +2,23 @@ import os
 import json
 import importlib.util
 from PyQt6.QtCore import Qt, QTime, QDate, QPoint, QRect, QPropertyAnimation, QParallelAnimationGroup, QEasingCurve, pyqtProperty, QSize
-from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPen, QColor, QBrush, QPolygon, QLinearGradient, QPixmap, QIcon
+from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPen, QColor, QBrush, QPolygon, QLinearGradient, QPixmap, QIcon, QGuiApplication
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QHBoxLayout, QLabel, QFrame, QPushButton, QStackedWidget, QScrollArea, QScroller, QSizePolicy, QListWidget, QListWidgetItem
+
+# =================================================================
+# 🖥️ DYNAMIC SCREEN GEOMETRY ENGINE
+# =================================================================
+def get_screen_geometry():
+    """Dynamically detects active monitor resolution (Defaults to 1024x600 fallback)."""
+    screen = QGuiApplication.primaryScreen()
+    if screen:
+        size = screen.size()
+        return size.width(), size.height()
+    return 1024, 600
+
+SCREEN_WIDTH, SCREEN_HEIGHT = get_screen_geometry()
+SCALE_FACTOR = SCREEN_WIDTH / 1024.0
+
 
 # =================================================================
 # GLOBAL SETTINGS ENGINE
@@ -95,7 +110,8 @@ class ImagePickerButton(QPushButton):
         super().__init__()
         self.callback = callback
         self.path = path
-        self.setFixedSize(80, 80)
+        btn_size = int(80 * SCALE_FACTOR)
+        self.setFixedSize(btn_size, btn_size)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet("QPushButton { background-color: #1C1C22; border-radius: 12px; border: 2px solid rgba(255,255,255,40); } QPushButton:hover { border-color: #5A8DEF; }")
         
@@ -105,19 +121,19 @@ class ImagePickerButton(QPushButton):
             x = (pix.width() - side) // 2
             y = (pix.height() - side) // 2
             cropped = pix.copy(x, y, side, side)
-            scaled = cropped.scaled(76, 76, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            scaled = cropped.scaled(btn_size - 4, btn_size - 4, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
             
-            rounded = QPixmap(76, 76)
+            rounded = QPixmap(btn_size - 4, btn_size - 4)
             rounded.fill(Qt.GlobalColor.transparent)
             p = QPainter(rounded)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
             path_obj = QPainterPath()
-            path_obj.addRoundedRect(0, 0, 76, 76, 10, 10)
+            path_obj.addRoundedRect(0, 0, btn_size - 4, btn_size - 4, 10, 10)
             p.setClipPath(path_obj)
             p.drawPixmap(0, 0, scaled)
             p.end()
             self.setIcon(QIcon(rounded))
-            self.setIconSize(QSize(76, 76))
+            self.setIconSize(QSize(btn_size - 4, btn_size - 4))
             
         self.clicked.connect(lambda: self.callback(self.path))
 
@@ -125,7 +141,8 @@ class GalleryGridButton(QPushButton):
     def __init__(self, path, click_cb):
         super().__init__()
         self.path = path
-        self.setFixedSize(160, 160)
+        btn_size = int(160 * SCALE_FACTOR)
+        self.setFixedSize(btn_size, btn_size)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet("QPushButton { background-color: #1C1C22; border-radius: 16px; border: 1px solid #2C2C35; } QPushButton:hover { border-color: #5A8DEF; }")
         
@@ -135,19 +152,19 @@ class GalleryGridButton(QPushButton):
             x = (pix.width() - side) // 2
             y = (pix.height() - side) // 2
             cropped = pix.copy(x, y, side, side)
-            scaled = cropped.scaled(156, 156, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            scaled = cropped.scaled(btn_size - 6, btn_size - 6, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
             
-            rounded = QPixmap(156, 156)
+            rounded = QPixmap(btn_size - 6, btn_size - 6)
             rounded.fill(Qt.GlobalColor.transparent)
             p = QPainter(rounded)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
             path_obj = QPainterPath()
-            path_obj.addRoundedRect(0, 0, 156, 156, 14, 14)
+            path_obj.addRoundedRect(0, 0, btn_size - 6, btn_size - 6, 14, 14)
             p.setClipPath(path_obj)
             p.drawPixmap(0, 0, scaled)
             p.end()
             self.setIcon(QIcon(rounded))
-            self.setIconSize(QSize(156, 156))
+            self.setIconSize(QSize(btn_size - 6, btn_size - 6))
             
         self.clicked.connect(lambda: click_cb(self.path))
 
@@ -164,14 +181,14 @@ class ClassicClock(QWidget):
         
         self.clock_layout = QVBoxLayout(self)
         self.clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.clock_layout.setSpacing(10)
+        self.clock_layout.setSpacing(int(10 * SCALE_FACTOR))
         
         self.lbl_time = QLabel()
-        self.lbl_time.setFont(QFont("Google Sans", 95, QFont.Weight.Bold))
+        self.lbl_time.setFont(QFont("Google Sans", int(95 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_time.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.lbl_date = QLabel()
-        self.lbl_date.setFont(QFont("Google Sans", 24))
+        self.lbl_date.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
         self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.clock_layout.addWidget(self.lbl_time)
@@ -179,7 +196,7 @@ class ClassicClock(QWidget):
         self.load_settings()
 
     def sizeHint(self):
-        return QSize(1024, 600)
+        return QSize(SCREEN_WIDTH, SCREEN_HEIGHT)
 
     def minimumSizeHint(self):
         return QSize(100, 100)
@@ -208,7 +225,7 @@ class ClassicClock(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        radius = 36 if self.width() < 1000 else 0
+        radius = 50 if self.width() < 1500 else 0
         path = QPainterPath()
         path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
         painter.setClipPath(path)
@@ -225,18 +242,18 @@ class StackedClock(QWidget):
         
         self.clock_layout = QVBoxLayout(self)
         self.clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.clock_layout.setSpacing(15)
+        self.clock_layout.setSpacing(int(15 * SCALE_FACTOR))
         
         self.lbl_hour = QLabel()
-        self.lbl_hour.setFont(QFont("Google Sans", 115, QFont.Weight.Bold))
+        self.lbl_hour.setFont(QFont("Google Sans", int(115 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_hour.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.lbl_minute = QLabel()
-        self.lbl_minute.setFont(QFont("Google Sans", 115, QFont.Weight.Bold))
+        self.lbl_minute.setFont(QFont("Google Sans", int(115 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_minute.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.lbl_date = QLabel()
-        self.lbl_date.setFont(QFont("Google Sans", 20))
+        self.lbl_date.setFont(QFont("Google Sans", int(20 * SCALE_FACTOR)))
         self.lbl_date.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.clock_layout.addWidget(self.lbl_hour)
@@ -245,7 +262,7 @@ class StackedClock(QWidget):
         self.load_settings()
 
     def sizeHint(self):
-        return QSize(1024, 600)
+        return QSize(SCREEN_WIDTH, SCREEN_HEIGHT)
 
     def minimumSizeHint(self):
         return QSize(100, 100)
@@ -285,7 +302,7 @@ class StackedClock(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        radius = 36 if self.width() < 1000 else 0
+        radius = 50 if self.width() < 1500 else 0
         path = QPainterPath()
         path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
         painter.setClipPath(path)
@@ -301,7 +318,7 @@ class AnalogClock(QWidget):
         self.load_settings()
 
     def sizeHint(self):
-        return QSize(1024, 600)
+        return QSize(SCREEN_WIDTH, SCREEN_HEIGHT)
 
     def minimumSizeHint(self):
         return QSize(100, 100)
@@ -319,7 +336,7 @@ class AnalogClock(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        radius = 36 if self.width() < 1000 else 0
+        radius = 50 if self.width() < 1500 else 0
         path = QPainterPath()
         path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
         painter.setClipPath(path)
@@ -408,7 +425,6 @@ def load_dynamic_clockfaces():
     CLOCKFACE_CLASSES.clear()
     CLOCKFACE_CLASSES.extend([cls for name, cls in CLOCKFACES])
 
-# Initialize once at boot
 load_dynamic_clockfaces()
 
 
@@ -419,7 +435,7 @@ class ImageAdjusterOverlay(QFrame):
     def __init__(self, parent, apply_callback):
         super().__init__(parent)
         self.apply_callback = apply_callback
-        self.setGeometry(0, 0, 1024, 600)
+        self.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.setStyleSheet("background-color: #000000;")
         self.hide()
         
@@ -432,35 +448,35 @@ class ImageAdjusterOverlay(QFrame):
         self.last_mouse = None
         
         top_bar = QWidget(self)
-        top_bar.setGeometry(0, 0, 1024, 90)
+        top_bar.setGeometry(0, 0, SCREEN_WIDTH, int(90 * SCALE_FACTOR))
         top_bar.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(0,0,0,180), stop:1 rgba(0,0,0,0));")
         
         btn_cancel = QPushButton("Cancel", top_bar)
-        btn_cancel.setGeometry(30, 25, 100, 40)
+        btn_cancel.setGeometry(int(30 * SCALE_FACTOR), int(25 * SCALE_FACTOR), int(100 * SCALE_FACTOR), int(40 * SCALE_FACTOR))
         btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_cancel.setStyleSheet("background: rgba(255,255,255,30); color: white; border-radius: 20px; font-weight: bold; font-size: 15px;")
         btn_cancel.clicked.connect(self.hide)
         
         btn_done = QPushButton("Apply Background", top_bar)
-        btn_done.setGeometry(1024 - 200, 25, 170, 40)
+        btn_done.setGeometry(SCREEN_WIDTH - int(200 * SCALE_FACTOR), int(25 * SCALE_FACTOR), int(170 * SCALE_FACTOR), int(40 * SCALE_FACTOR))
         btn_done.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_done.setStyleSheet("background: #5A8DEF; color: white; border-radius: 20px; font-weight: bold; font-size: 15px;")
         btn_done.clicked.connect(self.on_apply)
 
         bot_bar = QWidget(self)
-        bot_bar.setGeometry(0, 500, 1024, 100)
+        bot_bar.setGeometry(0, SCREEN_HEIGHT - int(100 * SCALE_FACTOR), SCREEN_WIDTH, int(100 * SCALE_FACTOR))
         bot_bar.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(0,0,0,0), stop:1 rgba(0,0,0,180));")
 
         self.btn_toggle = QPushButton("Mode: Fill Screen", bot_bar)
-        self.btn_toggle.setGeometry(1024//2 - 90, 30, 180, 45)
+        self.btn_toggle.setGeometry(SCREEN_WIDTH//2 - int(90 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(180 * SCALE_FACTOR), int(45 * SCALE_FACTOR))
         self.btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_toggle.setStyleSheet("background: #1C1C22; color: white; border-radius: 22px; border: 2px solid #5A8DEF; font-weight: bold; font-size: 15px;")
         self.btn_toggle.clicked.connect(self.toggle_mode)
         
         self.lbl_hint = QLabel("Drag to reposition", self)
-        self.lbl_hint.setGeometry(0, 250, 1024, 100)
+        self.lbl_hint.setGeometry(0, SCREEN_HEIGHT//2 - int(50 * SCALE_FACTOR), SCREEN_WIDTH, int(100 * SCALE_FACTOR))
         self.lbl_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_hint.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        self.lbl_hint.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_hint.setStyleSheet("color: rgba(255,255,255,100); background: transparent;")
 
     def setup(self, path, setting_key):
@@ -502,7 +518,7 @@ class ImageAdjusterOverlay(QFrame):
 
     def clamp_pan(self):
         if self.pix.isNull(): return
-        w, h = 1024, 600
+        w, h = SCREEN_WIDTH, SCREEN_HEIGHT
         if self.mode == "fill":
             scaled = self.pix.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
             max_x = max(0.0, (scaled.width() - w) / 2.0)
@@ -544,7 +560,7 @@ class GalleryPickerOverlay(QFrame):
         super().__init__(parent)
         self.photo_selected = photo_selected_callback
         self.setting_key = None
-        self.setGeometry(0, 0, 1024, 600)
+        self.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.setStyleSheet("background-color: #0C0C0E;")
         self.hide()
         
@@ -557,13 +573,13 @@ class GalleryPickerOverlay(QFrame):
         self.ignored_folders = [".", "__", "apps", "components", "fonts", "icons", "venv", "browser_data"]
         
         self.sidebar = QFrame()
-        self.sidebar.setFixedWidth(240)
+        self.sidebar.setFixedWidth(int(240 * SCALE_FACTOR))
         self.sidebar.setStyleSheet("background-color: #14141A; border-right: 1px solid #22222A;")
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(15, 30, 15, 20)
+        sidebar_layout.setContentsMargins(int(15 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(15 * SCALE_FACTOR), int(20 * SCALE_FACTOR))
         
         lbl_title = QLabel("Albums")
-        lbl_title.setFont(QFont("Google Sans", 15, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", int(15 * SCALE_FACTOR), QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: #666670; margin-left: 10px; margin-bottom: 10px;")
         sidebar_layout.addWidget(lbl_title)
         
@@ -579,7 +595,7 @@ class GalleryPickerOverlay(QFrame):
         sidebar_layout.addWidget(self.album_list_widget)
         
         btn_back = QPushButton("← Back to Editor")
-        btn_back.setFixedHeight(45)
+        btn_back.setFixedHeight(int(45 * SCALE_FACTOR))
         btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_back.setStyleSheet("background: #2C2C35; color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none;")
         btn_back.clicked.connect(self.hide)
@@ -589,13 +605,13 @@ class GalleryPickerOverlay(QFrame):
         
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(30, 25, 30, 30)
+        right_layout.setContentsMargins(int(30 * SCALE_FACTOR), int(25 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR))
         
         self.lbl_album_title = QLabel("Photos")
-        self.lbl_album_title.setFont(QFont("Google Sans", 28, QFont.Weight.Bold))
+        self.lbl_album_title.setFont(QFont("Google Sans", int(28 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_album_title.setStyleSheet("color: white;")
         right_layout.addWidget(self.lbl_album_title)
-        right_layout.addSpacing(10)
+        right_layout.addSpacing(int(10 * SCALE_FACTOR))
         
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -607,7 +623,7 @@ class GalleryPickerOverlay(QFrame):
         self.grid_container = QWidget()
         self.grid = QGridLayout(self.grid_container)
         self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self.grid.setSpacing(20)
+        self.grid.setSpacing(int(20 * SCALE_FACTOR))
         self.scroll.setWidget(self.grid_container)
         
         right_layout.addWidget(self.scroll)
@@ -658,12 +674,12 @@ class GalleryPickerOverlay(QFrame):
         
         if not paths:
             lbl_empty = QLabel("No images in this album.")
-            lbl_empty.setFont(QFont("Google Sans", 16))
+            lbl_empty.setFont(QFont("Google Sans", int(16 * SCALE_FACTOR)))
             lbl_empty.setStyleSheet("color: #666670;")
             self.grid.addWidget(lbl_empty, 0, 0)
             return
             
-        cols = 4
+        cols = 5 if SCREEN_WIDTH > 1280 else 4
         for i, path in enumerate(paths):
             btn = GalleryGridButton(path, lambda p: self.photo_selected(p, self.setting_key))
             self.grid.addWidget(btn, i // cols, i % cols)
@@ -676,19 +692,19 @@ class ClockSelectorOverlay(QWidget):
     def __init__(self, parent, apply_callback):
         super().__init__(parent)
         self.apply_callback = apply_callback
-        self.setGeometry(0, 0, 1024, 600)
+        self.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.hide()
         
         self.main_container = QFrame(self)
-        self.main_container.setGeometry(0, 0, 1024, 600)
+        self.main_container.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         
         self.bg_fade = FadeOverlay(self.main_container)
-        self.bg_fade.setGeometry(0, 0, 1024, 600)
+        self.bg_fade.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         
         self.lbl_title = QLabel("Swipe to browse • Tap to apply", self.main_container)
-        self.lbl_title.setGeometry(0, 10, 1024, 25)
+        self.lbl_title.setGeometry(0, int(10 * SCALE_FACTOR), SCREEN_WIDTH, int(25 * SCALE_FACTOR))
         self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_title.setFont(QFont("Google Sans", 13, QFont.Weight.Bold))
+        self.lbl_title.setFont(QFont("Google Sans", int(13 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_title.setStyleSheet("color: #888888; background: transparent;")
         self.lbl_title.hide()
         
@@ -699,31 +715,34 @@ class ClockSelectorOverlay(QWidget):
         self.border_frames = []
         
         self.btn_close = QPushButton("✕", self.main_container)
-        self.btn_close.setGeometry(30, 30, 50, 50)
+        self.btn_close.setGeometry(int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(50 * SCALE_FACTOR), int(50 * SCALE_FACTOR))
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_close.setStyleSheet("background: rgba(255,255,255,10); color: white; border-radius: 25px; font-size: 20px; border: none;")
         self.btn_close.clicked.connect(self.close_selector)
         self.btn_close.hide()
 
+        btn_w = int(160 * SCALE_FACTOR)
+        btn_h = int(45 * SCALE_FACTOR)
         self.btn_customize = QPushButton("⚙️ Customize", self.main_container)
-        self.btn_customize.setGeometry(1024//2 - 80, 540, 160, 45)
+        self.btn_customize.setGeometry((SCREEN_WIDTH - btn_w)//2, SCREEN_HEIGHT - int(60 * SCALE_FACTOR), btn_w, btn_h)
         self.btn_customize.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_customize.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 22px; font-weight: bold; font-size: 15px; border: none;")
         self.btn_customize.clicked.connect(self.open_editor)
         self.btn_customize.hide()
 
+        panel_h = int(210 * SCALE_FACTOR)
         self.edit_panel = QFrame(self.main_container)
-        self.edit_panel.setGeometry(0, 600, 1024, 210)
+        self.edit_panel.setGeometry(0, SCREEN_HEIGHT, SCREEN_WIDTH, panel_h)
         self.edit_panel.setStyleSheet("background-color: rgba(20, 20, 26, 250); border-top-left-radius: 24px; border-top-right-radius: 24px;")
         
         self.btn_done = QPushButton("Done", self.edit_panel)
-        self.btn_done.setGeometry(1024 - 110, 15, 80, 35)
+        self.btn_done.setGeometry(SCREEN_WIDTH - int(110 * SCALE_FACTOR), int(15 * SCALE_FACTOR), int(80 * SCALE_FACTOR), int(35 * SCALE_FACTOR))
         self.btn_done.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_done.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 17px; font-weight: bold; border: none;")
         self.btn_done.clicked.connect(self.close_editor)
         
         self.edit_stack = QStackedWidget(self.edit_panel)
-        self.edit_stack.setGeometry(30, 20, 1024 - 160, 170)
+        self.edit_stack.setGeometry(int(30 * SCALE_FACTOR), int(20 * SCALE_FACTOR), SCREEN_WIDTH - int(160 * SCALE_FACTOR), panel_h - int(40 * SCALE_FACTOR))
         self.edit_stack.setStyleSheet("background: transparent;")
 
         self.all_colors = [
@@ -751,7 +770,6 @@ class ClockSelectorOverlay(QWidget):
         self.is_editing = False
         self.saved_idx = 0
 
-        # Build the initial state
         self.reload_custom_clockfaces()
 
     def reload_custom_clockfaces(self):
@@ -770,7 +788,6 @@ class ClockSelectorOverlay(QWidget):
         self.name_labels.clear()
         self.border_frames.clear()
 
-        # Build rendering wrappers
         for i, (name, Cls) in enumerate(CLOCKFACES):
             inst = Cls()
             wrapper = QFrame(self.main_container)
@@ -780,7 +797,7 @@ class ClockSelectorOverlay(QWidget):
             l.setContentsMargins(0, 0, 0, 0)
             
             lbl_card_name = QLabel(name, self.main_container)
-            lbl_card_name.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+            lbl_card_name.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
             lbl_card_name.setStyleSheet("color: white; background: transparent; border: none;")
             lbl_card_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl_card_name.hide()
@@ -799,13 +816,11 @@ class ClockSelectorOverlay(QWidget):
             self.border_frames.append(border_frame)
             wrapper.hide()
 
-        # Purge old customization tabs
         while self.edit_stack.count() > 0:
             widget = self.edit_stack.widget(0)
             self.edit_stack.removeWidget(widget)
             widget.deleteLater()
 
-        # Re-inject default tabs
         page0 = self.build_editor_page({
             "Clock Color": self.create_color_grid("classic_color"),
             "Backgrounds": self.create_bg_grid("classic_bg"),
@@ -824,7 +839,6 @@ class ClockSelectorOverlay(QWidget):
         self.edit_stack.addWidget(page1)
         self.edit_stack.addWidget(page2)
 
-        # Build dynamic tabs for all downloaded clocks!
         for i in range(3, len(CLOCKFACES)):
             name, cls = CLOCKFACES[i]
             prefix = name.lower().replace(" ", "_")
@@ -835,7 +849,6 @@ class ClockSelectorOverlay(QWidget):
             })
             self.edit_stack.addWidget(custom_page)
             
-        # Z-Index guarantees
         self.btn_close.raise_()
         self.btn_customize.raise_()
         self.edit_panel.raise_()
@@ -843,7 +856,6 @@ class ClockSelectorOverlay(QWidget):
         if hasattr(self, 'gallery_picker'):
             self.gallery_picker.raise_()
 
-        # Prevent out-of-bounds error if active clock was deleted
         if self.current_idx >= len(CLOCKFACES):
             self.current_idx = 0
             self.saved_idx = 0
@@ -863,10 +875,10 @@ class ClockSelectorOverlay(QWidget):
         page = QWidget()
         layout = QHBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(15)
+        layout.setSpacing(int(15 * SCALE_FACTOR))
         
         tab_container = QWidget()
-        tab_container.setFixedWidth(190)
+        tab_container.setFixedWidth(int(190 * SCALE_FACTOR))
         tab_layout = QVBoxLayout(tab_container)
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.setSpacing(5)
@@ -875,7 +887,7 @@ class ClockSelectorOverlay(QWidget):
         buttons = []
         for i, (name, widget) in enumerate(sections_dict.items()):
             btn = QPushButton(name)
-            btn.setFixedSize(180, 42)
+            btn.setFixedSize(int(180 * SCALE_FACTOR), int(42 * SCALE_FACTOR))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self._apply_tab_style(btn, i == 0)
             btn.clicked.connect(lambda checked, idx=i: self._switch_editor_tab(idx, stack, buttons))
@@ -901,13 +913,14 @@ class ClockSelectorOverlay(QWidget):
         w = QWidget()
         l = QGridLayout(w)
         l.setContentsMargins(5, 5, 5, 5)
-        l.setSpacing(15)
+        l.setSpacing(int(15 * SCALE_FACTOR))
         row, col = 0, 0
         for c in self.all_colors:
             btn = QPushButton()
-            btn.setFixedSize(45, 45)
+            size = int(45 * SCALE_FACTOR)
+            btn.setFixedSize(size, size)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setStyleSheet(f"background-color: {c}; border-radius: 22px; border: 2px solid rgba(255,255,255,40);")
+            btn.setStyleSheet(f"background-color: {c}; border-radius: {size//2}px; border: 2px solid rgba(255,255,255,40);")
             btn.clicked.connect(lambda checked, val=c: self.set_setting(setting_key, val))
             l.addWidget(btn, row, col)
             col += 1
@@ -922,11 +935,12 @@ class ClockSelectorOverlay(QWidget):
         w = QWidget()
         l = QGridLayout(w)
         l.setContentsMargins(5, 5, 5, 5)
-        l.setSpacing(15)
+        l.setSpacing(int(15 * SCALE_FACTOR))
         row, col = 0, 0
         for val, css in self.all_bgs:
             btn = QPushButton()
-            btn.setFixedSize(60, 60)
+            size = int(60 * SCALE_FACTOR)
+            btn.setFixedSize(size, size)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet(f"QPushButton {{ {css} border-radius: 12px; border: 2px solid rgba(255,255,255,40); }}")
             btn.clicked.connect(lambda checked, v=val: self.set_setting(setting_key, v))
@@ -943,7 +957,7 @@ class ClockSelectorOverlay(QWidget):
         w = QWidget()
         l = QGridLayout(w)
         l.setContentsMargins(5, 5, 5, 5)
-        l.setSpacing(15)
+        l.setSpacing(int(15 * SCALE_FACTOR))
         
         photos = []
         if os.path.exists("photos"):
@@ -964,7 +978,8 @@ class ClockSelectorOverlay(QWidget):
                 col += 1
                 
             btn_all = QPushButton("All\nPhotos")
-            btn_all.setFixedSize(80, 80)
+            size = int(80 * SCALE_FACTOR)
+            btn_all.setFixedSize(size, size)
             btn_all.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_all.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 12px; font-weight: bold;")
             btn_all.clicked.connect(lambda checked, k=setting_key: self.open_gallery_picker(k))
@@ -981,13 +996,13 @@ class ClockSelectorOverlay(QWidget):
         l.setSpacing(20)
         
         btn_dark = QPushButton("Dark Mode")
-        btn_dark.setFixedSize(130, 45)
+        btn_dark.setFixedSize(int(130 * SCALE_FACTOR), int(45 * SCALE_FACTOR))
         btn_dark.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_dark.setStyleSheet("background: #0C0C0E; color: white; border-radius: 12px; border: 2px solid #444; font-weight: bold;")
         btn_dark.clicked.connect(lambda: self.set_setting("analog_theme", "dark"))
         
         btn_light = QPushButton("Light Mode")
-        btn_light.setFixedSize(130, 45)
+        btn_light.setFixedSize(int(130 * SCALE_FACTOR), int(45 * SCALE_FACTOR))
         btn_light.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_light.setStyleSheet("background: #FFFFFF; color: black; border-radius: 12px; border: 2px solid #444; font-weight: bold;")
         btn_light.clicked.connect(lambda: self.set_setting("analog_theme", "light"))
@@ -1028,21 +1043,27 @@ class ClockSelectorOverlay(QWidget):
             else:
                 b_frame.setStyleSheet("border: 2px solid #33333F; border-radius: 36px;")
         
+        card_w = int(SCREEN_WIDTH * 0.68)
+        card_h = int(SCREEN_HEIGHT * 0.70)
+        card_y = int(SCREEN_HEIGHT * 0.18)
+        center_x = (SCREEN_WIDTH - card_w) // 2
+        gap = int(card_w * 1.06)
+
         self.grp_slide = QParallelAnimationGroup()
         for i, wrapper in enumerate(self.wrappers):
             offset = i - self.current_idx
-            target_x = 162 + (offset * 740) 
+            target_x = center_x + (offset * gap) 
             
             anim = QPropertyAnimation(wrapper, b"geometry")
             anim.setDuration(300)
             anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-            anim.setEndValue(QRect(target_x, 110, 700, 420))
+            anim.setEndValue(QRect(target_x, card_y, card_w, card_h))
             self.grp_slide.addAnimation(anim)
             
             anim_l = QPropertyAnimation(self.name_labels[i], b"geometry")
             anim_l.setDuration(300)
             anim_l.setEasingCurve(QEasingCurve.Type.OutCubic)
-            anim_l.setEndValue(QRect(target_x, 40, 700, 50))
+            anim_l.setEndValue(QRect(target_x, int(40 * SCALE_FACTOR), card_w, int(50 * SCALE_FACTOR)))
             self.grp_slide.addAnimation(anim_l)
             
         self.grp_slide.start()
@@ -1095,20 +1116,25 @@ class ClockSelectorOverlay(QWidget):
         active_wrapper.raise_()
         self.edit_panel.raise_() 
         
+        card_w = int(SCREEN_WIDTH * 0.58)
+        card_h = int(SCREEN_HEIGHT * 0.60)
+        center_x = (SCREEN_WIDTH - card_w) // 2
+        
         self.grp_edit = QParallelAnimationGroup()
         
         anim_w = QPropertyAnimation(active_wrapper, b"geometry")
         anim_w.setDuration(300)
         anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim_w.setStartValue(active_wrapper.geometry())
-        anim_w.setEndValue(QRect(212, 10, 600, 360)) 
+        anim_w.setEndValue(QRect(center_x, int(10 * SCALE_FACTOR), card_w, card_h)) 
         self.grp_edit.addAnimation(anim_w)
         
+        panel_h = int(210 * SCALE_FACTOR)
         anim_e = QPropertyAnimation(self.edit_panel, b"geometry")
         anim_e.setDuration(300)
         anim_e.setEasingCurve(QEasingCurve.Type.OutCubic)
-        anim_e.setStartValue(QRect(0, 600, 1024, 210))
-        anim_e.setEndValue(QRect(0, 390, 1024, 210))
+        anim_e.setStartValue(QRect(0, SCREEN_HEIGHT, SCREEN_WIDTH, panel_h))
+        anim_e.setEndValue(QRect(0, SCREEN_HEIGHT - panel_h, SCREEN_WIDTH, panel_h))
         self.grp_edit.addAnimation(anim_e)
         
         self.grp_edit.start()
@@ -1118,18 +1144,24 @@ class ClockSelectorOverlay(QWidget):
         active_wrapper = self.wrappers[self.current_idx]
         self.grp_edit = QParallelAnimationGroup()
         
+        card_w = int(SCREEN_WIDTH * 0.68)
+        card_h = int(SCREEN_HEIGHT * 0.70)
+        card_y = int(SCREEN_HEIGHT * 0.18)
+        center_x = (SCREEN_WIDTH - card_w) // 2
+        panel_h = int(210 * SCALE_FACTOR)
+        
         anim_w = QPropertyAnimation(active_wrapper, b"geometry")
         anim_w.setDuration(300)
         anim_w.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim_w.setStartValue(active_wrapper.geometry())
-        anim_w.setEndValue(QRect(162, 110, 700, 420))
+        anim_w.setEndValue(QRect(center_x, card_y, card_w, card_h))
         self.grp_edit.addAnimation(anim_w)
         
         anim_e = QPropertyAnimation(self.edit_panel, b"geometry")
         anim_e.setDuration(300)
         anim_e.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim_e.setStartValue(self.edit_panel.geometry())
-        anim_e.setEndValue(QRect(0, 600, 1024, 210))
+        anim_e.setEndValue(QRect(0, SCREEN_HEIGHT, SCREEN_WIDTH, panel_h))
         self.grp_edit.addAnimation(anim_e)
         
         self.grp_edit.finished.connect(self._on_editor_closed)
@@ -1154,11 +1186,16 @@ class ClockSelectorOverlay(QWidget):
         active_wrapper = self.wrappers[self.current_idx]
         active_wrapper.raise_()
         
+        card_w = int(SCREEN_WIDTH * 0.68)
+        card_h = int(SCREEN_HEIGHT * 0.70)
+        card_y = int(SCREEN_HEIGHT * 0.18)
+        center_x = (SCREEN_WIDTH - card_w) // 2
+        
         self.zoom_anim = QPropertyAnimation(active_wrapper, b"geometry")
         self.zoom_anim.setDuration(350)
         self.zoom_anim.setEasingCurve(QEasingCurve.Type.InCubic)
-        self.zoom_anim.setStartValue(QRect(162, 110, 700, 420))
-        self.zoom_anim.setEndValue(QRect(0, 0, 1024, 600))
+        self.zoom_anim.setStartValue(QRect(center_x, card_y, card_w, card_h))
+        self.zoom_anim.setEndValue(QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
         
         self.bg_fade_anim = QPropertyAnimation(self.bg_fade, b"alpha")
         self.bg_fade_anim.setDuration(350)
@@ -1184,6 +1221,12 @@ class ClockSelectorOverlay(QWidget):
         self.bg_fade.alpha = 0
         self.bg_fade.show()
         
+        card_w = int(SCREEN_WIDTH * 0.68)
+        card_h = int(SCREEN_HEIGHT * 0.70)
+        card_y = int(SCREEN_HEIGHT * 0.18)
+        center_x = (SCREEN_WIDTH - card_w) // 2
+        gap = int(card_w * 1.06)
+        
         for i, wrapper in enumerate(self.wrappers):
             self.name_labels[i].hide() 
             self.border_frames[i].show()
@@ -1195,11 +1238,11 @@ class ClockSelectorOverlay(QWidget):
                 
             offset = i - self.current_idx
             if offset == 0:
-                wrapper.setGeometry(0, 0, 1024, 600)
+                wrapper.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
                 wrapper.show()
                 wrapper.raise_()
             else:
-                wrapper.setGeometry(162 + (offset * 740), 110, 700, 420)
+                wrapper.setGeometry(center_x + (offset * gap), card_y, card_w, card_h)
                 wrapper.show()
 
         self.show()
@@ -1208,8 +1251,8 @@ class ClockSelectorOverlay(QWidget):
         self.zoom_anim = QPropertyAnimation(self.wrappers[self.current_idx], b"geometry")
         self.zoom_anim.setDuration(400)
         self.zoom_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self.zoom_anim.setStartValue(QRect(0, 0, 1024, 600))
-        self.zoom_anim.setEndValue(QRect(162, 110, 700, 420))
+        self.zoom_anim.setStartValue(QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.zoom_anim.setEndValue(QRect(center_x, card_y, card_w, card_h))
         
         self.bg_fade_anim = QPropertyAnimation(self.bg_fade, b"alpha")
         self.bg_fade_anim.setDuration(400)
@@ -1227,10 +1270,14 @@ class ClockSelectorOverlay(QWidget):
         self.btn_close.show()
         self.btn_customize.show()
         
+        card_w = int(SCREEN_WIDTH * 0.68)
+        center_x = (SCREEN_WIDTH - card_w) // 2
+        gap = int(card_w * 1.06)
+        
         for i, lbl in enumerate(self.name_labels):
             offset = i - self.current_idx
-            target_x = 162 + (offset * 740)
-            lbl.setGeometry(target_x, 40, 700, 50)
+            target_x = center_x + (offset * gap)
+            lbl.setGeometry(target_x, int(40 * SCALE_FACTOR), card_w, int(50 * SCALE_FACTOR))
             lbl.show()
         
     def close_selector(self):
@@ -1243,11 +1290,17 @@ class ClockSelectorOverlay(QWidget):
         for b_frame in self.border_frames:
             b_frame.hide()
         
+        card_w = int(SCREEN_WIDTH * 0.68)
+        card_h = int(SCREEN_HEIGHT * 0.70)
+        card_y = int(SCREEN_HEIGHT * 0.18)
+        center_x = (SCREEN_WIDTH - card_w) // 2
+        gap = int(card_w * 1.06)
+        
         if self.current_idx != self.saved_idx:
             self.current_idx = self.saved_idx
             for i, wrapper in enumerate(self.wrappers):
                 offset = i - self.current_idx
-                wrapper.setGeometry(162 + (offset * 740), 110, 700, 420)
+                wrapper.setGeometry(center_x + (offset * gap), card_y, card_w, card_h)
                 
         active_wrapper = self.wrappers[self.saved_idx]
         active_wrapper.raise_()
@@ -1255,8 +1308,8 @@ class ClockSelectorOverlay(QWidget):
         self.zoom_anim = QPropertyAnimation(active_wrapper, b"geometry")
         self.zoom_anim.setDuration(350)
         self.zoom_anim.setEasingCurve(QEasingCurve.Type.InCubic)
-        self.zoom_anim.setStartValue(QRect(162, 110, 700, 420))
-        self.zoom_anim.setEndValue(QRect(0, 0, 1024, 600))
+        self.zoom_anim.setStartValue(QRect(center_x, card_y, card_w, card_h))
+        self.zoom_anim.setEndValue(QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
         
         self.bg_fade_anim = QPropertyAnimation(self.bg_fade, b"alpha")
         self.bg_fade_anim.setDuration(350)

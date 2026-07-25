@@ -6,7 +6,7 @@ import time
 import importlib
 import urllib.request
 from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint, QUrl
-from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor
+from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor, QGuiApplication
 from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
     QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect, QStackedWidget
@@ -26,6 +26,22 @@ from apps.local_music import LocalMusicPage
 from apps.web_app import create_web_app_view
 from apps.app_store import AppStorePage
 from components.voice_assistant import VoiceAssistantThread
+
+# =================================================================
+# 🖥️ DYNAMIC SCREEN GEOMETRY ENGINE
+# =================================================================
+def get_screen_geometry():
+    """Dynamically detects active monitor resolution (Defaults to 1024x600 fallback)."""
+    screen = QGuiApplication.primaryScreen()
+    if screen:
+        size = screen.size()
+        return size.width(), size.height()
+    return 1024, 600
+
+# Dynamically evaluated at runtime
+SCREEN_WIDTH, SCREEN_HEIGHT = get_screen_geometry()
+SCALE_FACTOR = SCREEN_WIDTH / 1024.0
+CC_HEIGHT = int(500 * (SCREEN_HEIGHT / 600.0))
 
 
 def get_system_setting(key, default=None):
@@ -147,31 +163,38 @@ class ToastNotification(QFrame):
         self.drag_start_x = None
         self.is_swiping = False
         
-        self.setFixedSize(420, 85)
-        self.setStyleSheet("background-color: #22222B; border-radius: 42px; border: 1px solid #33333F;")
+        toast_w = int(420 * SCALE_FACTOR)
+        toast_h = int(85 * SCALE_FACTOR)
+        radius = int(toast_h / 2)
+        
+        self.setFixedSize(toast_w, toast_h)
+        self.setStyleSheet(f"background-color: #22222B; border-radius: {radius}px; border: 1px solid #33333F;")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(15, 10, 25, 10)
-        layout.setSpacing(15)
+        self.center_x = (SCREEN_WIDTH - toast_w) // 2
         
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(int(15 * SCALE_FACTOR), int(10 * SCALE_FACTOR), int(25 * SCALE_FACTOR), int(10 * SCALE_FACTOR))
+        layout.setSpacing(int(15 * SCALE_FACTOR))
+        
+        icon_size = int(54 * SCALE_FACTOR)
         lbl_icon = QLabel(icon_char)
-        lbl_icon.setFont(QFont("Google Sans", 24))
-        lbl_icon.setFixedSize(54, 54)
+        lbl_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
+        lbl_icon.setFixedSize(icon_size, icon_size)
         lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_icon.setStyleSheet("background-color: rgba(255,255,255,10); border-radius: 27px; border: none;")
+        lbl_icon.setStyleSheet(f"background-color: rgba(255,255,255,10); border-radius: {icon_size//2}px; border: none;")
         
         text_box = QVBoxLayout()
         text_box.setSpacing(2)
         text_box.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         
         lbl_title = QLabel(title)
-        lbl_title.setFont(QFont("Google Sans", 15, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", int(15 * SCALE_FACTOR), QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: white; border: none; background: transparent;")
         
         clean_desc = desc if len(desc) <= 35 else desc[:32] + "..."
         lbl_desc = QLabel(clean_desc)
-        lbl_desc.setFont(QFont("Google Sans", 13))
+        lbl_desc.setFont(QFont("Google Sans", int(13 * SCALE_FACTOR)))
         lbl_desc.setStyleSheet("color: #AAAAAA; border: none; background: transparent;")
         
         text_box.addWidget(lbl_title)
@@ -191,20 +214,20 @@ class ToastNotification(QFrame):
     def show_toast(self):
         self.raise_()
         self.show()
-        self.pos_anim.setStartValue(QPoint(302, -100))
-        self.pos_anim.setEndValue(QPoint(302, 25))
+        self.pos_anim.setStartValue(QPoint(self.center_x, -int(120 * SCALE_FACTOR)))
+        self.pos_anim.setEndValue(QPoint(self.center_x, int(25 * SCALE_FACTOR)))
         self.pos_anim.start()
         self.hide_timer.start(4000)
         
     def dismiss(self):
         self.pos_anim.setEasingCurve(QEasingCurve.Type.InBack)
         self.pos_anim.setStartValue(self.pos())
-        self.pos_anim.setEndValue(QPoint(302, -100))
+        self.pos_anim.setEndValue(QPoint(self.center_x, -int(120 * SCALE_FACTOR)))
         self.pos_anim.finished.connect(self.deleteLater)
         self.pos_anim.start()
 
     def swipe_dismiss(self, to_right):
-        target_x = 1200 if to_right else -500
+        target_x = int(SCREEN_WIDTH + 200) if to_right else -int(SCREEN_WIDTH // 2)
         self.pos_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.pos_anim.setDuration(300)
         self.pos_anim.setStartValue(self.pos())
@@ -235,7 +258,7 @@ class ToastNotification(QFrame):
                 else:  
                     self.pos_anim.setEasingCurve(QEasingCurve.Type.OutBack)
                     self.pos_anim.setStartValue(self.pos())
-                    self.pos_anim.setEndValue(QPoint(302, 25))
+                    self.pos_anim.setEndValue(QPoint(self.center_x, int(25 * SCALE_FACTOR)))
                     self.pos_anim.start()
                     self.hide_timer.start(4000)
             else:
@@ -258,8 +281,8 @@ class DynamicAppButton(QFrame):
             DynamicAppButton:hover { background-color: rgba(255, 255, 255, 12); }
         """)
 
-        base_icon_size = 72
-        base_font_size = 14
+        base_icon_size = int(72 * SCALE_FACTOR)
+        base_font_size = int(14 * SCALE_FACTOR)
         
         icon_size = int(base_icon_size * (scale / 100.0))
         font_size = max(9, int(base_font_size * (scale / 100.0)))
@@ -338,7 +361,7 @@ class DynamicAppButton(QFrame):
             self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             layout = QHBoxLayout(self)
             layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-            layout.setContentsMargins(30, 15, 30, 15)
+            layout.setContentsMargins(int(30 * SCALE_FACTOR), 15, int(30 * SCALE_FACTOR), 15)
             layout.setSpacing(25)
             self.setFixedHeight(icon_size + 40)
             
@@ -355,7 +378,7 @@ class VoiceOverlay(QFrame):
     """Full-screen dimmed overlay for voice assistant feedback."""
     def __init__(self, parent):
         super().__init__(parent)
-        self.setGeometry(0, 0, 1024, 600)
+        self.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.setStyleSheet("background-color: rgba(0, 0, 0, 200);")
         self.hide()
         
@@ -363,12 +386,12 @@ class VoiceOverlay(QFrame):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.icon = QLabel("🎙️")
-        self.icon.setFont(QFont("Google Sans", 64))
+        self.icon.setFont(QFont("Google Sans", int(64 * SCALE_FACTOR)))
         self.icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.icon.setStyleSheet("background: transparent; color: white;")
         
         self.lbl_text = QLabel("Listening...")
-        self.lbl_text.setFont(QFont("Google Sans", 36, QFont.Weight.Bold))
+        self.lbl_text.setFont(QFont("Google Sans", int(36 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_text.setStyleSheet("color: white; background: transparent;")
         self.lbl_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_text.setWordWrap(True)
@@ -399,7 +422,7 @@ class NestKiosk(QMainWindow):
         app_font = QFont("Google Sans")
         QApplication.setFont(app_font)
         
-        self.setFixedSize(1024, 600)
+        self.setFixedSize(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setStyleSheet("background-color: #0C0C0E; color: #FFFFFF;")
 
@@ -425,13 +448,13 @@ class NestKiosk(QMainWindow):
         # 1. MAIN SCREEN CAROUSEL & CLOCKFACE INJECTION
         # -------------------------------------------------------------
         self.main_carousel = QWidget(self)
-        self.main_carousel.setGeometry(0, 0, 1024, 600)
+        self.main_carousel.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.home_index = 0
         self.home_pages = []
         
         self.page_clock = QWidget(self.main_carousel)
-        self.page_clock.setGeometry(0, 0, 1024, 600)
+        self.page_clock.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.clock_layout = QVBoxLayout(self.page_clock)
         self.clock_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.clock_layout.setContentsMargins(0, 0, 0, 0)
@@ -441,13 +464,13 @@ class NestKiosk(QMainWindow):
         self.apply_clockface(get_system_setting("clockface_index", 0))
         
         self.page_media = QWidget(self.main_carousel)
-        self.page_media.setGeometry(1024, 0, 1024, 600)
+        self.page_media.setGeometry(SCREEN_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         media_layout = QVBoxLayout(self.page_media)
         media_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_media_title = QLabel("Now Playing")
-        lbl_media_title.setFont(QFont("Google Sans", 32, QFont.Weight.Bold))
+        lbl_media_title.setFont(QFont("Google Sans", int(32 * SCALE_FACTOR), QFont.Weight.Bold))
         lbl_media_track = QLabel("No active stream • Swipe up to launch Spotify")
-        lbl_media_track.setStyleSheet("color: #AAAAAA; font-size: 18px; margin-top: 10px;")
+        lbl_media_track.setStyleSheet(f"color: #AAAAAA; font-size: {int(18 * SCALE_FACTOR)}px; margin-top: 10px;")
         media_layout.addWidget(lbl_media_title, alignment=Qt.AlignmentFlag.AlignCenter)
         media_layout.addWidget(lbl_media_track, alignment=Qt.AlignmentFlag.AlignCenter)
 
@@ -459,37 +482,37 @@ class NestKiosk(QMainWindow):
         self.update_clock()
 
         self.indicator = QLabel("▲ Swipe up for apps", self)
-        self.indicator.setGeometry(0, 560, 1024, 40)
+        self.indicator.setGeometry(0, SCREEN_HEIGHT - int(40 * SCALE_FACTOR), SCREEN_WIDTH, int(40 * SCALE_FACTOR))
         self.indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.indicator.setStyleSheet("color: #444444; font-size: 14px; font-weight: bold; background-color: transparent;")
+        self.indicator.setStyleSheet(f"color: #444444; font-size: {int(14 * SCALE_FACTOR)}px; font-weight: bold; background-color: transparent;")
 
         # -------------------------------------------------------------
         # 2. SPLIT-SCREEN CONTROL CENTER
         # -------------------------------------------------------------
-        self.control_center = SlidingPanel(self, QRect(0, -500, 1024, 500), QRect(0, 0, 1024, 500))
+        self.control_center = SlidingPanel(self, QRect(0, -CC_HEIGHT, SCREEN_WIDTH, CC_HEIGHT), QRect(0, 0, SCREEN_WIDTH, CC_HEIGHT))
         self.control_center.setStyleSheet("background-color: rgba(22, 22, 26, 245); border-bottom: 2px solid #282830;")
         
         cc_layout = QHBoxLayout(self.control_center)
-        cc_layout.setContentsMargins(50, 40, 50, 40)
-        cc_layout.setSpacing(40)
+        cc_layout.setContentsMargins(int(50 * SCALE_FACTOR), int(40 * SCALE_FACTOR), int(50 * SCALE_FACTOR), int(40 * SCALE_FACTOR))
+        cc_layout.setSpacing(int(40 * SCALE_FACTOR))
 
         self.page_settings = QWidget()
-        self.page_settings.setFixedWidth(400)
+        self.page_settings.setFixedWidth(int(400 * SCALE_FACTOR))
         settings_layout = QVBoxLayout(self.page_settings)
         settings_layout.setContentsMargins(0, 0, 0, 0)
-        settings_layout.setSpacing(20)
+        settings_layout.setSpacing(int(20 * SCALE_FACTOR))
 
         lbl_qs_title = QLabel("⚙️ Quick Settings")
-        lbl_qs_title.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        lbl_qs_title.setFont(QFont("Google Sans", int(22 * SCALE_FACTOR), QFont.Weight.Bold))
         settings_layout.addWidget(lbl_qs_title)
 
         qs_card = QFrame()
         qs_card.setStyleSheet("background-color: #22222B; border-radius: 12px; border: 1px solid #2F2F3B;")
         qs_card_layout = QVBoxLayout(qs_card)
-        qs_card_layout.setContentsMargins(20, 20, 20, 20)
+        qs_card_layout.setContentsMargins(int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR))
 
         slider_layout = QGridLayout()
-        slider_layout.setSpacing(20)
+        slider_layout.setSpacing(int(20 * SCALE_FACTOR))
         
         lbl_b = QLabel("☀️ Brightness")
         lbl_b.setStyleSheet("background: transparent; border: none;")
@@ -510,9 +533,9 @@ class NestKiosk(QMainWindow):
         settings_layout.addStretch()
 
         close_sys_btn = QPushButton("✕ Exit Kiosk OS")
-        close_sys_btn.setFixedHeight(48)
+        close_sys_btn.setFixedHeight(int(48 * SCALE_FACTOR))
         close_sys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_sys_btn.setStyleSheet("background-color: #E24A4A; color: white; border-radius: 10px; font-size: 16px; font-weight: bold;")
+        close_sys_btn.setStyleSheet(f"background-color: #E24A4A; color: white; border-radius: 10px; font-size: {int(16 * SCALE_FACTOR)}px; font-weight: bold;")
         close_sys_btn.clicked.connect(self.close)
         settings_layout.addWidget(close_sys_btn)
 
@@ -526,16 +549,16 @@ class NestKiosk(QMainWindow):
         self.page_notifs = QWidget()
         notifs_main_layout = QVBoxLayout(self.page_notifs)
         notifs_main_layout.setContentsMargins(0, 0, 0, 0)
-        notifs_main_layout.setSpacing(10)
+        notifs_main_layout.setSpacing(int(10 * SCALE_FACTOR))
 
         notif_header = QHBoxLayout()
         self.lbl_notif_count = QLabel("Recent Alerts")
-        self.lbl_notif_count.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        self.lbl_notif_count.setFont(QFont("Google Sans", int(22 * SCALE_FACTOR), QFont.Weight.Bold))
         notif_header.addWidget(self.lbl_notif_count)
         notif_header.addStretch()
 
         btn_clear_notifs = QPushButton("Clear All")
-        btn_clear_notifs.setFixedSize(100, 32)
+        btn_clear_notifs.setFixedSize(int(100 * SCALE_FACTOR), int(32 * SCALE_FACTOR))
         btn_clear_notifs.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_clear_notifs.setStyleSheet("background: rgba(255,255,255,15); color: white; border-radius: 6px; font-weight: bold;")
         btn_clear_notifs.clicked.connect(self.clear_all_notifications)
@@ -553,7 +576,7 @@ class NestKiosk(QMainWindow):
         self.notif_container.setStyleSheet("background: transparent;")
         self.notif_layout = QVBoxLayout(self.notif_container)
         self.notif_layout.setContentsMargins(0, 0, 0, 10)
-        self.notif_layout.setSpacing(12)
+        self.notif_layout.setSpacing(int(12 * SCALE_FACTOR))
         self.notif_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         self.notif_scroll.setWidget(self.notif_container)
@@ -565,29 +588,29 @@ class NestKiosk(QMainWindow):
         # -------------------------------------------------------------
         # 3. RESPONSIVE APP DRAWER
         # -------------------------------------------------------------
-        self.app_drawer = SlidingPanel(self, QRect(0, 600, 1024, 600), QRect(0, 0, 1024, 600))
+        self.app_drawer = SlidingPanel(self, QRect(0, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT), QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
         self.app_drawer.setStyleSheet("background-color: #121215;")
         
         drawer_main_layout = QVBoxLayout(self.app_drawer)
-        drawer_main_layout.setContentsMargins(0, 30, 0, 0)
+        drawer_main_layout.setContentsMargins(0, int(30 * SCALE_FACTOR), 0, 0)
         drawer_main_layout.setSpacing(10)
 
         header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(60, 0, 60, 0)
+        header_layout.setContentsMargins(int(60 * SCALE_FACTOR), 0, int(60 * SCALE_FACTOR), 0)
         
         drawer_title = QLabel("Applications")
-        drawer_title.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
+        drawer_title.setFont(QFont("Google Sans", int(26 * SCALE_FACTOR), QFont.Weight.Bold))
         header_layout.addWidget(drawer_title)
         header_layout.addStretch()
 
         self.multitask_btn_container = QWidget()
-        self.multitask_btn_container.setFixedSize(170, 48)
+        self.multitask_btn_container.setFixedSize(int(170 * SCALE_FACTOR), int(48 * SCALE_FACTOR))
         self.multitask_btn_container.setStyleSheet("background: transparent;")
 
         self.btn_multitask = QPushButton("🗂️ Active Tasks", self.multitask_btn_container)
-        self.btn_multitask.setGeometry(0, 4, 160, 40)
+        self.btn_multitask.setGeometry(0, int(4 * SCALE_FACTOR), int(160 * SCALE_FACTOR), int(40 * SCALE_FACTOR))
         self.btn_multitask.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_multitask.setFont(QFont("Google Sans", 13, QFont.Weight.Bold))
+        self.btn_multitask.setFont(QFont("Google Sans", int(13 * SCALE_FACTOR), QFont.Weight.Bold))
         self.btn_multitask.setStyleSheet("""
             QPushButton { background-color: #22222A; color: white; border: 1px solid #33333F; border-radius: 20px; }
             QPushButton:hover { background-color: #2E2E38; border-color: #4A4A5A; }
@@ -595,9 +618,9 @@ class NestKiosk(QMainWindow):
         self.btn_multitask.clicked.connect(self.toggle_task_ribbon)
 
         self.lbl_task_badge = QLabel("0", self.multitask_btn_container)
-        self.lbl_task_badge.setGeometry(142, 0, 24, 24)
+        self.lbl_task_badge.setGeometry(int(142 * SCALE_FACTOR), 0, int(24 * SCALE_FACTOR), int(24 * SCALE_FACTOR))
         self.lbl_task_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_task_badge.setFont(QFont("Google Sans", 11, QFont.Weight.Bold))
+        self.lbl_task_badge.setFont(QFont("Google Sans", int(11 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_task_badge.setStyleSheet("""
             background-color: #3EA6FF; color: #0E0E12; border-radius: 12px; border: 2px solid #121215; font-weight: bold;
         """)
@@ -607,13 +630,13 @@ class NestKiosk(QMainWindow):
         drawer_main_layout.addLayout(header_layout)
 
         self.task_ribbon = QFrame()
-        self.task_ribbon.setFixedHeight(120)
+        self.task_ribbon.setFixedHeight(int(120 * SCALE_FACTOR))
         self.task_ribbon.setStyleSheet("background-color: #1A1A22; border-top: 1px solid #2A2A35; border-bottom: 1px solid #2A2A35;")
         self.task_ribbon.hide()
         
         self.ribbon_layout = QHBoxLayout(self.task_ribbon)
-        self.ribbon_layout.setContentsMargins(60, 15, 60, 15)
-        self.ribbon_layout.setSpacing(15)
+        self.ribbon_layout.setContentsMargins(int(60 * SCALE_FACTOR), int(15 * SCALE_FACTOR), int(60 * SCALE_FACTOR), int(15 * SCALE_FACTOR))
+        self.ribbon_layout.setSpacing(int(15 * SCALE_FACTOR))
         self.ribbon_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         drawer_main_layout.addWidget(self.task_ribbon)
 
@@ -628,7 +651,7 @@ class NestKiosk(QMainWindow):
         self.drawer_container.setStyleSheet("background: transparent;")
         
         self.drawer_grid = QGridLayout(self.drawer_container)
-        self.drawer_grid.setContentsMargins(60, 20, 60, 100) 
+        self.drawer_grid.setContentsMargins(int(60 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(60 * SCALE_FACTOR), int(100 * SCALE_FACTOR)) 
         self.drawer_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
 
         self.drawer_scroll.setWidget(self.drawer_container)
@@ -640,7 +663,7 @@ class NestKiosk(QMainWindow):
         # 4. ACTIVE APP VIEW CONTAINER
         # -------------------------------------------------------------
         self.app_view = QWidget(self)
-        self.app_view.setGeometry(0, 0, 1024, 600)
+        self.app_view.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.app_view.hide()
         
         self.app_opacity = QGraphicsOpacityEffect(self.app_view)
@@ -660,7 +683,7 @@ class NestKiosk(QMainWindow):
         self.anim_app_group.addAnimation(self.anim_app_fade)
 
         self.edge_interceptor = QWidget(self)
-        self.edge_interceptor.setGeometry(0, 0, 25, 600)
+        self.edge_interceptor.setGeometry(0, 0, int(25 * SCALE_FACTOR), SCREEN_HEIGHT)
         self.edge_interceptor.setStyleSheet("background-color: transparent;")
         self.edge_interceptor.raise_() 
         
@@ -686,8 +709,6 @@ class NestKiosk(QMainWindow):
         
         self.voice_thread = VoiceAssistantThread()
         self.voice_thread.command_recognized.connect(self.handle_voice_intent)
-        
-        # Bind the thread signals to the UI overly
         self.voice_thread.wake_word_detected.connect(self.voice_overlay.show_listening)
         self.voice_thread.transcription_update.connect(self.voice_overlay.update_text)
         self.voice_thread.sleep_mode.connect(self.voice_overlay.hide)
@@ -990,7 +1011,6 @@ class NestKiosk(QMainWindow):
         for i in range(self.drawer_grid.rowCount()):
             self.drawer_grid.setRowStretch(i, 0)
 
-        # Added Gallery to Core Apps List
         core_apps = [
             ("App Store", "icons/appstore.png"),
             ("Gallery", "icons/gallery.png"),
@@ -1024,9 +1044,11 @@ class NestKiosk(QMainWindow):
 
         if layout_type == "grid":
             self.drawer_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-            self.drawer_grid.setSpacing(35) 
-            columns = max(1, int(4 * (100.0 / scale)))
-            if columns > 6: columns = 6
+            self.drawer_grid.setSpacing(int(35 * SCALE_FACTOR)) 
+            # Auto-adapt columns: 4 on small screens, 6 on widescreen/1200p
+            base_cols = 4 if SCREEN_WIDTH <= 1280 else 6
+            columns = max(1, int(base_cols * (100.0 / scale)))
+            if columns > 8: columns = 8
         else:
             self.drawer_grid.setAlignment(Qt.AlignmentFlag.AlignTop) 
             self.drawer_grid.setSpacing(10)
@@ -1049,7 +1071,7 @@ class NestKiosk(QMainWindow):
             if self.home_index == 0 and self.app_view.isHidden() and not self.control_center.is_visible and not self.app_drawer.is_visible:
                 self.long_press_timer.start(700) 
 
-            if not self.app_view.isHidden() and self.drag_start_pos.x() <= 50:
+            if not self.app_view.isHidden() and self.drag_start_pos.x() <= int(50 * SCALE_FACTOR):
                 self.active_gesture = 'edge_swipe_back'
 
     def mouseMoveEvent(self, event):
@@ -1081,19 +1103,19 @@ class NestKiosk(QMainWindow):
                     self.active_gesture = 'horizontal'
 
         if self.active_gesture == 'edge_swipe_back':
-            new_x = max(0, min(1024, dx))
+            new_x = max(0, min(SCREEN_WIDTH, dx))
             self.app_view.move(new_x, 0)
         elif self.active_gesture == 'open_drawer':
-            new_y = max(0, min(600, 600 + dy))
+            new_y = max(0, min(SCREEN_HEIGHT, SCREEN_HEIGHT + dy))
             self.app_drawer.move(0, new_y)
         elif self.active_gesture == 'close_drawer':
-            new_y = max(0, min(600, dy))
+            new_y = max(0, min(SCREEN_HEIGHT, dy))
             self.app_drawer.move(0, new_y)
         elif self.active_gesture == 'open_controls':
-            new_y = max(-500, min(0, -500 + dy))
+            new_y = max(-CC_HEIGHT, min(0, -CC_HEIGHT + dy))
             self.control_center.move(0, new_y)
         elif self.active_gesture == 'close_controls':
-            new_y = max(-500, min(0, dy))
+            new_y = max(-CC_HEIGHT, min(0, dy))
             self.control_center.move(0, new_y)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
@@ -1101,11 +1123,11 @@ class NestKiosk(QMainWindow):
             if dx < 0 and self.home_index < len(self.home_pages) - 1:
                 next_page = self.home_pages[self.home_index + 1]
                 next_page.show()
-                next_page.move(1024 + dx, 0)
+                next_page.move(SCREEN_WIDTH + dx, 0)
             elif dx > 0 and self.home_index > 0:
                 prev_page = self.home_pages[self.home_index - 1]
                 prev_page.show()
-                prev_page.move(-1024 + dx, 0)
+                prev_page.move(-SCREEN_WIDTH + dx, 0)
 
     def mouseReleaseEvent(self, event):
         self.long_press_timer.stop()
@@ -1119,37 +1141,37 @@ class NestKiosk(QMainWindow):
         dy = current_pos.y() - self.drag_start_pos.y()
 
         if self.active_gesture == 'edge_swipe_back':
-            if dx > 150: self.animate_app_close()
+            if dx > int(150 * SCALE_FACTOR): self.animate_app_close()
             else:        self.animate_app_snap_back()
         elif self.active_gesture == 'open_drawer':
-            if dy < -120: 
+            if dy < -int(120 * SCALE_FACTOR): 
                 self.rebuild_app_drawer()  
                 self.app_drawer.slide_in()
             else:         
                 self.app_drawer.slide_out()
         elif self.active_gesture == 'open_controls':
-            if dy > 120:  self.control_center.slide_in()
+            if dy > int(120 * SCALE_FACTOR):  self.control_center.slide_in()
             else:         self.control_center.slide_out()
         elif self.active_gesture == 'close_drawer':
-            if dy > 120:  self.app_drawer.slide_out()
+            if dy > int(120 * SCALE_FACTOR):  self.app_drawer.slide_out()
             else:         self.app_drawer.slide_in()
         elif self.active_gesture == 'close_controls':
-            if dy < -120: self.control_center.slide_out()
+            if dy < -int(120 * SCALE_FACTOR): self.control_center.slide_out()
             else:         self.control_center.slide_in()
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
-            if dx < -200 and self.home_index < len(self.home_pages) - 1:
+            if dx < -int(200 * SCALE_FACTOR) and self.home_index < len(self.home_pages) - 1:
                 next_page = self.home_pages[self.home_index + 1]
-                self.animate_carousel(current_page, QRect(-1024, 0, 1024, 600), next_page, QRect(0, 0, 1024, 600), self.home_index + 1)
-            elif dx > 200 and self.home_index > 0:
+                self.animate_carousel(current_page, QRect(-SCREEN_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT), next_page, QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), self.home_index + 1)
+            elif dx > int(200 * SCALE_FACTOR) and self.home_index > 0:
                 prev_page = self.home_pages[self.home_index - 1]
-                self.animate_carousel(current_page, QRect(1024, 0, 1024, 600), prev_page, QRect(0, 0, 1024, 600), self.home_index - 1)
+                self.animate_carousel(current_page, QRect(SCREEN_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT), prev_page, QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT), self.home_index - 1)
             else:
-                self.animate_carousel(current_page, QRect(0, 0, 1024, 600))
+                self.animate_carousel(current_page, QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
                 if self.home_index < len(self.home_pages) - 1:
-                    self.home_pages[self.home_index + 1].move(1024, 0)
+                    self.home_pages[self.home_index + 1].move(SCREEN_WIDTH, 0)
                 if self.home_index > 0:
-                    self.home_pages[self.home_index - 1].move(-1024, 0)
+                    self.home_pages[self.home_index - 1].move(-SCREEN_WIDTH, 0)
 
         self.drag_start_pos = None
         self.active_gesture = None
@@ -1246,7 +1268,6 @@ class NestKiosk(QMainWindow):
             elif app_name == "App Store":
                 page_instance = AppStorePage()
             elif app_name == "Gallery":
-                # Routings added for Gallery
                 from apps.gallery import GalleryPage
                 page_instance = GalleryPage(on_close=self.minimize_app)
             else:
@@ -1294,7 +1315,7 @@ class NestKiosk(QMainWindow):
             self.app_stack.setCurrentWidget(page_instance)
             self.update_task_switcher()
 
-        start_rect = QRect(int(1024 * 0.075), int(600 * 0.075), int(1024 * 0.85), int(600 * 0.85))
+        start_rect = QRect(int(SCREEN_WIDTH * 0.075), int(SCREEN_HEIGHT * 0.075), int(SCREEN_WIDTH * 0.85), int(SCREEN_HEIGHT * 0.85))
         self.app_view.setGeometry(start_rect) 
         self.app_opacity.setOpacity(0.0)
         self.app_view.show()
@@ -1307,7 +1328,7 @@ class NestKiosk(QMainWindow):
         self.anim_app_geom.setDuration(250) 
         self.anim_app_geom.setEasingCurve(QEasingCurve.Type.OutCubic) 
         self.anim_app_geom.setStartValue(start_rect)
-        self.anim_app_geom.setEndValue(QRect(0, 0, 1024, 600))
+        self.anim_app_geom.setEndValue(QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
         
         self.anim_app_fade.setDuration(250)
         self.anim_app_fade.setEasingCurve(QEasingCurve.Type.OutCubic)
@@ -1319,7 +1340,7 @@ class NestKiosk(QMainWindow):
     def animate_app_close(self):
         self.anim_app_group.stop()
         
-        end_rect = QRect(int(1024 * 0.075), int(600 * 0.075), int(1024 * 0.85), int(600 * 0.85))
+        end_rect = QRect(int(SCREEN_WIDTH * 0.075), int(SCREEN_HEIGHT * 0.075), int(SCREEN_WIDTH * 0.85), int(SCREEN_HEIGHT * 0.85))
         
         self.anim_app_geom.setDuration(200)
         self.anim_app_geom.setEasingCurve(QEasingCurve.Type.OutCubic)
@@ -1339,7 +1360,7 @@ class NestKiosk(QMainWindow):
         self.anim_app_geom.setDuration(200)
         self.anim_app_geom.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.anim_app_geom.setStartValue(self.app_view.geometry())
-        self.anim_app_geom.setEndValue(QRect(0, 0, 1024, 600))
+        self.anim_app_geom.setEndValue(QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
         
         self.anim_app_fade.setDuration(200)
         self.anim_app_fade.setStartValue(self.app_opacity.opacity())

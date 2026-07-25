@@ -5,18 +5,19 @@ import json
 import urllib.request
 import time
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor, QPen
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor, QPen, QGuiApplication
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit,
     QListWidget, QListWidgetItem
 )
 
-# =================================================================
-# ⚙️ OS UPDATE CONFIGURATION
-# =================================================================
+def get_scale_factor():
+    screen = QGuiApplication.primaryScreen()
+    return max(1.0, screen.size().width() / 1024.0) if screen else 1.0
+
+
 class CheckUpdateThread(QThread):
-    """Background thread to fetch the latest OS version from GitHub and calculate payload size."""
     on_success = pyqtSignal(dict)
     on_error = pyqtSignal(str)
 
@@ -51,13 +52,14 @@ class CheckUpdateThread(QThread):
 
 
 class ModernDialog(QDialog):
-    """A sleek, Android/One UI style popup dialog."""
     def __init__(self, parent, title, message, accept_text="OK", cancel_text="Cancel"):
         super().__init__(parent)
+        scale = get_scale_factor()
+        
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        self.setFixedSize(520, 300)
+        self.setFixedSize(int(520 * scale), int(300 * scale))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -65,46 +67,47 @@ class ModernDialog(QDialog):
         bg_frame = QFrame(self)
         bg_frame.setStyleSheet("background-color: #22222B; border-radius: 20px; border: 1px solid #33333F;")
         bg_layout = QVBoxLayout(bg_frame)
-        bg_layout.setContentsMargins(30, 30, 30, 25)
-        bg_layout.setSpacing(15)
+        bg_layout.setContentsMargins(int(30 * scale), int(30 * scale), int(30 * scale), int(25 * scale))
+        bg_layout.setSpacing(int(15 * scale))
 
         lbl_title = QLabel(title)
-        lbl_title.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", int(20 * scale), QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: white; border: none;")
 
         lbl_msg = QLabel(message)
-        lbl_msg.setFont(QFont("Google Sans", 15))
+        lbl_msg.setFont(QFont("Google Sans", int(15 * scale)))
         lbl_msg.setStyleSheet("color: #CCCCCC; border: none;")
         lbl_msg.setWordWrap(True)
         lbl_msg.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        lbl_msg.setMinimumHeight(80) 
 
         bg_layout.addWidget(lbl_title)
         bg_layout.addWidget(lbl_msg)
         bg_layout.addStretch()
 
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(15)
+        btn_layout.setSpacing(int(15 * scale))
         btn_layout.addStretch()
 
         if cancel_text:
             btn_cancel = QPushButton(cancel_text)
-            btn_cancel.setFixedHeight(45)
+            btn_cancel.setFixedHeight(int(45 * scale))
             btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_cancel.setStyleSheet("""
-                QPushButton { background: transparent; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; padding: 0 20px; }
+                QPushButton { background: transparent; color: white; border-radius: 8px; font-weight: bold; padding: 0 20px; }
                 QPushButton:hover { background-color: rgba(255,255,255,10); }
             """)
+            btn_cancel.setFont(QFont("Google Sans", int(15 * scale), QFont.Weight.Bold))
             btn_cancel.clicked.connect(self.reject)
             btn_layout.addWidget(btn_cancel)
 
         btn_accept = QPushButton(accept_text)
-        btn_accept.setFixedHeight(45)
+        btn_accept.setFixedHeight(int(45 * scale))
         btn_accept.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_accept.setStyleSheet("""
-            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; border: none; padding: 0 25px; }
+            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; border: none; padding: 0 25px; }
             QPushButton:hover { background-color: #4A7DDF; }
         """)
+        btn_accept.setFont(QFont("Google Sans", int(15 * scale), QFont.Weight.Bold))
         btn_accept.clicked.connect(self.accept)
         btn_layout.addWidget(btn_accept)
 
@@ -113,13 +116,14 @@ class ModernDialog(QDialog):
 
 
 class DeleteClockfaceDialog(QDialog):
-    """Custom dialog dedicated to safely uninstalling downloaded clockfaces."""
     def __init__(self, parent):
         super().__init__(parent)
+        scale = get_scale_factor()
+        
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        self.setFixedSize(480, 360)
+        self.setFixedSize(int(520 * scale), int(380 * scale))
         self.deleted_any = False
 
         layout = QVBoxLayout(self)
@@ -127,21 +131,22 @@ class DeleteClockfaceDialog(QDialog):
         bg_frame = QFrame(self)
         bg_frame.setStyleSheet("background-color: #22222B; border-radius: 24px; border: 1px solid #33333F;")
         bg_layout = QVBoxLayout(bg_frame)
-        bg_layout.setContentsMargins(25, 25, 25, 20)
+        bg_layout.setContentsMargins(int(25 * scale), int(25 * scale), int(25 * scale), int(20 * scale))
 
         lbl_title = QLabel("Delete Downloaded Clockfaces")
-        lbl_title.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", int(18 * scale), QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: white; border: none;")
         bg_layout.addWidget(lbl_title)
-        bg_layout.addSpacing(10)
+        bg_layout.addSpacing(int(10 * scale))
 
         self.list_widget = QListWidget()
         QScroller.grabGesture(self.list_widget.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         self.list_widget.setStyleSheet("""
-            QListWidget { background-color: #14141A; border-radius: 12px; border: 1px solid #2C2C35; padding: 5px; color: white; font-size: 15px; outline: 0; }
+            QListWidget { background-color: #14141A; border-radius: 12px; border: 1px solid #2C2C35; padding: 5px; color: white; outline: 0; }
             QListWidget::item { padding: 10px; border-radius: 8px; }
             QListWidget::item:selected { background-color: rgba(226, 74, 74, 40); color: #E24A4A; }
         """)
+        self.list_widget.setFont(QFont("Google Sans", int(15 * scale)))
         
         self.files_map = {}
         if os.path.exists("clockfaces"):
@@ -156,18 +161,20 @@ class DeleteClockfaceDialog(QDialog):
             self.list_widget.setEnabled(False)
             
         bg_layout.addWidget(self.list_widget)
-        bg_layout.addSpacing(15)
+        bg_layout.addSpacing(int(15 * scale))
         
         actions = QHBoxLayout()
         actions.addStretch()
         
         btn_cancel = QPushButton("Close")
-        btn_cancel.setStyleSheet("QPushButton { background: transparent; color: #888888; font-weight: bold; font-size: 15px; padding: 5px 15px; border: none; }")
+        btn_cancel.setFont(QFont("Google Sans", int(15 * scale), QFont.Weight.Bold))
+        btn_cancel.setStyleSheet("QPushButton { background: transparent; color: #888888; border: none; }")
         btn_cancel.clicked.connect(self.accept)
         actions.addWidget(btn_cancel)
 
         self.btn_del = QPushButton("Delete Selected")
-        self.btn_del.setStyleSheet("QPushButton { background-color: #E24A4A; color: white; font-weight: bold; font-size: 15px; border-radius: 8px; padding: 8px 20px; border: none; }")
+        self.btn_del.setFont(QFont("Google Sans", int(15 * scale), QFont.Weight.Bold))
+        self.btn_del.setStyleSheet("QPushButton { background-color: #E24A4A; color: white; border-radius: 8px; padding: 8px 20px; border: none; }")
         self.btn_del.clicked.connect(self.confirm_delete)
         if not self.files_map:
             self.btn_del.hide()
@@ -213,13 +220,14 @@ class DeleteClockfaceDialog(QDialog):
 class CategoryButton(QPushButton):
     def __init__(self, title, icon_path):
         super().__init__(f"  {title}")
-        self.setFixedHeight(75) 
+        scale = get_scale_factor()
+        self.setFixedHeight(int(75 * scale)) 
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        self.setFont(QFont("Google Sans", int(16 * scale), QFont.Weight.Bold))
         
         if os.path.exists(icon_path):
             self.setIcon(QIcon(icon_path))
-            self.setIconSize(QSize(28, 28))
+            self.setIconSize(QSize(int(28 * scale), int(28 * scale)))
             
         self.setStyleSheet(self.get_inactive_style())
 
@@ -258,6 +266,7 @@ class SettingsPage(QWidget):
     def __init__(self, on_close=None):
         super().__init__()
         self.on_close = on_close
+        self.scale = get_scale_factor()
         
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -266,11 +275,11 @@ class SettingsPage(QWidget):
         content_area = QWidget()
         content_area.setStyleSheet("background-color: #0C0C0E;")
         h_layout = QHBoxLayout(content_area)
-        h_layout.setContentsMargins(20, 20, 20, 20)
-        h_layout.setSpacing(20)
+        h_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
+        h_layout.setSpacing(int(20 * self.scale))
 
         left_container = QFrame()
-        left_container.setFixedWidth(280) 
+        left_container.setFixedWidth(int(280 * self.scale)) 
         left_container.setStyleSheet("background-color: #1C1C22; border-radius: 16px; border: 1px solid #2C2C35;")
         left_container_layout = QVBoxLayout(left_container)
         left_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -286,8 +295,8 @@ class SettingsPage(QWidget):
         nav_content = QWidget()
         nav_content.setStyleSheet("background: transparent;")
         left_layout = QVBoxLayout(nav_content)
-        left_layout.setContentsMargins(15, 20, 15, 20)
-        left_layout.setSpacing(10)
+        left_layout.setContentsMargins(int(15 * self.scale), int(20 * self.scale), int(15 * self.scale), int(20 * self.scale))
+        left_layout.setSpacing(int(10 * self.scale))
         left_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.category_buttons = []
@@ -315,7 +324,6 @@ class SettingsPage(QWidget):
 
         self.right_stack = QStackedWidget()
         self.right_stack.setStyleSheet("background: transparent;")
-        self.right_stack.setMinimumWidth(500) 
         
         self.right_stack.addWidget(self.create_network_page())
         self.right_stack.addWidget(self.create_display_page())
@@ -367,34 +375,31 @@ class SettingsPage(QWidget):
         except Exception as e:
             print(f"Failed to save setting: {e}")
 
-    # =================================================================
-    # CATEGORY PAGES
-    # =================================================================
     def create_network_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("Network Status")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         ip_address = self.get_local_ip()
         lbl_status = QLabel("Status: Connected")
-        lbl_status.setFont(QFont("Google Sans", 18))
+        lbl_status.setFont(QFont("Google Sans", int(18 * self.scale)))
         lbl_status.setStyleSheet("color: #1ED760; border: none;")
         
         lbl_ip = QLabel(f"IP Address: {ip_address}")
-        lbl_ip.setFont(QFont("Google Sans", 16))
+        lbl_ip.setFont(QFont("Google Sans", int(16 * self.scale)))
         lbl_ip.setStyleSheet("color: #CCCCCC; border: none;")
         
         card_layout.addWidget(lbl_status)
@@ -402,10 +407,10 @@ class SettingsPage(QWidget):
         layout.addWidget(card)
 
         btn_wifi = QPushButton("Scan Networks")
-        btn_wifi.setFixedSize(200, 60) 
-        btn_wifi.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        btn_wifi.setFixedSize(int(200 * self.scale), int(60 * self.scale)) 
+        btn_wifi.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         btn_wifi.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; }")
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
         layout.addWidget(btn_wifi)
         
         layout.addStretch()
@@ -414,29 +419,29 @@ class SettingsPage(QWidget):
     def create_display_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("Display")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         bright_header = QHBoxLayout()
         lbl_bright = QLabel("Screen Brightness")
-        lbl_bright.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_bright.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         lbl_bright.setStyleSheet("color: white; border: none;")
         
         saved_brightness = self.get_saved_setting("brightness", 80)
         self.lbl_bright_val = QLabel(f"{saved_brightness}%")
-        self.lbl_bright_val.setFont(QFont("Google Sans", 16))
+        self.lbl_bright_val.setFont(QFont("Google Sans", int(16 * self.scale)))
         self.lbl_bright_val.setStyleSheet("color: #5A8DEF; border: none;")
         
         bright_header.addWidget(lbl_bright)
@@ -468,14 +473,14 @@ class SettingsPage(QWidget):
     def create_audio_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("Audio and Sound")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -494,17 +499,17 @@ class SettingsPage(QWidget):
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
-        card_layout.setSpacing(15)
+        card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
+        card_layout.setSpacing(int(15 * self.scale))
         
         vol_header = QHBoxLayout()
         lbl_vol = QLabel("System Sounds Volume")
-        lbl_vol.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_vol.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         lbl_vol.setStyleSheet("color: white; border: none;")
         
         saved_vol = self.get_saved_setting("system_volume", 80)
         self.lbl_vol_val = QLabel(f"{saved_vol}%")
-        self.lbl_vol_val.setFont(QFont("Google Sans", 16))
+        self.lbl_vol_val.setFont(QFont("Google Sans", int(16 * self.scale)))
         self.lbl_vol_val.setStyleSheet("color: #5A8DEF; border: none;")
         
         vol_header.addWidget(lbl_vol)
@@ -524,7 +529,7 @@ class SettingsPage(QWidget):
         self.sys_vol_slider.valueChanged.connect(self.update_volume_val)
         card_layout.addWidget(self.sys_vol_slider)
 
-        card_layout.addSpacing(10)
+        card_layout.addSpacing(int(10 * self.scale))
 
         self.is_silent = self.get_saved_setting("silent_mode", False)
         self.btn_silent = QPushButton()
@@ -550,23 +555,23 @@ class SettingsPage(QWidget):
         self.save_setting("system_volume", val)
 
     def update_toggle_btn(self, btn, text, state, mode_type="default"):
-        btn.setFixedHeight(60)
+        btn.setFixedHeight(int(60 * self.scale))
         btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        btn.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
         
         icon_file = ""
         if mode_type == "silent":
-            active_bg = "#E24A4A"  # Red
+            active_bg = "#E24A4A"  
             icon_file = "icons/silent.png"
         elif mode_type == "dnd":
-            active_bg = "#7B61FF"  # Blue-purple
+            active_bg = "#7B61FF"  
             icon_file = "icons/dnd.png"
         else:
             active_bg = "#5A8DEF"
 
         if os.path.exists(icon_file):
             btn.setIcon(QIcon(icon_file))
-            btn.setIconSize(QSize(24, 24))
+            btn.setIconSize(QSize(int(24 * self.scale), int(24 * self.scale)))
             btn.setText(f"  {text} (ON)" if state else f"  {text} (OFF)")
         else:
             btn.setIcon(QIcon())
@@ -590,14 +595,14 @@ class SettingsPage(QWidget):
     def create_customize_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("Customize Interface")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -616,16 +621,16 @@ class SettingsPage(QWidget):
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         c_layout = QVBoxLayout(card)
-        c_layout.setContentsMargins(20, 20, 20, 20)
+        c_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         scale_header = QHBoxLayout()
         lbl_scale = QLabel("App Drawer Icon Scale")
-        lbl_scale.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_scale.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         lbl_scale.setStyleSheet("color: white; border: none;")
         
         saved_scale = self.get_saved_setting("app_drawer_scale", 100)
         self.lbl_scale_val = QLabel(f"{saved_scale}%")
-        self.lbl_scale_val.setFont(QFont("Google Sans", 16))
+        self.lbl_scale_val.setFont(QFont("Google Sans", int(16 * self.scale)))
         self.lbl_scale_val.setStyleSheet("color: #5A8DEF; border: none;")
         
         scale_header.addWidget(lbl_scale)
@@ -645,26 +650,26 @@ class SettingsPage(QWidget):
         self.scale_slider.valueChanged.connect(self.update_scale_val)
         c_layout.addWidget(self.scale_slider)
         
-        c_layout.addSpacing(15)
+        c_layout.addSpacing(int(15 * self.scale))
 
         lbl_layout = QLabel("App Drawer Layout")
-        lbl_layout.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_layout.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         lbl_layout.setStyleSheet("color: white; border: none;")
         c_layout.addWidget(lbl_layout)
 
         layout_btns = QHBoxLayout()
-        layout_btns.setSpacing(15)
+        layout_btns.setSpacing(int(15 * self.scale))
         
         self.btn_grid = QPushButton("⊞ Grid View")
-        self.btn_grid.setFixedHeight(60) 
+        self.btn_grid.setFixedHeight(int(60 * self.scale)) 
         self.btn_grid.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_grid.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        self.btn_grid.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
         self.btn_grid.clicked.connect(lambda: self.set_app_layout("grid"))
         
         self.btn_list = QPushButton("☰ List View")
-        self.btn_list.setFixedHeight(60)
+        self.btn_list.setFixedHeight(int(60 * self.scale))
         self.btn_list.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_list.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        self.btn_list.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
         self.btn_list.clicked.connect(lambda: self.set_app_layout("list"))
 
         layout_btns.addWidget(self.btn_grid)
@@ -672,43 +677,46 @@ class SettingsPage(QWidget):
         c_layout.addLayout(layout_btns)
         
         card_layout.addWidget(card)
-        card_layout.addSpacing(20)
+        card_layout.addSpacing(int(20 * self.scale))
 
         lbl_cf = QLabel("Watch Face")
-        lbl_cf.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        lbl_cf.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         lbl_cf.setStyleSheet("color: white; border: none;")
         card_layout.addWidget(lbl_cf)
 
         cf_card = QFrame()
         cf_card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         cf_layout = QHBoxLayout(cf_card)
-        cf_layout.setContentsMargins(15, 15, 15, 15)
-        cf_layout.setSpacing(15)
+        cf_layout.setContentsMargins(int(15 * self.scale), int(15 * self.scale), int(15 * self.scale), int(15 * self.scale))
+        cf_layout.setSpacing(int(15 * self.scale))
         
+        preview_size = int(90 * self.scale)
         self.lbl_cf_preview = QLabel()
-        self.lbl_cf_preview.setFixedSize(90, 90)
+        self.lbl_cf_preview.setFixedSize(preview_size, preview_size)
         self.lbl_cf_preview.setStyleSheet("background: transparent;")
         self.lbl_cf_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cf_layout.addWidget(self.lbl_cf_preview)
         
         cf_info = QVBoxLayout()
-        cf_info.setSpacing(10)
+        cf_info.setSpacing(int(10 * self.scale))
         cf_name = QLabel("Clockface Settings")
-        cf_name.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        cf_name.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
         cf_name.setStyleSheet("color: white; border: none; background: transparent;")
         
         btn_change_cf = QPushButton("Change Clockface")
         btn_change_cf.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_change_cf.setFont(QFont("Google Sans", int(13 * self.scale), QFont.Weight.Bold))
         btn_change_cf.setStyleSheet("""
-            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; font-size: 13px; font-weight: bold; padding: 8px 14px; border: none; }
+            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; padding: 8px 14px; border: none; }
             QPushButton:hover { background-color: #4A7DDF; }
         """)
         btn_change_cf.clicked.connect(self.open_clockface_selector)
 
         btn_delete_cf = QPushButton("🗑️ Delete")
         btn_delete_cf.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_delete_cf.setFont(QFont("Google Sans", int(13 * self.scale), QFont.Weight.Bold))
         btn_delete_cf.setStyleSheet("""
-            QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border-radius: 8px; font-size: 13px; font-weight: bold; padding: 8px 14px; border: 1px solid rgba(226, 74, 74, 100); }
+            QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border-radius: 8px; padding: 8px 14px; border: 1px solid rgba(226, 74, 74, 100); }
             QPushButton:hover { background-color: #E24A4A; color: white; }
         """)
         btn_delete_cf.clicked.connect(self.open_delete_clockface_dialog)
@@ -750,7 +758,8 @@ class SettingsPage(QWidget):
                 pix.fill(Qt.GlobalColor.transparent)
                 inst.render(pix)
                 
-                circular_pix = QPixmap(90, 90)
+                preview_size = int(90 * self.scale)
+                circular_pix = QPixmap(preview_size, preview_size)
                 circular_pix.fill(Qt.GlobalColor.transparent)
                 
                 painter = QPainter(circular_pix)
@@ -759,15 +768,15 @@ class SettingsPage(QWidget):
                 
                 painter.setPen(QPen(QColor("#5A8DEF"), 2))
                 painter.setBrush(QColor("#0C0C0E"))
-                painter.drawEllipse(1, 1, 88, 88)
+                painter.drawEllipse(1, 1, preview_size - 2, preview_size - 2)
                 
                 path = QPainterPath()
-                path.addEllipse(2, 2, 86, 86)
+                path.addEllipse(2, 2, preview_size - 4, preview_size - 4)
                 painter.setClipPath(path)
                 
-                scaled = pix.scaled(86, 86, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                x = (86 - scaled.width()) // 2 + 2
-                y = (86 - scaled.height()) // 2 + 2
+                scaled = pix.scaled(preview_size - 4, preview_size - 4, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                x = (preview_size - 4 - scaled.width()) // 2 + 2
+                y = (preview_size - 4 - scaled.height()) // 2 + 2
                 painter.drawPixmap(x, y, scaled)
                 painter.end()
                 
@@ -793,20 +802,17 @@ class SettingsPage(QWidget):
                 main_win.apply_clockface(0)
             self.update_clockface_preview()
 
-    # =================================================================
-    # INSTALLED APPS PAGE W/ ICONS & UNINSTALLER
-    # =================================================================
     def create_apps_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("Installed Applications")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -819,7 +825,7 @@ class SettingsPage(QWidget):
         self.apps_container.setStyleSheet("background: transparent;")
         self.apps_layout = QVBoxLayout(self.apps_container)
         self.apps_layout.setContentsMargins(0, 0, 0, 0)
-        self.apps_layout.setSpacing(14)
+        self.apps_layout.setSpacing(int(14 * self.scale))
         self.apps_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         scroll.setWidget(self.apps_container)
@@ -851,7 +857,7 @@ class SettingsPage(QWidget):
 
         if not files:
             lbl_empty = QLabel("No applications installed.")
-            lbl_empty.setFont(QFont("Google Sans", 16))
+            lbl_empty.setFont(QFont("Google Sans", int(16 * self.scale)))
             lbl_empty.setStyleSheet("color: #AAAAAA; margin-top: 40px;")
             lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.apps_layout.addWidget(lbl_empty)
@@ -862,14 +868,15 @@ class SettingsPage(QWidget):
             card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
             card_layout = QHBoxLayout(card)
-            card_layout.setContentsMargins(20, 16, 20, 16)
-            card_layout.setSpacing(15)
+            card_layout.setContentsMargins(int(20 * self.scale), int(16 * self.scale), int(20 * self.scale), int(16 * self.scale))
+            card_layout.setSpacing(int(15 * self.scale))
 
             app_id = filename[:-3].lower() 
             app_name = "Music" if app_id == "local_music" else app_id.replace("_", " ").title()
 
+            icon_size = int(48 * self.scale)
             lbl_icon = QLabel()
-            lbl_icon.setFixedSize(48, 48)
+            lbl_icon.setFixedSize(icon_size, icon_size)
             lbl_icon.setStyleSheet("background: transparent; border: none;")
             
             icon_path = ""
@@ -878,30 +885,30 @@ class SettingsPage(QWidget):
             elif os.path.exists(os.path.join("icons", f"{app_id}.svg")):
                 icon_path = os.path.join("icons", f"{app_id}.svg")
                 
-            target_pix = QPixmap(48, 48)
+            target_pix = QPixmap(icon_size, icon_size)
             target_pix.fill(Qt.GlobalColor.transparent)
             painter = QPainter(target_pix)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             
-            original_pix = QIcon(icon_path).pixmap(QSize(48, 48)) if icon_path else QPixmap()
+            original_pix = QIcon(icon_path).pixmap(QSize(icon_size, icon_size)) if icon_path else QPixmap()
             
             if not original_pix.isNull():
                 path = QPainterPath()
-                path.addRoundedRect(0, 0, 48, 48, 12, 12)
+                path.addRoundedRect(0, 0, icon_size, icon_size, 12, 12)
                 painter.setClipPath(path)
-                scaled = original_pix.scaled(48, 48, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                x = (48 - scaled.width()) // 2
-                y = (48 - scaled.height()) // 2
+                scaled = original_pix.scaled(icon_size, icon_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                x = (icon_size - scaled.width()) // 2
+                y = (icon_size - scaled.height()) // 2
                 painter.drawPixmap(x, y, scaled)
             else:
                 colors = ["#E24A4A", "#5A8DEF", "#F39C12", "#27AE60", "#8E44AD", "#9B59B6"]
                 painter.setBrush(QColor(colors[len(app_name) % len(colors)]))
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.drawEllipse(0, 0, 48, 48)
+                painter.drawEllipse(0, 0, icon_size, icon_size)
                 painter.setPen(QColor("#FFFFFF"))
-                painter.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
-                painter.drawText(QRect(0, 0, 48, 48), Qt.AlignmentFlag.AlignCenter, app_name[0].upper())
+                painter.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
+                painter.drawText(QRect(0, 0, icon_size, icon_size), Qt.AlignmentFlag.AlignCenter, app_name[0].upper())
             painter.end()
             lbl_icon.setPixmap(target_pix)
 
@@ -914,19 +921,18 @@ class SettingsPage(QWidget):
                 except Exception:
                     pass
             
-            # Locked Case-Insensitive Core Match Check
             is_core = filename.lower() in core_apps
 
             info_box = QVBoxLayout()
             info_box.setSpacing(4)
             
             lbl_name = QLabel(app_name)
-            lbl_name.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+            lbl_name.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
             lbl_name.setStyleSheet("color: white; border: none; background: transparent;")
             
             status_text = "System OS Application" if is_core else f"App Store Download • {version_str if version_str else 'Installed'}"
             lbl_status = QLabel(status_text)
-            lbl_status.setFont(QFont("Google Sans", 13))
+            lbl_status.setFont(QFont("Google Sans", int(13 * self.scale)))
             lbl_status.setStyleSheet(f"color: {'#5A8DEF' if is_core else '#888888'}; border: none; background: transparent;")
             
             info_box.addWidget(lbl_name)
@@ -938,18 +944,20 @@ class SettingsPage(QWidget):
 
             if is_core:
                 btn_lock = QPushButton("🔒 System App")
-                btn_lock.setFixedSize(140, 42)
+                btn_lock.setFixedSize(int(140 * self.scale), int(42 * self.scale))
                 btn_lock.setEnabled(False)
+                btn_lock.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
                 btn_lock.setStyleSheet("""
-                    QPushButton { background-color: #2C2C35; color: #666670; border-radius: 8px; font-weight: bold; font-size: 14px; border: none; }
+                    QPushButton { background-color: #2C2C35; color: #666670; border-radius: 8px; border: none; }
                 """)
                 card_layout.addWidget(btn_lock)
             else:
                 btn_uninstall = QPushButton("🗑️ Uninstall")
-                btn_uninstall.setFixedSize(130, 42)
+                btn_uninstall.setFixedSize(int(130 * self.scale), int(42 * self.scale))
                 btn_uninstall.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_uninstall.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
                 btn_uninstall.setStyleSheet("""
-                    QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border: 1px solid #E24A4A; border-radius: 8px; font-weight: bold; font-size: 14px; }
+                    QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border: 1px solid #E24A4A; border-radius: 8px; }
                     QPushButton:hover { background-color: #E24A4A; color: white; }
                 """)
                 btn_uninstall.clicked.connect(lambda checked, fname=filename, name=app_name: self.uninstall_app(fname, name))
@@ -990,24 +998,24 @@ class SettingsPage(QWidget):
     def create_storage_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("System Storage")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         storage_info = self.get_storage_info()
         lbl_sys = QLabel(storage_info)
-        lbl_sys.setFont(QFont("Google Sans", 18))
+        lbl_sys.setFont(QFont("Google Sans", int(18 * self.scale)))
         lbl_sys.setStyleSheet("color: #CCCCCC; border: none;")
         card_layout.addWidget(lbl_sys)
         
@@ -1015,31 +1023,28 @@ class SettingsPage(QWidget):
         layout.addStretch()
         return page
 
-    # =================================================================
-    # UPDATE PAGE W/ BETA TOGGLE & PAYLOAD SIZE INJECTION
-    # =================================================================
     def create_update_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("Software Update")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
 
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(20, 20, 20, 20)
+        card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         self.current_os_version = self.get_saved_setting("os_version", "0.1.0")
         
         self.lbl_update_status = QLabel(f"Kiosk OS Version: v{self.current_os_version}\n\nStatus: Your system is up to date.")
-        self.lbl_update_status.setFont(QFont("Google Sans", 16))
+        self.lbl_update_status.setFont(QFont("Google Sans", int(16 * self.scale)))
         self.lbl_update_status.setStyleSheet("color: #CCCCCC; border: none;")
         card_layout.addWidget(self.lbl_update_status)
         
@@ -1053,9 +1058,9 @@ class SettingsPage(QWidget):
         """)
         self.update_progress.hide()
         
-        card_layout.addSpacing(10)
+        card_layout.addSpacing(int(10 * self.scale))
         card_layout.addWidget(self.update_progress)
-        card_layout.addSpacing(15)
+        card_layout.addSpacing(int(15 * self.scale))
 
         self.is_beta = self.get_saved_setting("update_channel", "main") == "beta"
         self.btn_beta = QPushButton()
@@ -1066,16 +1071,16 @@ class SettingsPage(QWidget):
         layout.addWidget(card)
 
         self.btn_check_update = QPushButton("Check for Updates")
-        self.btn_check_update.setFixedSize(250, 60) 
+        self.btn_check_update.setFixedSize(int(250 * self.scale), int(60 * self.scale)) 
         self.btn_check_update.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_check_update.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        self.btn_check_update.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         self.btn_check_update.setStyleSheet("""
             QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; }
             QPushButton:disabled { background-color: #2C2C35; color: #555555; }
         """)
         self.btn_check_update.clicked.connect(self.trigger_update_check)
         
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
         layout.addWidget(self.btn_check_update)
         
         layout.addStretch()
@@ -1161,31 +1166,31 @@ class SettingsPage(QWidget):
     def create_power_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.setContentsMargins(30, 20, 30, 30)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         title = QLabel("Power Options")
-        title.setFont(QFont("Google Sans", 24, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         layout.addWidget(title)
-        layout.addSpacing(20)
+        layout.addSpacing(int(20 * self.scale))
 
         btn_reboot = QPushButton("🔄 Reboot Kiosk")
-        btn_reboot.setFixedHeight(75) 
+        btn_reboot.setFixedHeight(int(75 * self.scale)) 
         btn_reboot.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_reboot.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        btn_reboot.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
         btn_reboot.setStyleSheet("""
             QPushButton { background-color: #2C2C35; color: white; border-radius: 12px; }
         """)
         btn_reboot.clicked.connect(self.reboot_system)
         layout.addWidget(btn_reboot)
         
-        layout.addSpacing(10)
+        layout.addSpacing(int(10 * self.scale))
 
         btn_shutdown = QPushButton("⏻ Shutdown")
-        btn_shutdown.setFixedHeight(75) 
+        btn_shutdown.setFixedHeight(int(75 * self.scale)) 
         btn_shutdown.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_shutdown.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        btn_shutdown.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
         btn_shutdown.setStyleSheet("""
             QPushButton { background-color: #E24A4A; color: white; border-radius: 12px; }
         """)
@@ -1195,9 +1200,6 @@ class SettingsPage(QWidget):
         layout.addStretch()
         return page
 
-    # =================================================================
-    # SYSTEM CONFIG HELPERS
-    # =================================================================
     def update_scale_val(self, val):
         self.lbl_scale_val.setText(f"{val}%")
         self.save_setting("app_drawer_scale", val)

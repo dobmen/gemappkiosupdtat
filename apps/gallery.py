@@ -7,16 +7,20 @@ import urllib.request
 import http.server
 import socketserver
 from PyQt6.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal, QObject, QPoint, QRect, QRectF, QPointF
-from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter, QPainterPath, QPen, QColor, QTransform
+from PyQt6.QtGui import QFont, QPixmap, QIcon, QPainter, QPainterPath, QPen, QColor, QTransform, QGuiApplication
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
     QScrollArea, QFrame, QGridLayout, QStackedWidget, QScroller, QDialog, QProgressBar, QLineEdit, QSlider
 )
 
-# =================================================================
-# BACKGROUND WEB SERVER & SIGNALS (PORT CHANGED TO 52634)
-# =================================================================
 SERVER_PORT = 52634
+
+
+def get_scale_factor():
+    """Dynamically detects active screen resolution and returns proportional scale factor."""
+    screen = QGuiApplication.primaryScreen()
+    return max(1.0, screen.size().width() / 1024.0) if screen else 1.0
+
 
 class UploadSignals(QObject):
     client_connected = pyqtSignal()
@@ -159,11 +163,8 @@ class QRFetchThread(QThread):
         except Exception:
             pass
 
-# =================================================================
-# FULL-SCREEN INTERACTIVE VIEWER & EDITOR COMPONENTS
-# =================================================================
+
 class SwipeableImageLabel(QLabel):
-    """Custom label to intercept touch swipe gestures and tap events for fullscreen toggling."""
     swiped_left = pyqtSignal()
     swiped_right = pyqtSignal()
     tapped = pyqtSignal()
@@ -195,29 +196,24 @@ class SwipeableImageLabel(QLabel):
 
 
 class EditorCanvas(QWidget):
-    """A custom widget that handles the heavy lifting of displaying, cropping, drawing, and adjusting an image."""
     def __init__(self):
         super().__init__()
-        self.mode = "view" # 'crop', 'draw', 'adjust', 'view'
+        self.mode = "view" 
         self.original_pixmap = QPixmap()
         
-        # Transform State
         self.rot_angle = 0
         self.flip_h = False
         self.flip_v = False
         
-        # Adjust State
-        self.brightness = 0  # -100 to 100
-        self.contrast = 0    # -100 to 100
-        self.warmth = 0      # -100 to 100
+        self.brightness = 0  
+        self.contrast = 0    
+        self.warmth = 0      
         
-        # Draw State
-        self.paths = [] # list of {'points': [QPointF], 'color': QColor, 'width': int}
+        self.paths = [] 
         self.current_path = None
-        self.draw_color = QColor(226, 74, 74) # Default Red
+        self.draw_color = QColor(226, 74, 74) 
         self.draw_width = 8
         
-        # Crop State
         self.crop_rect_norm = QRectF(0, 0, 1, 1)
         self.crop_start = None
         
@@ -240,8 +236,6 @@ class EditorCanvas(QWidget):
         self.update()
 
     def apply_painter_adjustments(self, painter, rect):
-        """Applies real-time hardware-accelerated adjustments using composition modes."""
-        # Brightness
         if self.brightness > 0:
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
             painter.fillRect(rect, QColor(255, 255, 255, int(self.brightness * 1.2)))
@@ -250,7 +244,6 @@ class EditorCanvas(QWidget):
             val = 255 + int(self.brightness * 1.5)
             painter.fillRect(rect, QColor(val, val, val, 255))
             
-        # Warmth / White Balance
         if self.warmth != 0:
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Overlay)
             if self.warmth > 0:
@@ -258,7 +251,6 @@ class EditorCanvas(QWidget):
             else:
                 painter.fillRect(rect, QColor(0, 150, 255, int(abs(self.warmth) * 0.7)))
 
-        # Contrast (Drawing image over itself using Overlay mode increases contrast)
         if self.contrast > 0:
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Overlay)
             painter.setOpacity(self.contrast / 150.0)
@@ -275,7 +267,6 @@ class EditorCanvas(QWidget):
         return base_pix.transformed(t, Qt.TransformationMode.SmoothTransformation)
 
     def get_norm_pos(self, screen_pos):
-        """Converts a screen pixel coordinate to a normalized 0.0-1.0 coordinate inside the image."""
         if self.draw_rect.width() == 0 or self.draw_rect.height() == 0:
             return QPointF(0, 0)
         nx = (screen_pos.x() - self.draw_rect.x()) / self.draw_rect.width()
@@ -308,7 +299,7 @@ class EditorCanvas(QWidget):
         elif self.mode == "crop":
             self.crop_start = None
             if self.crop_rect_norm.width() < 0.05 or self.crop_rect_norm.height() < 0.05:
-                self.crop_rect_norm = QRectF(0, 0, 1, 1) # Reset if click was just a tap
+                self.crop_rect_norm = QRectF(0, 0, 1, 1) 
             self.update()
 
     def paintEvent(self, event):
@@ -318,7 +309,6 @@ class EditorCanvas(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         
-        # 1. Base Transform & Scale
         t_pix = self.get_transformed_pixmap(self.original_pixmap)
         scaled = t_pix.scaled(self.width() - 40, self.height() - 40, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         
@@ -326,11 +316,9 @@ class EditorCanvas(QWidget):
         y = (self.height() - scaled.height()) // 2
         self.draw_rect = QRect(x, y, scaled.width(), scaled.height())
         
-        # 2. Draw Image & Adjustments
         painter.drawPixmap(self.draw_rect, scaled)
         self.apply_painter_adjustments(painter, self.draw_rect)
         
-        # 3. Draw Markings
         for path_data in self.paths:
             points = path_data['points']
             if len(points) < 2: continue
@@ -345,7 +333,6 @@ class EditorCanvas(QWidget):
                 qpath.lineTo(x + pt.x() * scaled.width(), y + pt.y() * scaled.height())
             painter.drawPath(qpath)
 
-        # 4. Draw Crop Overlay (Darkens outside, clear inside)
         if self.mode == "crop":
             cr = self.crop_rect_norm
             c_rect = QRectF(
@@ -355,24 +342,19 @@ class EditorCanvas(QWidget):
                 cr.height() * scaled.height()
             )
             
-            # Darken everything
             painter.fillRect(self.rect(), QColor(0, 0, 0, 180))
             
-            # Punch out the crop rect
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
             painter.fillRect(c_rect, Qt.GlobalColor.transparent)
             painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
             
-            # Draw border
             painter.setPen(QPen(QColor(255, 255, 255), 2, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(c_rect)
 
     def save_to_file(self, target_path):
-        """Renders the exact final layout to a full-resolution pixmap and saves it."""
         if self.original_pixmap.isNull(): return
         
-        # Get base transformed full-res image
         t_pix = self.get_transformed_pixmap(self.original_pixmap)
         final_pix = QPixmap(t_pix.size())
         final_pix.fill(Qt.GlobalColor.transparent)
@@ -389,7 +371,6 @@ class EditorCanvas(QWidget):
             points = path_data['points']
             if len(points) < 2: continue
             
-            # Scale pen width proportionally to full image size
             scale_factor = t_pix.width() / float(max(1, self.draw_rect.width()))
             real_width = max(1, int(path_data['width'] * scale_factor))
             
@@ -405,7 +386,6 @@ class EditorCanvas(QWidget):
             
         painter.end()
         
-        # Apply Final Crop
         if self.crop_rect_norm != QRectF(0, 0, 1, 1):
             cr = self.crop_rect_norm
             crop_rect = QRect(
@@ -422,38 +402,37 @@ class EditorCanvas(QWidget):
 class ImageEditorOverlay(QFrame):
     def __init__(self, parent, on_save_callback):
         super().__init__(parent)
+        self.scale = get_scale_factor()
         self.on_save_callback = on_save_callback
-        self.setGeometry(0, 0, 1024, 600)
+        self.setGeometry(0, 0, int(1024 * self.scale), int(600 * self.scale))
         self.setStyleSheet("background-color: #0A0A0C;")
         self.hide()
         
         self.current_path = ""
         
-        # Main Layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # --- Top Header ---
         header = QFrame()
-        header.setFixedHeight(60)
+        header.setFixedHeight(int(60 * self.scale))
         header.setStyleSheet("background-color: #14141A;")
         h_layout = QHBoxLayout(header)
-        h_layout.setContentsMargins(20, 0, 20, 0)
+        h_layout.setContentsMargins(int(20 * self.scale), 0, int(20 * self.scale), 0)
         
         btn_cancel = QPushButton("Cancel")
-        btn_cancel.setFixedSize(100, 36)
+        btn_cancel.setFixedSize(int(100 * self.scale), int(36 * self.scale))
         btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_cancel.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 18px; font-weight: bold;")
         btn_cancel.clicked.connect(self.hide)
         
         lbl_title = QLabel("Photo Editor")
-        lbl_title.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: white;")
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         btn_save = QPushButton("Save")
-        btn_save.setFixedSize(100, 36)
+        btn_save.setFixedSize(int(100 * self.scale), int(36 * self.scale))
         btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_save.setStyleSheet("background-color: #1ED760; color: #0E0E12; border-radius: 18px; font-weight: bold;")
         btn_save.clicked.connect(self.save_image)
@@ -463,24 +442,21 @@ class ImageEditorOverlay(QFrame):
         h_layout.addWidget(btn_save)
         layout.addWidget(header)
         
-        # --- Center Canvas ---
         self.canvas = EditorCanvas()
         layout.addWidget(self.canvas, stretch=1)
         
-        # --- Bottom Tool Stack ---
         self.tools_stack = QStackedWidget()
-        self.tools_stack.setFixedHeight(120)
+        self.tools_stack.setFixedHeight(int(120 * self.scale))
         self.tools_stack.setStyleSheet("background-color: #14141A;")
         layout.addWidget(self.tools_stack)
         
         self.build_menus()
         
     def build_menus(self):
-        # Page 0: Main Menu
         main_menu = QWidget()
         m_layout = QHBoxLayout(main_menu)
-        m_layout.setContentsMargins(20, 20, 20, 20)
-        m_layout.setSpacing(15)
+        m_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
+        m_layout.setSpacing(int(15 * self.scale))
         
         tools = [
             ("✂️ Crop", "crop"),
@@ -491,40 +467,38 @@ class ImageEditorOverlay(QFrame):
         
         for text, mode in tools:
             btn = QPushButton(text)
-            btn.setFixedHeight(50)
+            btn.setFixedHeight(int(50 * self.scale))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+            btn.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
             btn.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 12px;")
             btn.clicked.connect(lambda checked, m=mode: self.set_mode(m))
             m_layout.addWidget(btn)
         self.tools_stack.addWidget(main_menu)
 
-        # Page 1: Crop Tools
         crop_menu = QWidget()
         c_layout = QHBoxLayout(crop_menu)
-        c_layout.setContentsMargins(20, 20, 20, 20)
+        c_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         lbl_crop = QLabel("Drag on the image to draw a crop box.\nTap to reset.")
-        lbl_crop.setFont(QFont("Google Sans", 14))
+        lbl_crop.setFont(QFont("Google Sans", int(14 * self.scale)))
         lbl_crop.setStyleSheet("color: #AAAAAA;")
         btn_c_done = QPushButton("Done Cropping")
-        btn_c_done.setFixedSize(150, 45)
+        btn_c_done.setFixedSize(int(150 * self.scale), int(45 * self.scale))
         btn_c_done.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 12px; font-weight: bold;")
         btn_c_done.clicked.connect(lambda: self.set_mode("view"))
         c_layout.addWidget(lbl_crop, stretch=1)
         c_layout.addWidget(btn_c_done)
         self.tools_stack.addWidget(crop_menu)
 
-        # Page 2: Rotate Tools
         rot_menu = QWidget()
         r_layout = QHBoxLayout(rot_menu)
-        r_layout.setContentsMargins(20, 20, 20, 20)
+        r_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         btn_r90 = QPushButton("⟳ Rotate 90°")
         btn_fh = QPushButton("↔ Flip Horiz")
         btn_fv = QPushButton("↕ Flip Vert")
         
         for btn in [btn_r90, btn_fh, btn_fv]:
-            btn.setFixedHeight(50)
+            btn.setFixedHeight(int(50 * self.scale))
             btn.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 12px; font-weight: bold; font-size: 14px;")
             r_layout.addWidget(btn)
             
@@ -533,33 +507,33 @@ class ImageEditorOverlay(QFrame):
         btn_fv.clicked.connect(self.do_flip_v)
         
         btn_r_done = QPushButton("Done")
-        btn_r_done.setFixedSize(100, 50)
+        btn_r_done.setFixedSize(int(100 * self.scale), int(50 * self.scale))
         btn_r_done.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 12px; font-weight: bold;")
         btn_r_done.clicked.connect(lambda: self.set_mode("view"))
         r_layout.addWidget(btn_r_done)
         self.tools_stack.addWidget(rot_menu)
         
-        # Page 3: Draw Tools
         draw_menu = QWidget()
         d_layout = QHBoxLayout(draw_menu)
-        d_layout.setContentsMargins(20, 20, 20, 20)
+        d_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         colors = ["#E24A4A", "#1ED760", "#5A8DEF", "#F39C12", "#FFFFFF", "#000000"]
         for c in colors:
             btn = QPushButton()
-            btn.setFixedSize(40, 40)
-            btn.setStyleSheet(f"background-color: {c}; border-radius: 20px; border: 2px solid #555;")
+            col_size = int(40 * self.scale)
+            btn.setFixedSize(col_size, col_size)
+            btn.setStyleSheet(f"background-color: {c}; border-radius: {col_size//2}px; border: 2px solid #555;")
             btn.clicked.connect(lambda checked, color=c: self.set_draw_color(color))
             d_layout.addWidget(btn)
             
         d_layout.addStretch()
         btn_undo = QPushButton("Undo Path")
-        btn_undo.setFixedSize(120, 45)
+        btn_undo.setFixedSize(int(120 * self.scale), int(45 * self.scale))
         btn_undo.setStyleSheet("background-color: #2C2C35; color: white; border-radius: 12px; font-weight: bold;")
         btn_undo.clicked.connect(self.undo_draw)
         
         btn_d_done = QPushButton("Done")
-        btn_d_done.setFixedSize(100, 45)
+        btn_d_done.setFixedSize(int(100 * self.scale), int(45 * self.scale))
         btn_d_done.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 12px; font-weight: bold;")
         btn_d_done.clicked.connect(lambda: self.set_mode("view"))
         
@@ -567,10 +541,9 @@ class ImageEditorOverlay(QFrame):
         d_layout.addWidget(btn_d_done)
         self.tools_stack.addWidget(draw_menu)
 
-        # Page 4: Adjust Tools
         adj_menu = QWidget()
         a_layout = QGridLayout(adj_menu)
-        a_layout.setContentsMargins(20, 10, 20, 10)
+        a_layout.setContentsMargins(int(20 * self.scale), int(10 * self.scale), int(20 * self.scale), int(10 * self.scale))
         
         self.sld_bright = QSlider(Qt.Orientation.Horizontal)
         self.sld_bright.setRange(-100, 100)
@@ -596,7 +569,7 @@ class ImageEditorOverlay(QFrame):
         a_layout.addWidget(self.sld_warmth, 2, 1)
         
         btn_a_done = QPushButton("Done")
-        btn_a_done.setFixedSize(100, 45)
+        btn_a_done.setFixedSize(int(100 * self.scale), int(45 * self.scale))
         btn_a_done.setStyleSheet("background-color: #5A8DEF; color: white; border-radius: 12px; font-weight: bold;")
         btn_a_done.clicked.connect(lambda: self.set_mode("view"))
         a_layout.addWidget(btn_a_done, 0, 2, 3, 1, Qt.AlignmentFlag.AlignVCenter)
@@ -652,25 +625,26 @@ class ImageEditorOverlay(QFrame):
 class ModernDialog(QDialog):
     def __init__(self, parent, title, message, accept_text="OK", cancel_text="Cancel"):
         super().__init__(parent)
+        self.scale = get_scale_factor()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        self.setFixedSize(460, 260)
+        self.setFixedSize(int(460 * self.scale), int(260 * self.scale))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         bg_frame = QFrame(self)
         bg_frame.setStyleSheet("background-color: #22222B; border-radius: 20px; border: 1px solid #33333F;")
         bg_layout = QVBoxLayout(bg_frame)
-        bg_layout.setContentsMargins(30, 30, 30, 25)
-        bg_layout.setSpacing(15)
+        bg_layout.setContentsMargins(int(30 * self.scale), int(30 * self.scale), int(30 * self.scale), int(25 * self.scale))
+        bg_layout.setSpacing(int(15 * self.scale))
 
         lbl_title = QLabel(title)
-        lbl_title.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: white; border: none;")
 
         lbl_msg = QLabel(message)
-        lbl_msg.setFont(QFont("Google Sans", 15))
+        lbl_msg.setFont(QFont("Google Sans", int(15 * self.scale)))
         lbl_msg.setStyleSheet("color: #CCCCCC; border: none;")
         lbl_msg.setWordWrap(True)
         lbl_msg.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
@@ -680,19 +654,19 @@ class ModernDialog(QDialog):
         bg_layout.addStretch()
 
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(15)
+        btn_layout.setSpacing(int(15 * self.scale))
         btn_layout.addStretch()
 
         if cancel_text:
             btn_cancel = QPushButton(cancel_text)
-            btn_cancel.setFixedHeight(45)
+            btn_cancel.setFixedHeight(int(45 * self.scale))
             btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
             btn_cancel.setStyleSheet("QPushButton { background: transparent; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; padding: 0 20px; } QPushButton:hover { background-color: rgba(255,255,255,10); }")
             btn_cancel.clicked.connect(self.reject)
             btn_layout.addWidget(btn_cancel)
 
         btn_accept = QPushButton(accept_text)
-        btn_accept.setFixedHeight(45)
+        btn_accept.setFixedHeight(int(45 * self.scale))
         btn_accept.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_accept.setStyleSheet("QPushButton { background-color: #E24A4A; color: white; border-radius: 8px; font-size: 16px; font-weight: bold; border: none; padding: 0 25px; } QPushButton:hover { background-color: #C0392B; }")
         btn_accept.clicked.connect(self.accept)
@@ -705,10 +679,11 @@ class ModernDialog(QDialog):
 class AlbumTransferDialog(QDialog):
     def __init__(self, parent, current_album, target_options):
         super().__init__(parent)
+        self.scale = get_scale_factor()
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setModal(True)
-        self.setFixedSize(480, 360)
+        self.setFixedSize(int(480 * self.scale), int(360 * self.scale))
         self.chosen_album = None
         self.created_new_name = None
 
@@ -717,13 +692,13 @@ class AlbumTransferDialog(QDialog):
         bg_frame = QFrame(self)
         bg_frame.setStyleSheet("background-color: #22222B; border-radius: 24px; border: 1px solid #33333F;")
         bg_layout = QVBoxLayout(bg_frame)
-        bg_layout.setContentsMargins(25, 25, 25, 20)
+        bg_layout.setContentsMargins(int(25 * self.scale), int(25 * self.scale), int(25 * self.scale), int(20 * self.scale))
 
         lbl_title = QLabel("Move File to Album")
-        lbl_title.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+        lbl_title.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
         lbl_title.setStyleSheet("color: white; border: none;")
         bg_layout.addWidget(lbl_title)
-        bg_layout.addSpacing(10)
+        bg_layout.addSpacing(int(10 * self.scale))
 
         self.list_widget = QListWidget()
         QScroller.grabGesture(self.list_widget.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
@@ -737,7 +712,7 @@ class AlbumTransferDialog(QDialog):
             if album != current_album:
                 self.list_widget.addItem(album)
         bg_layout.addWidget(self.list_widget)
-        bg_layout.addSpacing(10)
+        bg_layout.addSpacing(int(10 * self.scale))
 
         new_album_layout = QHBoxLayout()
         self.input_new_album = QLineEdit()
@@ -750,7 +725,7 @@ class AlbumTransferDialog(QDialog):
         btn_create.clicked.connect(self.create_custom_album)
         new_album_layout.addWidget(btn_create)
         bg_layout.addLayout(new_album_layout)
-        bg_layout.addSpacing(15)
+        bg_layout.addSpacing(int(15 * self.scale))
 
         actions = QHBoxLayout()
         actions.addStretch()
@@ -786,8 +761,10 @@ class AlbumTransferDialog(QDialog):
 class ImageButton(QPushButton):
     def __init__(self, img_path, click_cb):
         super().__init__()
+        self.scale = get_scale_factor()
         self.img_path = img_path
-        self.setFixedSize(160, 160)
+        btn_size = int(160 * self.scale)
+        self.setFixedSize(btn_size, btn_size)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet("QPushButton { background-color: #1C1C22; border-radius: 16px; border: 1px solid #2C2C35; } QPushButton:hover { border-color: #5A8DEF; }")
         
@@ -797,19 +774,19 @@ class ImageButton(QPushButton):
             x = (pix.width() - side) // 2
             y = (pix.height() - side) // 2
             cropped = pix.copy(x, y, side, side)
-            scaled_pix = cropped.scaled(156, 196, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            scaled_pix = cropped.scaled(btn_size - 4, btn_size - 4, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
             
-            rounded = QPixmap(156, 156)
+            rounded = QPixmap(btn_size - 4, btn_size - 4)
             rounded.fill(Qt.GlobalColor.transparent)
             painter = QPainter(rounded)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             path = QPainterPath()
-            path.addRoundedRect(0, 0, 156, 156, 14, 14)
+            path.addRoundedRect(0, 0, btn_size - 4, btn_size - 4, 14, 14)
             painter.setClipPath(path)
             painter.drawPixmap(0, 0, scaled_pix)
             painter.end()
             self.setIcon(QIcon(rounded))
-            self.setIconSize(QSize(156, 156))
+            self.setIconSize(QSize(btn_size - 4, btn_size - 4))
             
         self.clicked.connect(lambda: click_cb(img_path))
 
@@ -817,6 +794,7 @@ class ImageButton(QPushButton):
 class GalleryPage(QWidget):
     def __init__(self, on_close=None):
         super().__init__()
+        self.scale = get_scale_factor()
         self.on_close = on_close
         self.setStyleSheet("background-color: #0C0C0E; color: white;")
         layout = QVBoxLayout(self)
@@ -825,40 +803,36 @@ class GalleryPage(QWidget):
         self.stack = QStackedWidget()
         layout.addWidget(self.stack)
         
-        # Base Album Map Config
         self.albums = ["Photos", "Screenshots", "Videos"]
         self.current_selected_album = "Photos"
         self.all_image_paths = []
         
-        # System Folders to completely ignore during scanning
         self.ignored_folders = [".", "__", "apps", "components", "fonts", "icons", "venv", "browser_data"]
         
-        # --- 1. Dashboard View with Navigation Sidebar ---
         self.grid_page = QWidget()
         dashboard_layout = QHBoxLayout(self.grid_page)
         dashboard_layout.setContentsMargins(0, 0, 0, 0)
         dashboard_layout.setSpacing(0)
 
-        # Left Sidebar Navigation Panel
         self.sidebar = QFrame()
-        self.sidebar.setFixedWidth(240)
+        self.sidebar.setFixedWidth(int(240 * self.scale))
         self.sidebar.setStyleSheet("background-color: #14141A; border-right: 1px solid #22222A;")
         sidebar_layout = QVBoxLayout(self.sidebar)
-        sidebar_layout.setContentsMargins(15, 30, 15, 20)
-        sidebar_layout.setSpacing(10)
+        sidebar_layout.setContentsMargins(int(15 * self.scale), int(30 * self.scale), int(15 * self.scale), int(20 * self.scale))
+        sidebar_layout.setSpacing(int(10 * self.scale))
 
         lbl_sections = QLabel("Albums")
-        lbl_sections.setFont(QFont("Google Sans", 15, QFont.Weight.Bold))
+        lbl_sections.setFont(QFont("Google Sans", int(15 * self.scale), QFont.Weight.Bold))
         lbl_sections.setStyleSheet("color: #666670; margin-left: 10px; margin-bottom: 5px;")
         sidebar_layout.addWidget(lbl_sections)
 
         self.album_list_widget = QListWidget()
         QScroller.grabGesture(self.album_list_widget.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
-        self.album_list_widget.setStyleSheet("""
-            QListWidget { background: transparent; border: none; color: #AAAAAA; outline: 0; }
-            QListWidget::item { padding: 12px 15px; margin-bottom: 4px; border-radius: 10px; font-weight: bold; font-size: 15px; }
-            QListWidget::item:hover { background-color: rgba(255, 255, 255, 8); color: white; }
-            QListWidget::item:selected { background-color: rgba(90, 141, 239, 30); color: #5A8DEF; }
+        self.album_list_widget.setStyleSheet(f"""
+            QListWidget {{ background: transparent; border: none; color: #AAAAAA; outline: 0; }}
+            QListWidget::item {{ padding: {int(12*self.scale)}px {int(15*self.scale)}px; margin-bottom: 4px; border-radius: 10px; font-weight: bold; font-size: {int(15*self.scale)}px; }}
+            QListWidget::item:hover {{ background-color: rgba(255, 255, 255, 8); color: white; }}
+            QListWidget::item:selected {{ background-color: rgba(90, 141, 239, 30); color: #5A8DEF; }}
         """)
         self.album_list_widget.itemClicked.connect(self.on_album_nav_clicked)
         sidebar_layout.addWidget(self.album_list_widget)
@@ -866,26 +840,25 @@ class GalleryPage(QWidget):
 
         dashboard_layout.addWidget(self.sidebar)
 
-        # Right Panel Grid Content Space
         self.main_content_frame = QWidget()
         right_panel_layout = QVBoxLayout(self.main_content_frame)
-        right_panel_layout.setContentsMargins(30, 25, 30, 30)
+        right_panel_layout.setContentsMargins(int(30 * self.scale), int(25 * self.scale), int(30 * self.scale), int(30 * self.scale))
         
         header = QHBoxLayout()
         self.lbl_album_title = QLabel("Photos")
-        self.lbl_album_title.setFont(QFont("Google Sans", 28, QFont.Weight.Bold))
+        self.lbl_album_title.setFont(QFont("Google Sans", int(28 * self.scale), QFont.Weight.Bold))
         header.addWidget(self.lbl_album_title)
         header.addStretch()
         
         self.lbl_connected = QLabel("📱 Device connected.")
-        self.lbl_connected.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        self.lbl_connected.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
         self.lbl_connected.setStyleSheet("color: #1ED760;")
         self.lbl_connected.hide()
         header.addWidget(self.lbl_connected)
-        header.addSpacing(20)
+        header.addSpacing(int(20 * self.scale))
         
         self.btn_upload = QPushButton("  Upload")
-        icon_pix = QPixmap(24, 24)
+        icon_pix = QPixmap(int(24 * self.scale), int(24 * self.scale))
         icon_pix.fill(Qt.GlobalColor.transparent)
         painter = QPainter(icon_pix)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -897,18 +870,18 @@ class GalleryPage(QWidget):
         painter.end()
         
         self.btn_upload.setIcon(QIcon(icon_pix))
-        self.btn_upload.setIconSize(QSize(20, 20))
+        self.btn_upload.setIconSize(QSize(int(20 * self.scale), int(20 * self.scale)))
         self.btn_upload.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_upload.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; padding: 0px 20px; font-weight: bold; font-size: 16px; border: none; height: 45px; } QPushButton:hover { background-color: #4A7DDF; }")
+        self.btn_upload.setStyleSheet(f"QPushButton {{ background-color: #5A8DEF; color: white; border-radius: 12px; padding: 0px 20px; font-weight: bold; font-size: {int(16*self.scale)}px; border: none; height: {int(45*self.scale)}px; }} QPushButton:hover {{ background-color: #4A7DDF; }}")
         self.btn_upload.clicked.connect(self.show_qr_code)
         header.addWidget(self.btn_upload)
         
         if self.on_close:
-            header.addSpacing(15)
+            header.addSpacing(int(15 * self.scale))
             btn_close = QPushButton("✕")
-            btn_close.setFixedSize(45, 45)
+            btn_close.setFixedSize(int(45 * self.scale), int(45 * self.scale))
             btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_close.setFont(QFont("Google Sans", 18, QFont.Weight.Bold))
+            btn_close.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
             btn_close.setStyleSheet("QPushButton { background-color: #2C2C35; color: #AAAAAA; border-radius: 22px; border: none; } QPushButton:hover { background-color: #E24A4A; color: white; }")
             btn_close.clicked.connect(self.shutdown_and_close)
             header.addWidget(btn_close)
@@ -917,7 +890,7 @@ class GalleryPage(QWidget):
         
         self.upload_progress = QProgressBar()
         self.upload_progress.setTextVisible(False)
-        self.upload_progress.setFixedHeight(6)
+        self.upload_progress.setFixedHeight(int(6 * self.scale))
         self.upload_progress.setStyleSheet("""
             QProgressBar { background: #1C1C22; border-radius: 3px; border: none; }
             QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #5A8DEF, stop:1 #9B59B6); border-radius: 3px; }
@@ -936,14 +909,13 @@ class GalleryPage(QWidget):
         self.grid_container.setStyleSheet("background: transparent;")
         self.grid = QGridLayout(self.grid_container)
         self.grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self.grid.setSpacing(20)
+        self.grid.setSpacing(int(20 * self.scale))
         
         self.scroll.setWidget(self.grid_container)
         right_panel_layout.addWidget(self.scroll)
         dashboard_layout.addWidget(self.main_content_frame)
         self.stack.addWidget(self.grid_page)
         
-        # --- 2. Fullscreen Interactive Viewer Viewport ---
         self.fs_page = QWidget()
         self.fs_page.setStyleSheet("background-color: #000000;")
         fs_main_layout = QVBoxLayout(self.fs_page)
@@ -953,10 +925,10 @@ class GalleryPage(QWidget):
         self.fs_header_widget = QWidget()
         self.fs_header_widget.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(0,0,0,180), stop:1 rgba(0,0,0,0));")
         fs_header = QHBoxLayout(self.fs_header_widget)
-        fs_header.setContentsMargins(20, 20, 20, 20)
+        fs_header.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
         self.btn_back = QPushButton("← Back")
-        self.btn_back.setFixedSize(110, 45)
+        self.btn_back.setFixedSize(int(110 * self.scale), int(45 * self.scale))
         self.btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_back.setStyleSheet("QPushButton { background-color: rgba(255,255,255,30); color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: rgba(255,255,255,50); }")
         self.btn_back.clicked.connect(lambda: self.stack.setCurrentIndex(0))
@@ -964,23 +936,23 @@ class GalleryPage(QWidget):
         fs_header.addStretch()
 
         self.btn_edit = QPushButton("✏️ Edit")
-        self.btn_edit.setFixedSize(100, 45)
+        self.btn_edit.setFixedSize(int(100 * self.scale), int(45 * self.scale))
         self.btn_edit.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_edit.setStyleSheet("QPushButton { background-color: rgba(90, 141, 239, 60); color: #5A8DEF; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: #5A8DEF; color: white; }")
         self.btn_edit.clicked.connect(self.trigger_image_editor)
         fs_header.addWidget(self.btn_edit)
-        fs_header.addSpacing(10)
+        fs_header.addSpacing(int(10 * self.scale))
 
         self.btn_move = QPushButton("📦 Move")
-        self.btn_move.setFixedSize(100, 45)
+        self.btn_move.setFixedSize(int(100 * self.scale), int(45 * self.scale))
         self.btn_move.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_move.setStyleSheet("QPushButton { background-color: rgba(255, 255, 255, 30); color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: rgba(255, 255, 255, 50); }")
         self.btn_move.clicked.connect(self.trigger_album_migration)
         fs_header.addWidget(self.btn_move)
-        fs_header.addSpacing(10)
+        fs_header.addSpacing(int(10 * self.scale))
         
         self.btn_del = QPushButton("🗑️ Delete")
-        self.btn_del.setFixedSize(110, 45)
+        self.btn_del.setFixedSize(int(110 * self.scale), int(45 * self.scale))
         self.btn_del.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_del.setStyleSheet("QPushButton { background-color: rgba(226, 74, 74, 60); color: #E24A4A; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: #E24A4A; color: white; }")
         self.btn_del.clicked.connect(self.delete_current_image)
@@ -996,13 +968,12 @@ class GalleryPage(QWidget):
 
         self.stack.addWidget(self.fs_page)
 
-        # --- 3. QR Code Viewport Panel ---
         self.qr_page = QWidget()
         qr_layout = QVBoxLayout(self.qr_page)
-        qr_layout.setContentsMargins(40, 30, 40, 30)
+        qr_layout.setContentsMargins(int(40 * self.scale), int(30 * self.scale), int(40 * self.scale), int(30 * self.scale))
         
         btn_qr_back = QPushButton("← Back")
-        btn_qr_back.setFixedSize(110, 45)
+        btn_qr_back.setFixedSize(int(110 * self.scale), int(45 * self.scale))
         btn_qr_back.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_qr_back.setStyleSheet("QPushButton { background-color: #2C2C35; color: white; border-radius: 12px; font-weight: bold; font-size: 15px; border: none; } QPushButton:hover { background-color: #383845; }")
         btn_qr_back.clicked.connect(lambda: self.stack.setCurrentIndex(0))
@@ -1012,20 +983,20 @@ class GalleryPage(QWidget):
         
         self.lbl_qr = QLabel()
         self.lbl_qr.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_qr.setFixedSize(250, 250)
+        qr_size = int(250 * self.scale)
+        self.lbl_qr.setFixedSize(qr_size, qr_size)
         self.lbl_qr.setStyleSheet("background-color: #1C1C22; border-radius: 16px;")
         qr_layout.addWidget(self.lbl_qr, alignment=Qt.AlignmentFlag.AlignCenter)
-        qr_layout.addSpacing(20)
+        qr_layout.addSpacing(int(20 * self.scale))
         
         self.lbl_qr_inst = QLabel("Scan this code with your phone to upload images.")
-        self.lbl_qr_inst.setFont(QFont("Google Sans", 18))
+        self.lbl_qr_inst.setFont(QFont("Google Sans", int(18 * self.scale)))
         self.lbl_qr_inst.setStyleSheet("color: #AAAAAA;")
         self.lbl_qr_inst.setAlignment(Qt.AlignmentFlag.AlignCenter)
         qr_layout.addWidget(self.lbl_qr_inst, alignment=Qt.AlignmentFlag.AlignCenter)
         qr_layout.addStretch()
         self.stack.addWidget(self.qr_page)
         
-        # --- Internal Overlays ---
         self.editor_overlay = ImageEditorOverlay(self, self.on_editor_saved)
 
         self.current_img_path = None
@@ -1164,13 +1135,13 @@ class GalleryPage(QWidget):
         
         if not self.all_image_paths:
             lbl_empty = QLabel("No images in this album.")
-            lbl_empty.setFont(QFont("Google Sans", 16))
+            lbl_empty.setFont(QFont("Google Sans", int(16 * self.scale)))
             lbl_empty.setStyleSheet("color: #666670;")
             lbl_empty.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
             self.grid.addWidget(lbl_empty, 0, 0)
             return
             
-        cols = 4
+        cols = 5 if self.scale > 1.4 else 4
         for i, path in enumerate(self.all_image_paths):
             btn = ImageButton(path, self.open_image)
             self.grid.addWidget(btn, i // cols, i % cols)
@@ -1179,7 +1150,7 @@ class GalleryPage(QWidget):
         self.current_img_path = path
         pix = QPixmap(path)
         if not pix.isNull():
-            scaled = pix.scaled(1024, 600, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            scaled = pix.scaled(int(1024 * self.scale), int(600 * self.scale), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.lbl_fs_img.setPixmap(scaled)
         self.stack.setCurrentIndex(1)
         
