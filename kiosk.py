@@ -28,18 +28,34 @@ from apps.app_store import AppStorePage
 from components.voice_assistant import VoiceAssistantThread
 
 # =================================================================
-# 🖥️ DYNAMIC SCREEN GEOMETRY ENGINE
+# 🖥️ DYNAMIC SCREEN & HARDWARE PROFILE ENGINE
 # =================================================================
 def get_screen_geometry():
-    """Dynamically detects active monitor resolution (Defaults to 1024x600 fallback)."""
+    """Detects physical monitor resolution and classifies the hardware profile."""
     screen = QGuiApplication.primaryScreen()
+    width, height = 1024, 600
+    
     if screen:
         size = screen.size()
-        return size.width(), size.height()
-    return 1024, 600
+        width, height = size.width(), size.height()
 
-# Dynamically evaluated at runtime
-SCREEN_WIDTH, SCREEN_HEIGHT = get_screen_geometry()
+    # Read Bash environment flag if available, otherwise classify by resolution
+    env_mode = os.environ.get("KIOSK_DISPLAY_MODE", "")
+    
+    if width >= 1800 or env_mode == "WIDESCREEN_1200P":
+        profile = "1920x1200 Widescreen Pro"
+        default_cols = 6
+    elif width <= 1280 or env_mode == "COMPACT_600P":
+        profile = "1024x600 Compact Touch"
+        default_cols = 4
+    else:
+        profile = f"{width}x{height} Custom Display"
+        default_cols = 5 if width > 1400 else 4
+
+    return width, height, profile, default_cols
+
+# Dynamically evaluated at runtime boot
+SCREEN_WIDTH, SCREEN_HEIGHT, DISPLAY_PROFILE, DEFAULT_GRID_COLS = get_screen_geometry()
 SCALE_FACTOR = SCREEN_WIDTH / 1024.0
 CC_HEIGHT = int(500 * (SCREEN_HEIGHT / 600.0))
 
@@ -412,6 +428,14 @@ class VoiceOverlay(QFrame):
 class NestKiosk(QMainWindow):
     def __init__(self):
         super().__init__()
+        
+        # --- ANNOUNCE DETECTED HARDWARE ON BOOT ---
+        print("=" * 50)
+        print(f" [System Boot] Display Profile : {DISPLAY_PROFILE}")
+        print(f" [System Boot] Resolution      : {SCREEN_WIDTH} x {SCREEN_HEIGHT}")
+        print(f" [System Boot] UI Scale Multi  : {SCALE_FACTOR:.2f}x")
+        print(f" [System Boot] Default Columns : {DEFAULT_GRID_COLS}")
+        print("=" * 50)
         
         font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
         if os.path.exists(font_dir):
@@ -1045,9 +1069,8 @@ class NestKiosk(QMainWindow):
         if layout_type == "grid":
             self.drawer_grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
             self.drawer_grid.setSpacing(int(35 * SCALE_FACTOR)) 
-            # Auto-adapt columns: 4 on small screens, 6 on widescreen/1200p
-            base_cols = 4 if SCREEN_WIDTH <= 1280 else 6
-            columns = max(1, int(base_cols * (100.0 / scale)))
+            # Automatically apply 4 columns for 1024x600 or 6 columns for 1920x1200
+            columns = max(1, int(DEFAULT_GRID_COLS * (100.0 / scale)))
             if columns > 8: columns = 8
         else:
             self.drawer_grid.setAlignment(Qt.AlignmentFlag.AlignTop) 
@@ -1228,32 +1251,6 @@ class NestKiosk(QMainWindow):
     # =================================================================
     # APP LAUNCHING & ROUTING
     # =================================================================
-    def update_clock(self):
-        t = QTime.currentTime()
-        d = QDate.currentDate()
-        if self.active_clock_widget:
-            self.active_clock_widget.update_time(t, d)
-        if hasattr(self, 'selector_overlay'):
-            self.selector_overlay.update_time(t, d)
-
-    def apply_clockface(self, idx):
-        if idx >= len(cf.CLOCKFACE_CLASSES) or idx < 0:
-            idx = 0
-            
-        if self.active_clock_widget:
-            self.active_clock_widget.setParent(None)
-            self.active_clock_widget.deleteLater()
-            
-        self.active_clock_widget = cf.CLOCKFACE_CLASSES[idx]()
-        self.clock_layout.addWidget(self.active_clock_widget)
-        save_system_setting("clockface_index", idx)
-        self.update_clock()
-
-    def open_clockface_selector(self):
-        self.long_press_timer.stop()
-        current_idx = get_system_setting("clockface_index", 0)
-        self.selector_overlay.show_selector(current_idx)
-
     def launch_app(self, app_name):
         self.app_drawer.slide_out()
         self.task_ribbon.hide()
@@ -1296,14 +1293,14 @@ class NestKiosk(QMainWindow):
                     layout = QVBoxLayout(app_box)
                     layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
                     app_title = QLabel(f"{app_name} Module")
-                    app_title.setFont(QFont("Google Sans", 32, QFont.Weight.Bold))
+                    app_title.setFont(QFont("Google Sans", int(32 * SCALE_FACTOR), QFont.Weight.Bold))
                     desc = QLabel("Swipe from the far left edge of the screen to return home.")
-                    desc.setStyleSheet("color: #888888; font-size: 16px; margin-top: 10px;")
+                    desc.setStyleSheet(f"color: #888888; font-size: {int(16 * SCALE_FACTOR)}px; margin-top: 10px;")
                     layout.addWidget(app_title, alignment=Qt.AlignmentFlag.AlignCenter)
                     layout.addWidget(desc, alignment=Qt.AlignmentFlag.AlignCenter)
                     
                     btn_close = QPushButton("Return Home")
-                    btn_close.setFixedSize(200, 50)
+                    btn_close.setFixedSize(int(200 * SCALE_FACTOR), int(50 * SCALE_FACTOR))
                     btn_close.setStyleSheet("background-color: #E24A4A; border-radius: 10px; color: white;")
                     btn_close.clicked.connect(self.minimize_app)
                     layout.addWidget(btn_close, alignment=Qt.AlignmentFlag.AlignCenter)
