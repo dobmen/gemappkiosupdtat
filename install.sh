@@ -44,7 +44,8 @@ apt-get install -y -qq \
     libasound2-dev \
     portaudio19-dev \
     libjack-jackd2-dev \
-    libgl1-mesa-glx \
+    libgl1 \
+    libglx-mesa0 \
     libxkbcommon-x11-0 \
     libxcb-icccm4 \
     libxcb-image0 \
