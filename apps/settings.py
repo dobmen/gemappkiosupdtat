@@ -855,6 +855,7 @@ class SettingsPage(QWidget):
             idx = self.get_saved_setting("clockface_index", 0)
             if idx < len(CLOCKFACES):
                 inst = CLOCKFACES[idx][1]()
+                inst.setProperty("is_preview", True)
                 inst.setGeometry(0, 0, 360, 360)
                 inst.update_time(QTime.currentTime(), QDate.currentDate())
                 

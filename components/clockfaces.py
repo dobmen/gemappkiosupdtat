@@ -226,10 +226,11 @@ class ClassicClock(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        radius = max(36, int(36 * (self.height() / 600.0)))
-        path = QPainterPath()
-        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
-        painter.setClipPath(path)
+        if self.property("is_preview"):
+            radius = max(36, int(36 * (self.height() / 600.0)))
+            path = QPainterPath()
+            path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+            painter.setClipPath(path)
         
         draw_custom_background(painter, self.bg, self.width(), self.height())
         painter.end()
@@ -306,10 +307,11 @@ class StackedClock(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        radius = max(36, int(36 * (self.height() / 600.0)))
-        path = QPainterPath()
-        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
-        painter.setClipPath(path)
+        if self.property("is_preview"):
+            radius = max(36, int(36 * (self.height() / 600.0)))
+            path = QPainterPath()
+            path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+            painter.setClipPath(path)
         
         draw_custom_background(painter, self.bg, self.width(), self.height())
         painter.end()
@@ -342,10 +344,11 @@ class AnalogClock(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        radius = max(36, int(36 * (self.height() / 600.0)))
-        path = QPainterPath()
-        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
-        painter.setClipPath(path)
+        if self.property("is_preview"):
+            radius = max(36, int(36 * (self.height() / 600.0)))
+            path = QPainterPath()
+            path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+            painter.setClipPath(path)
         
         is_light = (self.theme == "light")
         bg_col = QColor(245, 245, 245) if is_light else QColor(12, 12, 14)
@@ -796,6 +799,7 @@ class ClockSelectorOverlay(QWidget):
 
         for i, (name, Cls) in enumerate(CLOCKFACES):
             inst = Cls()
+            inst.setProperty("is_preview", True)
             wrapper = QFrame(self.main_container)
             wrapper.setStyleSheet("background-color: transparent;")
             
