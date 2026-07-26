@@ -57,6 +57,17 @@ apt-get install -y -qq \
     libxcb-cursor0 \
     x11-xserver-utils \
     xinput \
+    x11-utils \
+    alsa-utils \
+    network-manager \
+    bluez \
+    libnss3 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxi6 \
+    libxtst6 \
+    libgbm1 \
+    libdrm2 \
     lightdm \
     openbox \
     git \
