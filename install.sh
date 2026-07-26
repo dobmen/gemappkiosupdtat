@@ -11,108 +11,48 @@ echo "   Target Resolution : Auto-Detecting            "
 echo "   Installation Path : ~/kiosk_os                "
 echo "================================================="
 
-# 1. Check for root/sudo privileges for system packages
 if [ "$EUID" -ne 0 ]; then
-    echo "Please run this installer with sudo: sudo ./install.sh"
+    echo "Please run this installer with sudo: sudo bash install.sh"
     exit 1
 fi
 
-# Get the actual user who invoked sudo and define the installation path
 REAL_USER=${SUDO_USER:-$USER}
 REAL_HOME=$(eval echo ~$REAL_USER)
 INSTALL_DIR="$REAL_HOME/kiosk_os"
-
-# The GitHub repository to clone the entire Kiosk OS system from
 GITHUB_REPO_URL="https://github.com/dobmen/gemappkiosupdtat.git"
 
 echo "[1/8] Configuring passwordless sudo for system power & update commands..."
 SUDOERS_FILE="/etc/sudoers.d/010_kiosk_nopasswd"
 cat <<EOF > "$SUDOERS_FILE"
-# Allow Kiosk OS user to perform all sudo commands without a password for seamless updates
 $REAL_USER ALL=(ALL) NOPASSWD: ALL
 EOF
 chmod 0440 "$SUDOERS_FILE"
-echo " -> Passwordless sudo configured successfully."
 
-echo "[2/8] Updating system and installing Linux audio/display/window manager dependencies..."
+echo "[2/8] Updating system and installing Linux audio/Wayland dependencies..."
 apt-get update -qq
 apt-get install -y -qq \
-    python3-pip \
-    python3-venv \
-    python3-dev \
-    build-essential \
-    libasound2-dev \
-    portaudio19-dev \
-    libjack-jackd2-dev \
-    libgl1 \
-    libglx-mesa0 \
-    libxkbcommon-x11-0 \
-    libxcb-icccm4 \
-    libxcb-image0 \
-    libxcb-keysyms1 \
-    libxcb-randr0 \
-    libxcb-render-util0 \
-    libxcb-xinerama0 \
-    libxcb-xfixes0 \
-    libxcb-cursor0 \
-    x11-xserver-utils \
-     \
-    x11-utils \
-    alsa-utils \
-    network-manager \
-    bluez \
-    picom \
-    libnss3 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxi6 \
-    libxtst6 \
-    libgbm1 \
-    libdrm2 \
-    lightdm \
-    openbox \
-    git \
-    curl
+    python3-pip python3-venv python3-dev build-essential \
+    libasound2-dev portaudio19-dev libjack-jackd2-dev \
+    libgl1 libglx-mesa0 libgbm1 libdrm2 \
+    labwc wlr-randr wayland-protocols \
+    python3-pyqt6 python3-pyqt6.qtwebengine \
+    libqt6webenginecore6 libqt6webenginewidgets6 \
+    alsa-utils network-manager bluez \
+    libnss3 git curl unzip wget
 
-echo "[3/8] Configuring LightDM Auto-Login for user: $REAL_USER..."
-# Ensure lightdm is the default display manager instead of gdm3
-echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager
-DEBIAN_FRONTEND=noninteractive dpkg-reconfigure lightdm 2>/dev/null || true
+echo "[3/8] Removing legacy LightDM & Openbox to ensure pure Wayland boot..."
+systemctl disable lightdm 2>/dev/null || true
 systemctl disable gdm3 2>/dev/null || true
-
-# Add user to autologin groups to ensure PAM allows passwordless boot
-groupadd -f autologin
-gpasswd -a $REAL_USER autologin
-groupadd -f nopasswdlogin
-gpasswd -a $REAL_USER nopasswdlogin
-
-LIGHTDM_CONF_DIR="/etc/lightdm/lightdm.conf.d"
-if [ -d "/etc/lightdm" ]; then
-    mkdir -p "$LIGHTDM_CONF_DIR"
-    cat <<EOF > "$LIGHTDM_CONF_DIR/50-kiosk-autologin.conf"
-[Seat:*]
-autologin-guest=false
-autologin-user=$REAL_USER
-autologin-user-timeout=0
-user-session=openbox
-EOF
-    echo " -> Auto-login enabled via LightDM drop-in config (Session: Openbox)."
-else
-    echo " ⚠ LightDM config directory not found. Skipping auto-login configuration."
-fi
 
 echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
 if [ -d "$INSTALL_DIR/.git" ]; then
-    echo " -> Existing Git repo found at $INSTALL_DIR. Pulling latest changes..."
     sudo -u $REAL_USER git -C "$INSTALL_DIR" fetch origin
     sudo -u $REAL_USER git -C "$INSTALL_DIR" reset --hard origin/main
     sudo -u $REAL_USER git -C "$INSTALL_DIR" checkout -B main origin/main
 else
-    echo " -> Cloning fresh Kiosk OS repository into $INSTALL_DIR..."
     rm -rf "$INSTALL_DIR"
     sudo -u $REAL_USER git clone -b main "$GITHUB_REPO_URL" "$INSTALL_DIR"
 fi
-
 cd "$INSTALL_DIR"
 
 echo "[5/8] Creating Python virtual environment..."
@@ -148,34 +88,47 @@ if [ ! -f "$CONFIG_FILE" ]; then
     "os_version": "0.1.0"
 }
 EOF
-    echo " -> Created fresh config.json."
 fi
 
-# Make launcher executable and fix recursive file ownership
 chmod +x "$INSTALL_DIR/launch.sh"
 chown -R $REAL_USER:$REAL_USER "$INSTALL_DIR"
 
-echo "[8/8] Configuring Openbox session to auto-launch Kiosk OS..."
-# Create an XDG autostart entry for openbox so it runs launch.sh right when the GUI boots
-AUTOSTART_DIR="$REAL_HOME/.config/openbox"
-sudo -u $REAL_USER mkdir -p "$AUTOSTART_DIR"
+echo "[8/8] Configuring systemd for direct Wayland boot (tty1)..."
+SERVICE_FILE="/etc/systemd/system/kiosk-wayland.service"
+cat <<EOF > "$SERVICE_FILE"
+[Unit]
+Description=Labwc Kiosk Wayland Session
+After=systemd-user-sessions.service network.target sound.target
+Conflicts=getty@tty1.service
 
-cat <<EOF > "$AUTOSTART_DIR/autostart"
-# Launch Kiosk OS automatically inside the lightweight Openbox session
-$INSTALL_DIR/launch.sh &
+[Service]
+User=$REAL_USER
+WorkingDirectory=$INSTALL_DIR
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty1
+Environment=XDG_SESSION_TYPE=wayland
+Environment=XDG_CURRENT_DESKTOP=labwc
+Environment=QT_QPA_PLATFORM=wayland
+ExecStart=/bin/bash $INSTALL_DIR/launch.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical.target
 EOF
-chown -R $REAL_USER:$REAL_USER "$REAL_HOME/.config"
 
-# Ensure LightDM starts on boot (and GDM3 is disabled)
-systemctl disable gdm3 2>/dev/null || true
-systemctl enable lightdm.service
+systemctl daemon-reload
+systemctl enable kiosk-wayland.service
 
 echo "================================================="
 echo "   INSTALLATION & KIOSK ENVIRONMENT COMPLETE!    "
 echo "================================================="
 echo "Kiosk OS has been installed to: $INSTALL_DIR"
 echo ""
-echo "When you reboot, Debian 13 will auto-login into LightDM,"
-echo "spawn Openbox, and launch your Kiosk application full-screen."
+echo "When you reboot, Debian 13 will bypass LightDM,"
+echo "and boot directly into a pure hardware-accelerated"
+echo "Wayland (labwc) session on tty1 at 60 FPS."
 echo "   sudo reboot"
 echo "================================================="
