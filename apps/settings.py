@@ -1363,13 +1363,15 @@ class SettingsPage(QWidget):
     def update_scale_val(self, val):
         self.lbl_scale_val.setText(f"{val}%")
         self.save_setting("app_drawer_scale", val)
+        if hasattr(self.window(), 'rebuild_app_drawer'):
+            self.window().rebuild_app_drawer()
 
     def set_app_layout(self, layout_type, save=True):
         active_style = """
-            QPushButton { background-color: #5A8DEF; color: white; border-radius: 8px; border: none; }
+            QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; }
         """
         inactive_style = """
-            QPushButton { background-color: #2C2C35; color: #AAAAAA; border-radius: 8px; border: none; }
+            QPushButton { background-color: #2C2C35; color: white; border-radius: 12px; }
         """
         
         if layout_type == "grid":
@@ -1381,6 +1383,9 @@ class SettingsPage(QWidget):
             
         if save:
             self.save_setting("app_drawer_layout", layout_type)
+            
+        if hasattr(self.window(), 'rebuild_app_drawer'):
+            self.window().rebuild_app_drawer()
 
     def get_local_ip(self):
         try:

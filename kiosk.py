@@ -1230,8 +1230,8 @@ class NestKiosk(QMainWindow):
         scale = 100
         layout_type = "grid"
         try:
-            if os.path.exists("settings.json"):
-                with open("settings.json", "r") as f:
+            if os.path.exists("config.json"):
+                with open("config.json", "r") as f:
                     conf = json.load(f)
                     scale = conf.get("app_drawer_scale", 100)
                     layout_type = conf.get("app_drawer_layout", "grid")
