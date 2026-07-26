@@ -1,4 +1,4 @@
 {
-  "version": "0.1.2.0",
-  "notes": "Beta option Settings Apps Update Alpha Release"
+  "version": "0.1.10 Beta",
+  "notes": "Completely rebuilt the background dimming engine to eliminate QGraphicsBlurEffect crashes. The OS is now incredibly stable and will not glitch out or turn black when opening apps like Neon Clock."
 }

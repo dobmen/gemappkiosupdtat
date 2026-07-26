@@ -7,7 +7,7 @@ import time
 import urllib.request
 import urllib.parse
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QUrl, QRect, QPropertyAnimation, QEasingCurve, QPoint, QSize
-from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor, QIcon, QFontMetrics
+from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor, QIcon, QFontMetrics, QGuiApplication
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QSlider, QFrame, QProgressBar, QScrollArea, QStackedWidget, QScroller, QMenu, QSizePolicy
@@ -20,11 +20,8 @@ try:
 except ImportError:
     SPOTIPY_AVAILABLE = False
 
-try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    WEBENGINE_AVAILABLE = True
-except ImportError:
-    WEBENGINE_AVAILABLE = False
+# Force disable QtWebEngine on Linux VMs to prevent Chromium sandbox core dump
+WEBENGINE_AVAILABLE = False
 
 SPOTIFY_CLIENT_ID = "a31b1c1688c947bb98baa2ab3e8c053f"
 SPOTIFY_CLIENT_SECRET = "abce0502579346649aaf44549857971d"
@@ -33,6 +30,12 @@ SCOPE = "user-read-playback-state,user-modify-playback-state,user-read-currently
 
 LYRICS_FETCH_TIMEOUT = 4  
 AUDIO_BUFFER_OFFSET_MS = -1200  
+
+
+def get_scale_factor():
+    """Dynamically detects active screen resolution and returns proportional scale factor."""
+    screen = QGuiApplication.primaryScreen()
+    return max(1.0, screen.size().width() / 1024.0) if screen else 1.0
 
 
 def truncate_text(text, max_len=40):
@@ -46,8 +49,9 @@ class ScrollLabel(QWidget):
     """Custom Marquee Label that prevents grid shifting and only scrolls overflowing text."""
     def __init__(self, text="", parent=None, align_center=False):
         super().__init__(parent)
+        self.scale = get_scale_factor()
         self._text = text
-        self._font = QFont("Google Sans", 20)
+        self._font = QFont("Google Sans", int(20 * self.scale))
         self._color = QColor(255, 255, 255)
         self._offset = 0.0
         self.align_center = align_center
@@ -57,13 +61,13 @@ class ScrollLabel(QWidget):
         self._timer.setInterval(30) 
         
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setFixedHeight(35) 
+        self.setFixedHeight(int(35 * self.scale)) 
         self._fm_width = 0
 
     def setFont(self, font):
         self._font = font
         fm = QFontMetrics(self._font)
-        self.setFixedHeight(fm.height() + 5)
+        self.setFixedHeight(fm.height() + int(5 * self.scale))
         self.update_metrics()
 
     def setTextColor(self, color_hex):
@@ -84,7 +88,10 @@ class ScrollLabel(QWidget):
 
     def update_metrics(self):
         fm = QFontMetrics(self._font)
-        self._fm_width = fm.horizontalAdvance(self._text)
+        # We use a crude way to strip HTML for width calculation, or just use QFontMetrics on raw text if it's simple
+        import re
+        clean_text = re.sub(r'<[^>]+>', '', self._text)
+        self._fm_width = fm.horizontalAdvance(clean_text)
         self.updateGeometry() 
         self.check_scroll()
 
@@ -103,7 +110,7 @@ class ScrollLabel(QWidget):
 
     def tick(self):
         self._offset -= 1.5
-        gap = 50
+        gap = int(50 * self.scale)
         if abs(self._offset) >= self._fm_width + gap:
             self._offset = 0.0
         self.update()
@@ -111,22 +118,36 @@ class ScrollLabel(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setFont(self._font)
-        p.setPen(self._color)
         
-        fm = QFontMetrics(self._font)
-        y = (self.height() + fm.ascent() - fm.descent()) // 2
+        from PyQt6.QtGui import QTextDocument
+        doc = QTextDocument()
+        doc.setDefaultFont(self._font)
+        # Apply color via css
+        doc.setDefaultStyleSheet(f"body {{ color: {self._color.name()}; white-space: nowrap; margin: 0px; }}")
+        doc.setHtml(f"<body>{self._text}</body>")
+        
+        # calculate vertical centering
+        y = (self.height() - int(doc.size().height())) // 2
         
         if self._timer.isActive():
-            p.drawText(int(self._offset), y, self._text)
-            gap = 50
-            p.drawText(int(self._offset) + self._fm_width + gap, y, self._text)
+            p.translate(int(self._offset), y)
+            doc.drawContents(p)
+            p.translate(-int(self._offset), -y)
+            
+            gap = int(50 * self.scale)
+            p.translate(int(self._offset) + self._fm_width + gap, y)
+            doc.drawContents(p)
+            p.translate(-(int(self._offset) + self._fm_width + gap), -y)
         else:
             if self.align_center:
                 x = max(0, (self.width() - self._fm_width) // 2)
-                p.drawText(x, y, self._text)
+                p.translate(x, y)
+                doc.drawContents(p)
+                p.translate(-x, -y)
             else:
-                p.drawText(0, y, self._text)
+                p.translate(0, y)
+                doc.drawContents(p)
+                p.translate(0, -y)
         p.end()
 
 
@@ -519,6 +540,7 @@ class QueuePanel(QScrollArea):
     on_track_clicked = pyqtSignal(int)
     def __init__(self):
         super().__init__()
+        self.scale = get_scale_factor()
         self.setWidgetResizable(True)
         self.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -529,7 +551,7 @@ class QueuePanel(QScrollArea):
         self.container = QWidget()
         self.container.setStyleSheet("background: transparent;")
         self.layout = QVBoxLayout(self.container)
-        self.layout.setContentsMargins(15, 20, 15, 180)
+        self.layout.setContentsMargins(int(15 * self.scale), int(20 * self.scale), int(15 * self.scale), int(180 * self.scale))
         self.layout.setSpacing(0)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.setWidget(self.container)
@@ -566,7 +588,7 @@ class QueuePanel(QScrollArea):
 
         if not tracks:
             lbl = QLabel("Queue is empty.")
-            lbl.setFont(QFont("Google Sans", 18))
+            lbl.setFont(QFont("Google Sans", int(18 * self.scale)))
             lbl.setStyleSheet("color: #888890; background: transparent;")
             self.layout.addWidget(lbl)
         else:
@@ -582,11 +604,12 @@ class QueuePanel(QScrollArea):
                 row.clicked.connect(self.on_track_clicked.emit) 
                 
                 hlay = QHBoxLayout(row)
-                hlay.setContentsMargins(0, 10, 0, 10)
-                hlay.setSpacing(15)
+                hlay.setContentsMargins(0, int(10 * self.scale), 0, int(10 * self.scale))
+                hlay.setSpacing(int(15 * self.scale))
 
+                img_size = int(50 * self.scale)
                 img_lbl = QLabel()
-                img_lbl.setFixedSize(50, 50)
+                img_lbl.setFixedSize(img_size, img_size)
                 img_lbl.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 6px;")
                 self.image_labels[i] = img_lbl
                 if img_url: image_tasks.append({'index': i, 'url': img_url})
@@ -597,11 +620,11 @@ class QueuePanel(QScrollArea):
                 vlay.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
                 t_lbl = QLabel(truncate_text(name, 40))
-                t_lbl.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+                t_lbl.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
                 t_lbl.setStyleSheet("color: #FFFFFF; background: transparent;")
                 
                 a_lbl = QLabel(truncate_text(artists, 50))
-                a_lbl.setFont(QFont("Google Sans", 13))
+                a_lbl.setFont(QFont("Google Sans", int(13 * self.scale)))
                 a_lbl.setStyleSheet("color: #DDDDDD; background: transparent;")
 
                 vlay.addWidget(t_lbl)
@@ -614,12 +637,12 @@ class QueuePanel(QScrollArea):
                     line = QFrame()
                     line.setFrameShape(QFrame.Shape.HLine)
                     line.setFixedHeight(1)
-                    line.setStyleSheet("background-color: rgba(255, 255, 255, 25); border: none; margin-left: 65px;")
+                    line.setStyleSheet(f"background-color: rgba(255, 255, 255, 25); border: none; margin-left: {int(65 * self.scale)}px;")
                     self.layout.addWidget(line)
         self.layout.addStretch()
         
         if image_tasks:
-            self.img_fetcher = ImageBatchFetchThread(image_tasks, size=50)
+            self.img_fetcher = ImageBatchFetchThread(image_tasks, size=int(50 * self.scale))
             self.img_fetcher.on_image_ready.connect(self.update_image)
             self.img_fetcher.start()
 
@@ -633,6 +656,7 @@ class LibraryPanel(QScrollArea):
     on_item_clicked = pyqtSignal(dict)
     def __init__(self):
         super().__init__()
+        self.scale = get_scale_factor()
         self.setWidgetResizable(True)
         self.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -643,7 +667,7 @@ class LibraryPanel(QScrollArea):
         self.container = QWidget()
         self.container.setStyleSheet("background: transparent;")
         self.layout = QVBoxLayout(self.container)
-        self.layout.setContentsMargins(15, 20, 15, 180)
+        self.layout.setContentsMargins(int(15 * self.scale), int(20 * self.scale), int(15 * self.scale), int(180 * self.scale))
         self.layout.setSpacing(0)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.setWidget(self.container)
@@ -685,14 +709,15 @@ class LibraryPanel(QScrollArea):
         row_liked.clicked.connect(self.on_item_clicked.emit) 
         
         hlay_liked = QHBoxLayout(row_liked)
-        hlay_liked.setContentsMargins(0, 10, 0, 10)
-        hlay_liked.setSpacing(15)
+        hlay_liked.setContentsMargins(0, int(10 * self.scale), 0, int(10 * self.scale))
+        hlay_liked.setSpacing(int(15 * self.scale))
 
+        img_size = int(50 * self.scale)
         img_liked = QLabel("♥")
-        img_liked.setFont(QFont("Google Sans", 24))
+        img_liked.setFont(QFont("Google Sans", int(24 * self.scale)))
         img_liked.setStyleSheet("color: white; background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4E1E8B, stop:1 #8E54E9); border-radius: 6px;")
         img_liked.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        img_liked.setFixedSize(50, 50)
+        img_liked.setFixedSize(img_size, img_size)
 
         vlay_liked = QVBoxLayout()
         vlay_liked.setContentsMargins(0, 0, 0, 0)
@@ -700,11 +725,11 @@ class LibraryPanel(QScrollArea):
         vlay_liked.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         
         t_lbl_liked = QLabel("Liked Songs")
-        t_lbl_liked.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        t_lbl_liked.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         t_lbl_liked.setStyleSheet("color: #FFFFFF; background: transparent;")
         
         a_lbl_liked = QLabel("My Library")
-        a_lbl_liked.setFont(QFont("Google Sans", 13))
+        a_lbl_liked.setFont(QFont("Google Sans", int(13 * self.scale)))
         a_lbl_liked.setStyleSheet("color: #DDDDDD; background: transparent;")
 
         vlay_liked.addWidget(t_lbl_liked)
@@ -716,7 +741,7 @@ class LibraryPanel(QScrollArea):
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFixedHeight(1)
-        line.setStyleSheet("background-color: rgba(255, 255, 255, 25); border: none; margin-left: 65px;")
+        line.setStyleSheet(f"background-color: rgba(255, 255, 255, 25); border: none; margin-left: {int(65 * self.scale)}px;")
         self.layout.addWidget(line)
 
         for i, pl in enumerate(playlists):
@@ -733,11 +758,11 @@ class LibraryPanel(QScrollArea):
             row.clicked.connect(self.on_item_clicked.emit) 
             
             hlay = QHBoxLayout(row)
-            hlay.setContentsMargins(0, 10, 0, 10)
-            hlay.setSpacing(15)
+            hlay.setContentsMargins(0, int(10 * self.scale), 0, int(10 * self.scale))
+            hlay.setSpacing(int(15 * self.scale))
 
             img_lbl = QLabel()
-            img_lbl.setFixedSize(50, 50)
+            img_lbl.setFixedSize(img_size, img_size)
             img_lbl.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 6px;")
             self.image_labels[idx] = img_lbl
             if img_url: image_tasks.append({'index': idx, 'url': img_url})
@@ -748,11 +773,11 @@ class LibraryPanel(QScrollArea):
             vlay.setAlignment(Qt.AlignmentFlag.AlignVCenter)
             
             t_lbl = QLabel(truncate_text(name, 40))
-            t_lbl.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+            t_lbl.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
             t_lbl.setStyleSheet("color: #FFFFFF; background: transparent;")
             
             a_lbl = QLabel(truncate_text(owner, 50))
-            a_lbl.setFont(QFont("Google Sans", 13))
+            a_lbl.setFont(QFont("Google Sans", int(13 * self.scale)))
             a_lbl.setStyleSheet("color: #DDDDDD; background: transparent;")
 
             vlay.addWidget(t_lbl)
@@ -765,12 +790,12 @@ class LibraryPanel(QScrollArea):
                 line = QFrame()
                 line.setFrameShape(QFrame.Shape.HLine)
                 line.setFixedHeight(1)
-                line.setStyleSheet("background-color: rgba(255, 255, 255, 25); border: none; margin-left: 65px;")
+                line.setStyleSheet(f"background-color: rgba(255, 255, 255, 25); border: none; margin-left: {int(65 * self.scale)}px;")
                 self.layout.addWidget(line)
         self.layout.addStretch()
         
         if image_tasks:
-            self.img_fetcher = ImageBatchFetchThread(image_tasks, size=50)
+            self.img_fetcher = ImageBatchFetchThread(image_tasks, size=img_size)
             self.img_fetcher.on_image_ready.connect(self.update_image)
             self.img_fetcher.start()
 
@@ -787,6 +812,7 @@ class PlaylistDetailsPanel(QScrollArea):
 
     def __init__(self):
         super().__init__()
+        self.scale = get_scale_factor()
         self.setWidgetResizable(True)
         self.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -797,12 +823,12 @@ class PlaylistDetailsPanel(QScrollArea):
         self.container = QWidget()
         self.container.setStyleSheet("background: transparent;")
         self.layout = QVBoxLayout(self.container)
-        self.layout.setContentsMargins(15, 10, 15, 180)
+        self.layout.setContentsMargins(int(15 * self.scale), int(10 * self.scale), int(15 * self.scale), int(180 * self.scale))
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.setWidget(self.container)
 
         self.btn_back = QPushButton("◀ Library")
-        self.btn_back.setFixedSize(100, 30)
+        self.btn_back.setFixedSize(int(100 * self.scale), int(30 * self.scale))
         self.btn_back.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_back.setStyleSheet("background: rgba(255,255,255,20); color: white; border-radius: 15px; font-weight: bold;")
         self.btn_back.clicked.connect(self.on_back.emit)
@@ -810,20 +836,21 @@ class PlaylistDetailsPanel(QScrollArea):
         header_container = QWidget()
         h_layout = QVBoxLayout(header_container)
         h_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        h_layout.setSpacing(15)
+        h_layout.setSpacing(int(15 * self.scale))
 
+        img_size = int(160 * self.scale)
         self.lbl_image = QLabel()
-        self.lbl_image.setFixedSize(160, 160)
+        self.lbl_image.setFixedSize(img_size, img_size)
         self.lbl_image.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 12px;")
         self.lbl_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.lbl_title = ScrollLabel("", align_center=True)
-        self.lbl_title.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        self.lbl_title.setFont(QFont("Google Sans", int(22 * self.scale), QFont.Weight.Bold))
         self.lbl_title.setTextColor("#FFFFFF")
 
         self.btn_play_all = QPushButton("Play Playlist")
-        self.btn_play_all.setFixedSize(170, 45)
-        self.btn_play_all.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+        self.btn_play_all.setFixedSize(int(170 * self.scale), int(45 * self.scale))
+        self.btn_play_all.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
         self.btn_play_all.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play_all.setStyleSheet("background-color: #1ED760; color: #0E0E12; border-radius: 22px;")
         self.btn_play_all.clicked.connect(lambda: self.on_play_all.emit(self.current_uri))
@@ -837,7 +864,7 @@ class PlaylistDetailsPanel(QScrollArea):
         
         self.tracks_widget = QWidget()
         self.tracks_layout = QVBoxLayout(self.tracks_widget)
-        self.tracks_layout.setContentsMargins(0, 20, 0, 0)
+        self.tracks_layout.setContentsMargins(0, int(20 * self.scale), 0, 0)
         self.tracks_layout.setSpacing(0)
         self.layout.addWidget(self.tracks_widget)
 
@@ -874,13 +901,13 @@ class PlaylistDetailsPanel(QScrollArea):
 
         if is_liked:
             self.lbl_image.setText("♥")
-            self.lbl_image.setFont(QFont("Google Sans", 70))
+            self.lbl_image.setFont(QFont("Google Sans", int(70 * self.scale)))
             self.lbl_image.setStyleSheet("color: white; background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #4E1E8B, stop:1 #8E54E9); border-radius: 12px;")
         else:
             self.lbl_image.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 12px;")
             if img_url:
                 self._retire_thread(getattr(self, 'header_img_fetcher', None))
-                self.header_img_fetcher = ImageBatchFetchThread([{'index': 999, 'url': img_url}], size=160)
+                self.header_img_fetcher = ImageBatchFetchThread([{'index': 999, 'url': img_url}], size=int(160 * self.scale))
                 self.header_img_fetcher.on_image_ready.connect(self.set_header_image)
                 self.header_img_fetcher.start()
 
@@ -903,7 +930,7 @@ class PlaylistDetailsPanel(QScrollArea):
 
         if not tracks:
             lbl = QLabel("No tracks found.")
-            lbl.setFont(QFont("Google Sans", 16))
+            lbl.setFont(QFont("Google Sans", int(16 * self.scale)))
             lbl.setStyleSheet("color: #888890; background: transparent;")
             self.tracks_layout.addWidget(lbl)
         else:
@@ -918,11 +945,12 @@ class PlaylistDetailsPanel(QScrollArea):
                 row.clicked.connect(lambda idx=i: self.on_play_track.emit(self.current_uri, idx))
                 
                 hlay = QHBoxLayout(row)
-                hlay.setContentsMargins(0, 10, 0, 10)
-                hlay.setSpacing(15)
+                hlay.setContentsMargins(0, int(10 * self.scale), 0, int(10 * self.scale))
+                hlay.setSpacing(int(15 * self.scale))
 
                 img_lbl = QLabel()
-                img_lbl.setFixedSize(40, 40)
+                img_size = int(40 * self.scale)
+                img_lbl.setFixedSize(img_size, img_size)
                 img_lbl.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 4px;")
                 self.image_labels[i] = img_lbl
                 if img_url: image_tasks.append({'index': i, 'url': img_url})
@@ -933,11 +961,11 @@ class PlaylistDetailsPanel(QScrollArea):
                 vlay.setAlignment(Qt.AlignmentFlag.AlignVCenter)
                 
                 t_lbl = QLabel(truncate_text(name, 40))
-                t_lbl.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+                t_lbl.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
                 t_lbl.setStyleSheet("color: #FFFFFF; background: transparent;")
                 
                 a_lbl = QLabel(truncate_text(artists, 50))
-                a_lbl.setFont(QFont("Google Sans", 12))
+                a_lbl.setFont(QFont("Google Sans", int(12 * self.scale)))
                 a_lbl.setStyleSheet("color: #DDDDDD; background: transparent;")
 
                 vlay.addWidget(t_lbl)
@@ -950,11 +978,11 @@ class PlaylistDetailsPanel(QScrollArea):
                     line = QFrame()
                     line.setFrameShape(QFrame.Shape.HLine)
                     line.setFixedHeight(1)
-                    line.setStyleSheet("background-color: rgba(255, 255, 255, 25); border: none; margin-left: 55px;")
+                    line.setStyleSheet(f"background-color: rgba(255, 255, 255, 25); border: none; margin-left: {int(55 * self.scale)}px;")
                     self.tracks_layout.addWidget(line)
 
         if image_tasks:
-            self.img_fetcher = ImageBatchFetchThread(image_tasks, size=40)
+            self.img_fetcher = ImageBatchFetchThread(image_tasks, size=int(40 * self.scale))
             self.img_fetcher.on_image_ready.connect(self.update_image)
             self.img_fetcher.start()
 
@@ -967,6 +995,7 @@ class PlaylistDetailsPanel(QScrollArea):
 class LyricsPanel(QScrollArea):
     def __init__(self):
         super().__init__()
+        self.scale = get_scale_factor()
         self.setWidgetResizable(True)
         self.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -977,8 +1006,8 @@ class LyricsPanel(QScrollArea):
         self.container = QWidget()
         self.container.setStyleSheet("background: transparent;")
         self.layout = QVBoxLayout(self.container)
-        self.layout.setContentsMargins(15, 180, 15, 180)
-        self.layout.setSpacing(24)
+        self.layout.setContentsMargins(int(15 * self.scale), int(180 * self.scale), int(15 * self.scale), int(180 * self.scale))
+        self.layout.setSpacing(int(24 * self.scale))
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.setWidget(self.container)
 
@@ -995,10 +1024,9 @@ class LyricsPanel(QScrollArea):
         self.lyric_data.clear()
         self.active_index = -1
         for time_ms, text, words in lyrics_list:
-            lbl = QLabel(text)
-            lbl.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
-            lbl.setWordWrap(True)
-            lbl.setStyleSheet("color: rgba(255, 255, 255, 100); border: none; background: transparent;")
+            lbl = ScrollLabel(text, align_center=True)
+            lbl.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
+            lbl.setTextColor("#646464")
             self.layout.addWidget(lbl)
             self.lyric_data.append([time_ms, lbl, words, -1])
         self.layout.addStretch()
@@ -1014,14 +1042,14 @@ class LyricsPanel(QScrollArea):
             for idx, item in enumerate(self.lyric_data):
                 lbl = item[1]
                 if idx == new_index:
-                    lbl.setStyleSheet("color: #FFFFFF; border: none; background: transparent;")
-                    lbl.setFont(QFont("Google Sans", 26, QFont.Weight.Bold))
+                    lbl.setTextColor("#FFFFFF")
+                    lbl.setFont(QFont("Google Sans", int(26 * self.scale), QFont.Weight.Bold))
                 elif abs(idx - new_index) == 1:
-                    lbl.setStyleSheet("color: rgba(255, 255, 255, 180); border: none; background: transparent;")
-                    lbl.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+                    lbl.setTextColor("#B4B4B4")
+                    lbl.setFont(QFont("Google Sans", int(22 * self.scale), QFont.Weight.Bold))
                 else:
-                    lbl.setStyleSheet("color: rgba(255, 255, 255, 100); border: none; background: transparent;")
-                    lbl.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
+                    lbl.setTextColor("#646464")
+                    lbl.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
 
             active_widget = self.lyric_data[new_index][1]
             target_y = active_widget.pos().y() - (self.height() // 2) + (active_widget.height() // 2)
@@ -1049,6 +1077,7 @@ class LyricsPanel(QScrollArea):
 class SpotifyPage(QWidget):
     def __init__(self, on_close=None):
         super().__init__()
+        self.scale = get_scale_factor()
         
         font_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
         if os.path.exists(font_dir):
@@ -1069,7 +1098,6 @@ class SpotifyPage(QWidget):
         self.is_playing = False
         self.is_liked = False
         
-        # Initialize panel attributes immediately to prevent AttributeError during cleanup
         self.queue_panel = None
         self.lib_panel = None
         self.playlist_details_panel = None
@@ -1216,16 +1244,17 @@ class SpotifyPage(QWidget):
         if not self.layout(): layout = QVBoxLayout(self)
         else: layout = self.layout()
         
-        layout.setContentsMargins(40, 20, 40, 20)
-        layout.setSpacing(15)
+        layout.setContentsMargins(int(40 * self.scale), int(20 * self.scale), int(40 * self.scale), int(20 * self.scale))
+        layout.setSpacing(int(15 * self.scale))
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         top_bar = QHBoxLayout()
-        btn_exit = QPushButton("Home")
-        btn_exit.setFixedSize(110, 38)
+        btn_exit = QPushButton("✕")
+        btn_size = int(50 * self.scale)
+        btn_exit.setFixedSize(btn_size, btn_size)
         btn_exit.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_exit.setStyleSheet("""
-            QPushButton { background-color: rgba(28, 28, 36, 200); color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: 1px solid rgba(255,255,255,50); }
-            QPushButton:hover { background-color: #E24A4A; border-color: #E24A4A; }
+        btn_exit.setStyleSheet(f"""
+            QPushButton {{ background-color: rgba(28, 28, 36, 200); color: #AAAAAA; font-size: {int(20 * self.scale)}px; font-weight: bold; border-radius: {btn_size//2}px; border: 1px solid rgba(255,255,255,50); }}
+            QPushButton:hover {{ background-color: #E24A4A; color: white; border-color: #E24A4A; }}
         """)
         if self.on_close: btn_exit.clicked.connect(self.exit_app)
         top_bar.addWidget(btn_exit)
@@ -1233,31 +1262,31 @@ class SpotifyPage(QWidget):
         layout.addLayout(top_bar)
 
         title = QLabel("Connect Your Spotify Account")
-        title.setFont(QFont("Google Sans", 28, QFont.Weight.Bold))
+        title.setFont(QFont("Google Sans", int(28 * self.scale), QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
         if WEBENGINE_AVAILABLE:
             btn_login = QPushButton("Log In on Touchscreen")
-            btn_login.setFixedSize(360, 65)
+            btn_login.setFixedSize(int(360 * self.scale), int(65 * self.scale))
             btn_login.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_login.setStyleSheet("""
-                QPushButton { background-color: #1ED760; color: #0E0E12; font-size: 19px; font-weight: bold; border-radius: 32px; }
-                QPushButton:hover { background-color: #1FDF64; }
+            btn_login.setStyleSheet(f"""
+                QPushButton {{ background-color: #1ED760; color: #0E0E12; font-size: {int(19 * self.scale)}px; font-weight: bold; border-radius: {int(32 * self.scale)}px; }}
+                QPushButton:hover {{ background-color: #1FDF64; }}
             """)
             btn_login.clicked.connect(self.open_login_browser)
             layout.addWidget(btn_login, alignment=Qt.AlignmentFlag.AlignCenter)
 
         btn_skip = QPushButton("Skip Login (Use Universal Wi-Fi Mode)")
-        btn_skip.setFixedSize(360, 42)
+        btn_skip.setFixedSize(int(360 * self.scale), int(42 * self.scale))
         btn_skip.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_skip.setStyleSheet("background-color: rgba(40, 40, 50, 180); color: #CCCCCC; font-size: 13px; font-weight: bold; border-radius: 8px;")
+        btn_skip.setStyleSheet(f"background-color: rgba(40, 40, 50, 180); color: #CCCCCC; font-size: {int(13 * self.scale)}px; font-weight: bold; border-radius: 8px;")
         btn_skip.clicked.connect(self.skip_to_demo)
         layout.addWidget(btn_skip, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def open_login_browser(self):
         self.auth_browser = QWebEngineView(self)
-        self.auth_browser.setGeometry(30, 20, 964, 560)
+        self.auth_browser.setGeometry(int(30 * self.scale), int(20 * self.scale), int(964 * self.scale), int(560 * self.scale))
         self.auth_browser.setStyleSheet("border-radius: 12px; border: 2px solid #1ED760; background-color: white;")
         self.auth_browser.urlChanged.connect(self.handle_auth_redirect)
         self.auth_browser.setUrl(QUrl(self.sp_auth.get_authorize_url()))
@@ -1270,7 +1299,7 @@ class SpotifyPage(QWidget):
             if hasattr(self, 'auth_browser') and self.auth_browser:
                 self.auth_browser.hide()
                 self.auth_browser.deleteLater()
-                self.auth_browser = None  # Prevents dead pointer crashes!
+                self.auth_browser = None  
             
             query = urllib.parse.urlparse(url_str).query
             params = urllib.parse.parse_qs(query)
@@ -1292,42 +1321,43 @@ class SpotifyPage(QWidget):
         self._clear_layout()
         if not self.layout(): layout = QVBoxLayout(self)
         else: layout = self.layout()
-        layout.setContentsMargins(30, 15, 30, 20)
-        layout.setSpacing(15)
+        layout.setContentsMargins(int(30 * self.scale), int(15 * self.scale), int(30 * self.scale), int(20 * self.scale))
+        layout.setSpacing(int(15 * self.scale))
 
         top_bar = QHBoxLayout()
-        self.btn_exit = QPushButton("Home")
-        self.btn_exit.setFixedSize(100, 38)
+        self.btn_exit = QPushButton("✕")
+        btn_size = int(45 * self.scale)
+        self.btn_exit.setFixedSize(btn_size, btn_size)
         self.btn_exit.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_exit.setStyleSheet("""
-            QPushButton { background-color: rgba(28, 28, 36, 150); color: white; font-size: 14px; font-weight: bold; border-radius: 8px; border: 1px solid rgba(255,255,255,30); }
-            QPushButton:hover { background-color: #E24A4A; border-color: #E24A4A; }
+        self.btn_exit.setStyleSheet(f"""
+            QPushButton {{ background-color: rgba(28, 28, 36, 150); color: #AAAAAA; font-size: {int(20 * self.scale)}px; font-weight: bold; border-radius: {btn_size//2}px; border: 1px solid rgba(255,255,255,30); }}
+            QPushButton:hover {{ background-color: #E24A4A; color: white; border-color: #E24A4A; }}
         """)
         if self.on_close: self.btn_exit.clicked.connect(self.exit_app)
         top_bar.addWidget(self.btn_exit)
 
         self.btn_logout = QPushButton("Log Out")
-        self.btn_logout.setFixedSize(90, 38)
+        self.btn_logout.setFixedSize(int(90 * self.scale), int(38 * self.scale))
         self.btn_logout.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_logout.setStyleSheet("background-color: rgba(40, 40, 50, 150); color: #DDDDDD; font-size: 12px; font-weight: bold; border-radius: 8px;")
+        self.btn_logout.setStyleSheet(f"background-color: rgba(40, 40, 50, 150); color: #DDDDDD; font-size: {int(12 * self.scale)}px; font-weight: bold; border-radius: 8px;")
         self.btn_logout.clicked.connect(self.logout_user)
         top_bar.addWidget(self.btn_logout)
 
         top_bar.addStretch()
 
         self.btn_device = QPushButton("🎧 Connect")
-        self.btn_device.setFont(QFont("Google Sans", 13, QFont.Weight.Bold))
+        self.btn_device.setFont(QFont("Google Sans", int(13 * self.scale), QFont.Weight.Bold))
         self.btn_device.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_device.setStyleSheet("color: #1ED760; background: transparent; border: none; text-align: left;")
         self.btn_device.clicked.connect(self.show_device_menu)
         top_bar.addWidget(self.btn_device)
 
         lbl_vol_icon = QLabel("−")
-        lbl_vol_icon.setFont(QFont("Google Sans", 22, QFont.Weight.Bold))
+        lbl_vol_icon.setFont(QFont("Google Sans", int(22 * self.scale), QFont.Weight.Bold))
         top_bar.addWidget(lbl_vol_icon)
 
         self.vol_slider = QSlider(Qt.Orientation.Horizontal)
-        self.vol_slider.setFixedSize(120, 20)
+        self.vol_slider.setFixedSize(int(120 * self.scale), int(20 * self.scale))
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setValue(80)
         self.vol_slider.setStyleSheet("""
@@ -1340,23 +1370,24 @@ class SpotifyPage(QWidget):
         top_bar.addWidget(self.vol_slider)
 
         lbl_vol_max = QLabel("+")
-        lbl_vol_max.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
+        lbl_vol_max.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
         top_bar.addWidget(lbl_vol_max)
         layout.addLayout(top_bar)
 
         main_body = QHBoxLayout()
-        main_body.setSpacing(40)
+        main_body.setSpacing(int(40 * self.scale))
 
         left_col = QVBoxLayout()
         left_col.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-        left_col.setSpacing(14)
+        left_col.setSpacing(int(14 * self.scale))
 
+        art_size = int(240 * self.scale)
         self.lbl_art = QLabel()
-        self.lbl_art.setFixedSize(300, 300)
+        self.lbl_art.setFixedSize(art_size, art_size)
         self.lbl_art.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 20px; border: 1px solid rgba(255,255,255,20);")
         self.lbl_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_art.setText("No Artwork")
-        self.lbl_art.setFont(QFont("Google Sans", 18))
+        self.lbl_art.setText("")
+        self.lbl_art.setFont(QFont("Google Sans", int(18 * self.scale)))
         left_col.addWidget(self.lbl_art)
 
         title_row = QHBoxLayout()
@@ -1364,13 +1395,13 @@ class SpotifyPage(QWidget):
         meta_box = QVBoxLayout()
         meta_box.setSpacing(2)
         
-        self.lbl_title = ScrollLabel("Select a track")
-        self.lbl_title.setFont(QFont("Google Sans", 20, QFont.Weight.Bold))
+        self.lbl_title = ScrollLabel("")
+        self.lbl_title.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
         self.lbl_title.setTextColor("#FFFFFF")
         meta_box.addWidget(self.lbl_title)
 
-        self.lbl_artist = ScrollLabel("Apple Music Player")
-        self.lbl_artist.setFont(QFont("Google Sans", 15))
+        self.lbl_artist = ScrollLabel("Spotify Player")
+        self.lbl_artist.setFont(QFont("Google Sans", int(15 * self.scale)))
         self.lbl_artist.setTextColor("#DDDDDD")
         meta_box.addWidget(self.lbl_artist)
         
@@ -1378,8 +1409,9 @@ class SpotifyPage(QWidget):
         title_row.addStretch()
 
         self.btn_star = QPushButton("♡")
-        self.btn_star.setFixedSize(36, 36)
-        self.btn_star.setFont(QFont("Google Sans", 24))
+        star_size = int(36 * self.scale)
+        self.btn_star.setFixedSize(star_size, star_size)
+        self.btn_star.setFont(QFont("Google Sans", int(24 * self.scale)))
         self.btn_star.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_star.setStyleSheet("background: transparent; color: #DDDDDD; border: none;")
         self.btn_star.clicked.connect(self.toggle_like)
@@ -1390,31 +1422,31 @@ class SpotifyPage(QWidget):
         scrub_layout = QVBoxLayout()
         scrub_layout.setSpacing(6)
         self.progress_bar = ClickableProgressBar()
-        self.progress_bar.setFixedHeight(6)
+        self.progress_bar.setFixedHeight(int(6 * self.scale))
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.progress_bar.setStyleSheet("""
             QProgressBar { background-color: rgba(255, 255, 255, 50); border: none; border-radius: 3px; }
-            QProgressBar::chunk { background-color: #FFFFFF; border-radius: 3px; }
+            QProgressBar::chunk { background-color: #1ED760; border-radius: 3px; }
         """)
         self.progress_bar.on_seek.connect(self.handle_seek)
         scrub_layout.addWidget(self.progress_bar)
 
         time_row = QHBoxLayout()
         self.lbl_curr_time = QLabel("0:00")
-        self.lbl_curr_time.setFont(QFont("Google Sans", 11))
+        self.lbl_curr_time.setFont(QFont("Google Sans", int(11 * self.scale)))
         self.lbl_curr_time.setStyleSheet("color: rgba(255,255,255,150);")
         time_row.addWidget(self.lbl_curr_time)
         time_row.addStretch()
 
         lbl_badge = QLabel(" Lossless ")
-        lbl_badge.setFont(QFont("Google Sans", 9, QFont.Weight.Bold))
+        lbl_badge.setFont(QFont("Google Sans", int(9 * self.scale), QFont.Weight.Bold))
         lbl_badge.setStyleSheet("color: rgba(255,255,255,180); background-color: rgba(255,255,255,20); border: 1px solid rgba(255,255,255,40); border-radius: 4px; padding: 2px 4px;")
         time_row.addWidget(lbl_badge)
         time_row.addStretch()
 
         self.lbl_total_time = QLabel("-0:00")
-        self.lbl_total_time.setFont(QFont("Google Sans", 11))
+        self.lbl_total_time.setFont(QFont("Google Sans", int(11 * self.scale)))
         self.lbl_total_time.setStyleSheet("color: rgba(255,255,255,150);")
         time_row.addWidget(self.lbl_total_time)
 
@@ -1422,46 +1454,48 @@ class SpotifyPage(QWidget):
         left_col.addLayout(scrub_layout)
 
         controls_row = QHBoxLayout()
-        controls_row.setSpacing(20)
+        controls_row.setSpacing(int(20 * self.scale))
         controls_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.btn_shuffle = QPushButton("Shuffle")
-        self.btn_shuffle.setFont(QFont("Google Sans", 12, QFont.Weight.Bold))
-        self.btn_shuffle.setFixedHeight(35)
+        self.btn_shuffle.setFont(QFont("Google Sans", int(12 * self.scale), QFont.Weight.Bold))
+        self.btn_shuffle.setFixedHeight(int(35 * self.scale))
         self.btn_shuffle.setStyleSheet("color: #DDDDDD; background: transparent; border: none;")
         self.btn_shuffle.clicked.connect(lambda: self.send_command("shuffle"))
         controls_row.addWidget(self.btn_shuffle)
 
         self.btn_prev = QPushButton()
-        self.btn_prev.setFixedSize(45, 45)
-        self.btn_prev.setIcon(self.get_icon("prev", "#FFFFFF", 45))
+        btn_prev_size = int(45 * self.scale)
+        self.btn_prev.setFixedSize(btn_prev_size, btn_prev_size)
+        self.btn_prev.setIcon(self.get_icon("prev", "#FFFFFF", btn_prev_size))
         self.btn_prev.setIconSize(self.btn_prev.size())
         self.btn_prev.setStyleSheet("background: transparent; border: none;")
         self.btn_prev.clicked.connect(lambda: self.send_command("prev"))
         controls_row.addWidget(self.btn_prev)
 
         self.btn_play = QPushButton()
-        self.btn_play.setFixedSize(64, 64)
-        self.btn_play.setIcon(self.get_icon("play", "#0E0E12", 64))
+        btn_play_size = int(64 * self.scale)
+        self.btn_play.setFixedSize(btn_play_size, btn_play_size)
+        self.btn_play.setIcon(self.get_icon("play", "#0E0E12", btn_play_size))
         self.btn_play.setIconSize(self.btn_play.size())
-        self.btn_play.setStyleSheet("""
-            QPushButton { background-color: #FFFFFF; border-radius: 32px; border: none; }
-            QPushButton:hover { background-color: #E0E0E0; }
+        self.btn_play.setStyleSheet(f"""
+            QPushButton {{ background-color: #FFFFFF; border-radius: {btn_play_size//2}px; border: none; }}
+            QPushButton:hover {{ background-color: #E0E0E0; }}
         """)
         self.btn_play.clicked.connect(lambda: self.send_command("toggle"))
         controls_row.addWidget(self.btn_play)
 
         self.btn_next = QPushButton()
-        self.btn_next.setFixedSize(45, 45)
-        self.btn_next.setIcon(self.get_icon("next", "#FFFFFF", 45))
+        self.btn_next.setFixedSize(btn_prev_size, btn_prev_size)
+        self.btn_next.setIcon(self.get_icon("next", "#FFFFFF", btn_prev_size))
         self.btn_next.setIconSize(self.btn_next.size())
         self.btn_next.setStyleSheet("background: transparent; border: none;")
         self.btn_next.clicked.connect(lambda: self.send_command("next"))
         controls_row.addWidget(self.btn_next)
 
         self.btn_repeat = QPushButton("Repeat")
-        self.btn_repeat.setFont(QFont("Google Sans", 12, QFont.Weight.Bold))
-        self.btn_repeat.setFixedHeight(35)
+        self.btn_repeat.setFont(QFont("Google Sans", int(12 * self.scale), QFont.Weight.Bold))
+        self.btn_repeat.setFixedHeight(int(35 * self.scale))
         self.btn_repeat.setStyleSheet("color: #DDDDDD; background: transparent; border: none;")
         self.btn_repeat.clicked.connect(lambda: self.send_command("repeat"))
         controls_row.addWidget(self.btn_repeat)
@@ -1473,28 +1507,29 @@ class SpotifyPage(QWidget):
         main_body.addLayout(left_col, stretch=4)
 
         right_col = QVBoxLayout()
-        right_col.setSpacing(10)
+        right_col.setSpacing(int(10 * self.scale))
         lyrics_header = QHBoxLayout()
         self.lbl_lyr_title = QLabel("Live Lyrics")
-        self.lbl_lyr_title.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
+        self.lbl_lyr_title.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         self.lbl_lyr_title.setStyleSheet("color: rgba(255,255,255,200);")
         lyrics_header.addWidget(self.lbl_lyr_title)
 
-        lyrics_header.addSpacing(15)
+        lyrics_header.addSpacing(int(15 * self.scale))
         self.btn_sync_minus = QPushButton("-")
-        self.btn_sync_minus.setFixedSize(28, 28)
+        btn_sync_size = int(28 * self.scale)
+        self.btn_sync_minus.setFixedSize(btn_sync_size, btn_sync_size)
         self.btn_sync_minus.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_sync_minus.setStyleSheet("background: rgba(40,40,50,150); color: #DDDDDD; border-radius: 4px; font-weight: bold;")
         self.btn_sync_minus.clicked.connect(lambda: self.adjust_sync(-200))
 
         self.lbl_sync = QLabel(f"{self.sync_offset_ms}ms")
-        self.lbl_sync.setFont(QFont("Google Sans", 11))
+        self.lbl_sync.setFont(QFont("Google Sans", int(11 * self.scale)))
         self.lbl_sync.setStyleSheet("color: rgba(255,255,255,150);")
         self.lbl_sync.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_sync.setFixedWidth(55)
+        self.lbl_sync.setFixedWidth(int(55 * self.scale))
 
         self.btn_sync_plus = QPushButton("+")
-        self.btn_sync_plus.setFixedSize(28, 28)
+        self.btn_sync_plus.setFixedSize(btn_sync_size, btn_sync_size)
         self.btn_sync_plus.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_sync_plus.setStyleSheet("background: rgba(40,40,50,150); color: #DDDDDD; border-radius: 4px; font-weight: bold;")
         self.btn_sync_plus.clicked.connect(lambda: self.adjust_sync(200))
@@ -1504,16 +1539,18 @@ class SpotifyPage(QWidget):
         lyrics_header.addWidget(self.btn_sync_plus)
         lyrics_header.addStretch()
 
+        btn_tab_w = int(70 * self.scale)
+        btn_tab_h = int(30 * self.scale)
         self.btn_view_lyr = QPushButton("Lyrics")
-        self.btn_view_lyr.setFixedSize(70, 30)
+        self.btn_view_lyr.setFixedSize(btn_tab_w, btn_tab_h)
         self.btn_view_lyr.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.btn_view_queue = QPushButton("Queue")
-        self.btn_view_queue.setFixedSize(70, 30)
+        self.btn_view_queue.setFixedSize(btn_tab_w, btn_tab_h)
         self.btn_view_queue.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.btn_view_lib = QPushButton("Library")
-        self.btn_view_lib.setFixedSize(70, 30)
+        self.btn_view_lib.setFixedSize(btn_tab_w, btn_tab_h)
         self.btn_view_lib.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.tab_active_style = "background: rgba(255,255,255,40); color: white; border-radius: 15px; font-weight: bold;"
@@ -1736,7 +1773,6 @@ class SpotifyPage(QWidget):
         self._retire_thread(getattr(self, 'device_fetcher', None))
         self._retire_thread(getattr(self, 'transfer_thread', None))
         
-        # Safe getattr checks to prevent AttributeError crashes
         queue_panel = getattr(self, 'queue_panel', None)
         if queue_panel:
             self._retire_thread(getattr(queue_panel, 'img_fetcher', None))
@@ -1773,8 +1809,9 @@ class SpotifyPage(QWidget):
 
         self.is_playing = is_playing
         
-        if is_playing: self.btn_play.setIcon(self.get_icon("pause", "#0E0E12", 64))
-        else: self.btn_play.setIcon(self.get_icon("play", "#0E0E12", 64))
+        btn_play_size = int(64 * self.scale)
+        if is_playing: self.btn_play.setIcon(self.get_icon("pause", "#0E0E12", btn_play_size))
+        else: self.btn_play.setIcon(self.get_icon("play", "#0E0E12", btn_play_size))
 
         is_shuff = data.get("shuffle_state", False)
         self.btn_shuffle.setStyleSheet("color: #1ED760; background: transparent; border: none;" if is_shuff else "color: #DDDDDD; background: transparent; border: none;")
@@ -1809,7 +1846,7 @@ class SpotifyPage(QWidget):
             images = item.get("album", {}).get("images", [])
             if images:
                 self._retire_thread(getattr(self, 'img_fetcher', None))
-                fetcher = ImageDownloadThread(images[0]["url"], size=300)
+                fetcher = ImageDownloadThread(images[0]["url"], size=int(300 * self.scale))
                 fetcher.on_image_ready.connect(self.update_artwork)
                 fetcher.finished.connect(fetcher.deleteLater)
                 fetcher.start()
@@ -1911,7 +1948,6 @@ class SpotifyPage(QWidget):
         self._retire_thread(getattr(self, 'device_fetcher', None))
         self._retire_thread(getattr(self, 'transfer_thread', None))
         
-        # Safe getattr checks to prevent AttributeError crashes
         queue_panel = getattr(self, 'queue_panel', None)
         if queue_panel:
             self._retire_thread(getattr(queue_panel, 'img_fetcher', None))
@@ -1949,48 +1985,35 @@ class SpotifyPage(QWidget):
 
     def load_demo_state(self):
         self.btn_device.setText("🎧 AirPlay / Connect Ready")
-        self.lbl_title.setText("NEVER A MEMORY")
-        self.lbl_artist.setText("Odetari")
-        self.is_playing = True
-        self.btn_play.setIcon(self.get_icon("pause", "#0E0E12", 64))
-        self.track_duration_ms = 110000
-        self.track_progress_ms = 8000
+        self.lbl_title.setText("")
+        self.lbl_artist.setText("Spotify Player")
+        self.is_playing = False
+        btn_play_size = int(64 * self.scale)
+        self.btn_play.setIcon(self.get_icon("play", "#0E0E12", btn_play_size))
+        self.track_duration_ms = 0
+        self.track_progress_ms = 0
 
-        self.is_liked = True
-        self.btn_star.setText("♥")
-        self.btn_star.setStyleSheet("color: #FFFFFF; background: transparent; border: none;")
+        self.is_liked = False
+        self.btn_star.setText("♡")
+        self.btn_star.setStyleSheet("color: #DDDDDD; background: transparent; border: none;")
 
         self.refresh_progress_display()
-        self.load_song_lyrics("NEVER A MEMORY", "Odetari", 110000)
+        self.lyrics_panel.set_lyrics([(0, "", [])])
 
-        pix = QPixmap(300, 300)
+        art_size = int(300 * self.scale)
+        pix = QPixmap(art_size, art_size)
         pix.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pix)
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             clip = QPainterPath()
-            clip.addRoundedRect(0, 0, 300, 300, 20, 20)
+            clip.addRoundedRect(0, 0, art_size, art_size, 20, 20)
             painter.setClipPath(clip)
-
-            painter.fillRect(0, 0, 300, 300, QColor("#0A0A10"))
-            painter.setBrush(QColor("#1A2035"))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(-50, -50, 250, 250)
-            painter.setBrush(QColor("#25355A"))
-            painter.drawEllipse(120, 120, 220, 220)
-
-            painter.setPen(QColor("#FFFFFF"))
-            painter.setFont(QFont("Google Sans", 16, QFont.Weight.Bold))
-            painter.drawText(QRect(0, 0, 300, 300), Qt.AlignmentFlag.AlignCenter, "NEVER A MEMORY\n\nOdetari")
+            painter.fillRect(0, 0, art_size, art_size, QColor(26, 26, 34, 150))
         finally:
             painter.end()
 
         bg_pix = QPixmap(1800, 1800)
         bg_pix.fill(QColor(0, 0, 0))
-        bg_painter = QPainter(bg_pix)
-        bg_painter.setBrush(QColor(26, 32, 53, 150))
-        bg_painter.setPen(Qt.PenStyle.NoPen)
-        bg_painter.drawEllipse(200, 200, 1400, 1400)
-        bg_painter.end()
 
         self.update_artwork(pix, bg_pix)

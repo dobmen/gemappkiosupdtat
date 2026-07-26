@@ -9,6 +9,7 @@ class SlidingPanel(QFrame):
         self.visible_rect = visible_rect
         self.setGeometry(self.hidden_rect)
         self.is_visible = False
+        self.hide()
 
         self.anim = QPropertyAnimation(self, b"geometry")
         self.anim.setDuration(350)
