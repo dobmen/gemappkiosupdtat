@@ -897,11 +897,16 @@ class AppStorePage(QWidget):
             main_win = self.window()
             if hasattr(main_win, 'selector_overlay'):
                 main_win.selector_overlay.reload_custom_clockfaces()
-                
-            QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']}! It is now available in your Clockfaces menu.")
-        else:
-            QMessageBox.information(self, "Success", f"Successfully installed {app_data['name']} v{app_data['version']}!")
-        
+        if hasattr(self.window(), 'show_toast'):
+            icon = app_data.get("icon_url", "✅")
+            if app_data.get("type", "app") == "clockface":
+                self.window().show_toast("App Store", "App Installed", f"{app_data['name']} is now in your Clockfaces menu.", icon)
+            else:
+                self.window().show_toast("App Store", "App Installed", f"{app_data['name']} v{app_data['version']} installed!", icon)
+            
+            # Immediately rebuild the app drawer so the newly installed app appears!
+            if hasattr(self.window(), 'rebuild_app_drawer'):
+                self.window().rebuild_app_drawer()
         if self.current_filter != "all" or self.search_bar.text():
             self.populate_catalog(self.full_catalog_cache)
 

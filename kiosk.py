@@ -261,11 +261,21 @@ class ToastNotification(QFrame):
         layout.setSpacing(int(15 * SCALE_FACTOR))
         
         icon_size = int(54 * SCALE_FACTOR)
-        lbl_icon = QLabel(icon_char)
-        lbl_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
+        lbl_icon = QLabel()
         lbl_icon.setFixedSize(icon_size, icon_size)
         lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_icon.setStyleSheet(f"background-color: rgba(255,255,255,10); border-radius: {icon_size//2}px; border: none;")
+        
+        if len(icon_char) > 2 and (icon_char.startswith("http") or icon_char.endswith(".png") or icon_char.endswith(".svg")):
+            # If it's a URL or file path, we would load the pixmap, but for now fallback to an emoji if we can't
+            if os.path.exists(icon_char):
+                lbl_icon.setPixmap(QPixmap(icon_char).scaled(int(32 * SCALE_FACTOR), int(32 * SCALE_FACTOR), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+            else:
+                lbl_icon.setText("✅")
+                lbl_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
+        else:
+            lbl_icon.setText(icon_char)
+            lbl_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
         
         text_box = QVBoxLayout()
         text_box.setSpacing(2)
