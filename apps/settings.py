@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect, QPropert
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor, QPen, QGuiApplication
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit, QScrollerProperties
+    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit, QScrollerProperties,
     QListWidget, QListWidgetItem
 )
 
