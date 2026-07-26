@@ -1122,6 +1122,7 @@ class SettingsPage(QWidget):
         info = QLabel("Voice Assistant is coming soon in a future update.\\nIt will allow you to control your smart home, play music, and ask questions hands-free.")
         info.setFont(QFont("Google Sans", int(16 * self.scale)))
         info.setStyleSheet("color: #AAAAAA;")
+        info.setWordWrap(True)
         layout.addWidget(info)
         layout.addSpacing(int(20 * self.scale))
 
@@ -1150,6 +1151,7 @@ class SettingsPage(QWidget):
         desc = QLabel("Say 'Hey Ghost' or your custom wake word to trigger the assistant.")
         desc.setFont(QFont("Google Sans", int(14 * self.scale)))
         desc.setStyleSheet("color: #888888; border: none;")
+        desc.setWordWrap(True)
         card_layout.addWidget(desc)
         
         layout.addWidget(card)
