@@ -1,4 +1,4 @@
 {
-  "version": "0.1.4.2",
-  "notes": "Redesigned sliders to be wider and rounder with percentage text. Added a marquee scrolling effect for the notifications header when text is too long."
+  "version": "0.1.4.3",
+  "notes": "Removed rounded corners from clockfaces to match the square display."
 }
