@@ -1,4 +1,4 @@
 {
-  "version": "0.1.5 Beta",
-  "notes": "Added Voice Assistant placeholder, Network Scanning in Settings, redesigned Task Switcher, added App Store icons, and fixed Spotify lyrics layout."
+  "version": "0.1.6 Beta",
+  "notes": "Added passwordless updates, custom update boot video animation, fixed App Drawer settings syncing, and improved system stability."
 }
