@@ -11,9 +11,13 @@ def main():
     app = QApplication(sys.argv)
     
     # Initialize and display the main Kiosk OS window
+    print("[DEBUG] main.py: Instantiating NestKiosk...")
     window = NestKiosk()
+    
+    print("[DEBUG] main.py: Calling window.show()...")
     window.show()
     
+    print("[DEBUG] main.py: window.show() succeeded! Calling app.exec()...")
     sys.exit(app.exec())
 
 if __name__ == "__main__":
