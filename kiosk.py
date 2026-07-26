@@ -709,6 +709,44 @@ class NestKiosk(QMainWindow):
         
         cc_layout.addLayout(sliders_layout, stretch=1)
         
+        toggles_layout = QHBoxLayout()
+        toggles_layout.setSpacing(int(15 * SCALE_FACTOR))
+        
+        self.btn_dnd = QPushButton("🌙 DND")
+        self.btn_silent = QPushButton("🔕 Silent")
+        
+        def style_cc_toggle(btn, is_active):
+            if is_active:
+                btn.setStyleSheet(f"QPushButton {{ background-color: white; color: black; font-weight: bold; border-radius: {int(24 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; padding: {int(12 * SCALE_FACTOR)}px; border: none; }}")
+            else:
+                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(24 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; padding: {int(12 * SCALE_FACTOR)}px; border: none; }}")
+
+        dnd_active = get_system_setting("dnd_mode", False)
+        silent_active = get_system_setting("silent_mode", False)
+        
+        style_cc_toggle(self.btn_dnd, dnd_active)
+        style_cc_toggle(self.btn_silent, silent_active)
+        
+        def toggle_dnd():
+            active = not get_system_setting("dnd_mode", False)
+            save_system_setting("dnd_mode", active)
+            style_cc_toggle(self.btn_dnd, active)
+            
+        def toggle_silent():
+            active = not get_system_setting("silent_mode", False)
+            save_system_setting("silent_mode", active)
+            style_cc_toggle(self.btn_silent, active)
+            
+        self.btn_dnd.clicked.connect(toggle_dnd)
+        self.btn_silent.clicked.connect(toggle_silent)
+        self.btn_dnd.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_silent.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        toggles_layout.addWidget(self.btn_dnd)
+        toggles_layout.addWidget(self.btn_silent)
+        
+        cc_layout.addLayout(toggles_layout)
+        
         # -------------------------------------------------------------
         print("[DEBUG] Building notifications panel...")
         # 2B. NOTIFICATIONS PANEL (Left Side)
