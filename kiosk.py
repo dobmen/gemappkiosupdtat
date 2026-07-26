@@ -638,129 +638,167 @@ class NestKiosk(QMainWindow):
         """)
         
         cc_layout = QVBoxLayout(self.control_center)
-        cc_layout.setContentsMargins(int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR))
-        cc_layout.setSpacing(int(20 * SCALE_FACTOR))
+        cc_layout.setContentsMargins(int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR))
+        cc_layout.setSpacing(int(15 * SCALE_FACTOR))
 
+        # --- Header ---
         cc_header = QHBoxLayout()
-        lbl_qs_title = QLabel("Quick Settings")
-        lbl_qs_title.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
+        lbl_qs_title = QLabel("Control Center")
+        lbl_qs_title.setFont(QFont("Google Sans", int(20 * SCALE_FACTOR), QFont.Weight.Bold))
         lbl_qs_title.setStyleSheet("background: transparent; border: none; color: white;")
         cc_header.addWidget(lbl_qs_title)
         cc_header.addStretch()
         
         close_sys_btn = QPushButton("⏻")
-        close_sys_btn.setFixedSize(int(44 * SCALE_FACTOR), int(44 * SCALE_FACTOR))
+        close_sys_btn.setFixedSize(int(40 * SCALE_FACTOR), int(40 * SCALE_FACTOR))
         close_sys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_sys_btn.setStyleSheet(f"""
-            QPushButton {{ background-color: rgba(226, 74, 74, 200); color: white; border-radius: {int(22 * SCALE_FACTOR)}px; font-size: {int(20 * SCALE_FACTOR)}px; border: none; }}
+            QPushButton {{ background-color: rgba(226, 74, 74, 200); color: white; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(18 * SCALE_FACTOR)}px; border: none; }}
             QPushButton:pressed {{ background-color: rgba(200, 50, 50, 255); }}
         """)
         close_sys_btn.clicked.connect(self.close)
         cc_header.addWidget(close_sys_btn)
         cc_layout.addLayout(cc_header)
 
-        sliders_layout = QHBoxLayout()
-        sliders_layout.setSpacing(int(20 * SCALE_FACTOR))
+        # --- Connectivity Row (Wi-Fi / BT) ---
+        conn_layout = QHBoxLayout()
+        conn_layout.setSpacing(int(10 * SCALE_FACTOR))
         
-        b_container = QFrame()
-        b_container.setStyleSheet(f"background-color: rgba(255, 255, 255, 15); border-radius: {int(24 * SCALE_FACTOR)}px; border: none;")
-        b_layout = QVBoxLayout(b_container)
-        b_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_b_icon = QLabel("☀️")
-        lbl_b_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
-        lbl_b_icon.setStyleSheet("background: transparent;")
+        self.btn_network = LongPressButton("📶 Network")
+        self.btn_network.setFixedHeight(int(70 * SCALE_FACTOR))
+        self.btn_network.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        self.lbl_b_percent = QLabel("80%")
-        self.lbl_b_percent.setFont(QFont("Google Sans", int(14 * SCALE_FACTOR), QFont.Weight.Bold))
-        self.lbl_b_percent.setStyleSheet("color: white; background: transparent;")
-        self.lbl_b_percent.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.btn_bt = LongPressButton("󰂯 Bluetooth")
+        self.btn_bt.setFixedHeight(int(70 * SCALE_FACTOR))
+        self.btn_bt.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        self.b_slider = QSlider(Qt.Orientation.Vertical)
-        self.b_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
-        self.b_slider.setValue(80)
-        self.b_slider.setStyleSheet(f"""
-            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(40 * SCALE_FACTOR)}px; border-radius: {int(20 * SCALE_FACTOR)}px; }}
-            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(20 * SCALE_FACTOR)}px; }}
-            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(20 * SCALE_FACTOR)}px; }}
-        """)
-        self.b_slider.valueChanged.connect(lambda v: self.lbl_b_percent.setText(f"{v}%"))
-        
-        b_layout.addWidget(self.lbl_b_percent, alignment=Qt.AlignmentFlag.AlignHCenter)
-        b_layout.addSpacing(5)
-        b_layout.addWidget(self.b_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
-        b_layout.addSpacing(10)
-        b_layout.addWidget(lbl_b_icon, alignment=Qt.AlignmentFlag.AlignHCenter)
-        sliders_layout.addWidget(b_container)
+        def style_conn_btn(btn, active):
+            if active:
+                btn.setStyleSheet(f"QPushButton {{ background-color: #5A8DEF; color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: #4A7DE0; }}")
+            else:
+                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: rgba(255, 255, 255, 30); }}")
 
-        v_container = QFrame()
-        v_container.setStyleSheet(f"background-color: rgba(255, 255, 255, 15); border-radius: {int(24 * SCALE_FACTOR)}px; border: none;")
-        v_layout = QVBoxLayout(v_container)
-        v_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_v_icon = QLabel("🔊")
-        lbl_v_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
-        lbl_v_icon.setStyleSheet("background: transparent;")
+        net_active = get_system_setting("network_enabled", True)
+        bt_active = get_system_setting("bluetooth_enabled", False)
         
-        self.lbl_v_percent = QLabel("50%")
-        self.lbl_v_percent.setFont(QFont("Google Sans", int(14 * SCALE_FACTOR), QFont.Weight.Bold))
-        self.lbl_v_percent.setStyleSheet("color: white; background: transparent;")
-        self.lbl_v_percent.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        style_conn_btn(self.btn_network, net_active)
+        style_conn_btn(self.btn_bt, bt_active)
         
-        self.v_slider = QSlider(Qt.Orientation.Vertical)
-        self.v_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
-        self.v_slider.setValue(50)
-        self.v_slider.setStyleSheet(f"""
-            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(40 * SCALE_FACTOR)}px; border-radius: {int(20 * SCALE_FACTOR)}px; }}
-            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(20 * SCALE_FACTOR)}px; }}
-            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(20 * SCALE_FACTOR)}px; }}
-        """)
-        self.v_slider.valueChanged.connect(lambda v: self.lbl_v_percent.setText(f"{v}%"))
+        def toggle_network():
+            active = not get_system_setting("network_enabled", True)
+            save_system_setting("network_enabled", active)
+            style_conn_btn(self.btn_network, active)
+            
+        def toggle_bt():
+            active = not get_system_setting("bluetooth_enabled", False)
+            save_system_setting("bluetooth_enabled", active)
+            style_conn_btn(self.btn_bt, active)
+            
+        def show_network_settings():
+            self.launch_app("Settings")
+            # The settings app will open. Next step: add a way to deep-link to the network page!
+            
+        def show_bt_settings():
+            self.launch_app("Settings")
+            
+        self.btn_network.clicked.connect(toggle_network)
+        self.btn_bt.clicked.connect(toggle_bt)
+        self.btn_network.on_long_press = show_network_settings
+        self.btn_bt.on_long_press = show_bt_settings
         
-        v_layout.addWidget(self.lbl_v_percent, alignment=Qt.AlignmentFlag.AlignHCenter)
-        v_layout.addSpacing(5)
-        v_layout.addWidget(self.v_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
-        v_layout.addSpacing(10)
-        v_layout.addWidget(lbl_v_icon, alignment=Qt.AlignmentFlag.AlignHCenter)
-        sliders_layout.addWidget(v_container)
-        
-        cc_layout.addLayout(sliders_layout, stretch=1)
-        
-        toggles_layout = QHBoxLayout()
-        toggles_layout.setSpacing(int(15 * SCALE_FACTOR))
+        conn_layout.addWidget(self.btn_network)
+        conn_layout.addWidget(self.btn_bt)
+        cc_layout.addLayout(conn_layout)
+
+        # --- Modes Row (DND / Silent) ---
+        modes_layout = QHBoxLayout()
+        modes_layout.setSpacing(int(10 * SCALE_FACTOR))
         
         self.btn_dnd = QPushButton("🌙 DND")
-        self.btn_silent = QPushButton("🔕 Silent")
+        self.btn_dnd.setFixedHeight(int(70 * SCALE_FACTOR))
+        self.btn_dnd.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        def style_cc_toggle(btn, is_active):
-            if is_active:
-                btn.setStyleSheet(f"QPushButton {{ background-color: white; color: black; font-weight: bold; border-radius: {int(24 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; padding: {int(12 * SCALE_FACTOR)}px; border: none; }}")
+        self.btn_silent = QPushButton("🔕 Silent")
+        self.btn_silent.setFixedHeight(int(70 * SCALE_FACTOR))
+        self.btn_silent.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        def style_mode_btn(btn, active, active_color):
+            if active:
+                btn.setStyleSheet(f"QPushButton {{ background-color: {active_color}; color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ opacity: 0.8; }}")
             else:
-                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(24 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; padding: {int(12 * SCALE_FACTOR)}px; border: none; }}")
+                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: rgba(255, 255, 255, 30); }}")
 
         dnd_active = get_system_setting("dnd_mode", False)
         silent_active = get_system_setting("silent_mode", False)
         
-        style_cc_toggle(self.btn_dnd, dnd_active)
-        style_cc_toggle(self.btn_silent, silent_active)
+        style_mode_btn(self.btn_dnd, dnd_active, "#7B61FF")
+        style_mode_btn(self.btn_silent, silent_active, "#E24A4A")
         
         def toggle_dnd():
             active = not get_system_setting("dnd_mode", False)
             save_system_setting("dnd_mode", active)
-            style_cc_toggle(self.btn_dnd, active)
+            style_mode_btn(self.btn_dnd, active, "#7B61FF")
             
         def toggle_silent():
             active = not get_system_setting("silent_mode", False)
             save_system_setting("silent_mode", active)
-            style_cc_toggle(self.btn_silent, active)
+            style_mode_btn(self.btn_silent, active, "#E24A4A")
             
         self.btn_dnd.clicked.connect(toggle_dnd)
         self.btn_silent.clicked.connect(toggle_silent)
-        self.btn_dnd.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_silent.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        toggles_layout.addWidget(self.btn_dnd)
-        toggles_layout.addWidget(self.btn_silent)
+        modes_layout.addWidget(self.btn_dnd)
+        modes_layout.addWidget(self.btn_silent)
+        cc_layout.addLayout(modes_layout)
+
+        # --- Sliders (Brightness / Volume) ---
+        sliders_container = QFrame()
+        sliders_container.setStyleSheet(f"background-color: rgba(255, 255, 255, 10); border-radius: {int(20 * SCALE_FACTOR)}px;")
+        sliders_vbox = QVBoxLayout(sliders_container)
+        sliders_vbox.setSpacing(int(20 * SCALE_FACTOR))
+        sliders_vbox.setContentsMargins(int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR))
         
-        cc_layout.addLayout(toggles_layout)
+        # Brightness
+        b_layout = QHBoxLayout()
+        lbl_b_icon = QLabel("☀️")
+        lbl_b_icon.setFont(QFont("Google Sans", int(18 * SCALE_FACTOR)))
+        lbl_b_icon.setStyleSheet("background: transparent;")
+        
+        self.b_slider = QSlider(Qt.Orientation.Horizontal)
+        self.b_slider.setMinimumWidth(int(150 * SCALE_FACTOR))
+        self.b_slider.setValue(80)
+        self.b_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{ background: rgba(0,0,0,80); height: {int(30 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::handle:horizontal {{ background: white; width: {int(30 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::sub-page:horizontal {{ background: rgba(255, 255, 255, 220); border-radius: {int(15 * SCALE_FACTOR)}px; }}
+        """)
+        
+        b_layout.addWidget(lbl_b_icon)
+        b_layout.addWidget(self.b_slider, stretch=1)
+        
+        # Volume
+        v_layout = QHBoxLayout()
+        lbl_v_icon = QLabel("🔊")
+        lbl_v_icon.setFont(QFont("Google Sans", int(18 * SCALE_FACTOR)))
+        lbl_v_icon.setStyleSheet("background: transparent;")
+        
+        self.v_slider = QSlider(Qt.Orientation.Horizontal)
+        self.v_slider.setMinimumWidth(int(150 * SCALE_FACTOR))
+        self.v_slider.setValue(50)
+        self.v_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{ background: rgba(0,0,0,80); height: {int(30 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::handle:horizontal {{ background: white; width: {int(30 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::sub-page:horizontal {{ background: rgba(255, 255, 255, 220); border-radius: {int(15 * SCALE_FACTOR)}px; }}
+        """)
+        
+        v_layout.addWidget(lbl_v_icon)
+        v_layout.addWidget(self.v_slider, stretch=1)
+        
+        sliders_vbox.addLayout(b_layout)
+        sliders_vbox.addLayout(v_layout)
+        
+        cc_layout.addWidget(sliders_container)
+        cc_layout.addStretch()
         
         # -------------------------------------------------------------
         print("[DEBUG] Building notifications panel...")
@@ -824,13 +862,13 @@ class NestKiosk(QMainWindow):
         
         def blur_in():
             self.dim_anim.stop()
-            self.dim_anim.setStartValue(self.dim_alpha)
+            self.dim_anim.setStartValue(int(self.dim_alpha))
             self.dim_anim.setEndValue(180)
             self.dim_anim.start()
                 
         def blur_out():
             self.dim_anim.stop()
-            self.dim_anim.setStartValue(self.dim_alpha)
+            self.dim_anim.setStartValue(int(self.dim_alpha))
             self.dim_anim.setEndValue(0)
             self.dim_anim.start()
 
@@ -894,10 +932,25 @@ class NestKiosk(QMainWindow):
         self.task_ribbon.setStyleSheet("background-color: #1A1A22; border-top: 1px solid #2A2A35; border-bottom: 1px solid #2A2A35;")
         self.task_ribbon.hide()
         
-        self.ribbon_layout = QHBoxLayout(self.task_ribbon)
-        self.ribbon_layout.setContentsMargins(int(60 * SCALE_FACTOR), int(15 * SCALE_FACTOR), int(60 * SCALE_FACTOR), int(15 * SCALE_FACTOR))
+        self.task_ribbon_container = QWidget()
+        self.task_ribbon_container.setStyleSheet("background: transparent;")
+        
+        self.ribbon_layout = QHBoxLayout(self.task_ribbon_container)
+        self.ribbon_layout.setContentsMargins(int(15 * SCALE_FACTOR), int(15 * SCALE_FACTOR), int(15 * SCALE_FACTOR), int(15 * SCALE_FACTOR))
         self.ribbon_layout.setSpacing(int(15 * SCALE_FACTOR))
         self.ribbon_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        
+        self.task_scroll = QScrollArea(self.task_ribbon)
+        self.task_scroll.setWidgetResizable(True)
+        self.task_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.task_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.task_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        QScroller.grabGesture(self.task_scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        self.task_scroll.setWidget(self.task_ribbon_container)
+        
+        ribbon_wrapper = QVBoxLayout(self.task_ribbon)
+        ribbon_wrapper.setContentsMargins(0,0,0,0)
+        ribbon_wrapper.addWidget(self.task_scroll)
         drawer_main_layout.addWidget(self.task_ribbon)
 
         self.drawer_scroll = QScrollArea()
@@ -1231,6 +1284,35 @@ class NestKiosk(QMainWindow):
         self.notif_layout.insertWidget(0, card)
         self.update_notif_header()
 
+class LongPressButton(QPushButton):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.long_press_timer = QTimer(self)
+        self.long_press_timer.setSingleShot(True)
+        self.long_press_timer.timeout.connect(self.emit_long_press)
+        self.long_pressed = False
+        self.on_long_press = None
+        
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.long_pressed = False
+            self.long_press_timer.start(600)  # 600ms hold time
+        super().mousePressEvent(event)
+        
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.long_press_timer.stop()
+            if self.long_pressed:
+                return  # Block the click if long press fired
+        super().mouseReleaseEvent(event)
+        
+    def emit_long_press(self):
+        self.long_pressed = True
+        self.setDown(False)
+        if self.on_long_press:
+            self.on_long_press()
+
+class AppCard(QWidget):
     def remove_notification(self, card_widget):
         card_widget.deleteLater()
         QTimer.singleShot(50, self.update_notif_header)

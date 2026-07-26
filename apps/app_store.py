@@ -697,7 +697,14 @@ class AppStorePage(QWidget):
         self.search_anim.start()
 
     def on_search_query_changed(self, text):
-        self.populate_catalog(self.full_catalog_cache)
+        if hasattr(self, 'search_debounce_timer'):
+            self.search_debounce_timer.stop()
+        else:
+            self.search_debounce_timer = QTimer(self)
+            self.search_debounce_timer.setSingleShot(True)
+            self.search_debounce_timer.timeout.connect(lambda: self.populate_catalog(self.full_catalog_cache))
+            
+        self.search_debounce_timer.start(300)
 
     def _update_tab_styles(self, filter_mode):
         self.btn_tab_all.setStyleSheet(self.tab_active_css if filter_mode == "all" else self.tab_inactive_css)
@@ -834,10 +841,10 @@ class AppStorePage(QWidget):
             card = AppCard(app_data, self.start_install, self.open_app_profile_details)
             
             if self.current_filter == "installed" and not card.is_installed:
-                card.deleteLater()
+                card.setParent(None)
                 continue
             if self.current_filter == "updates" and not card.needs_update:
-                card.deleteLater()
+                card.setParent(None)
                 continue
                 
             self.list_layout.addWidget(card)

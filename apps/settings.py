@@ -308,6 +308,7 @@ class SettingsPage(QWidget):
         self.category_buttons = []
         categories = [
             ("Network and Wi-Fi", "icons/network.png"),
+            ("Bluetooth", "icons/bluetooth.png"),
             ("Display", "icons/display.png"),
             ("Audio and Sound", "icons/audio.png"),
             ("Customize", "icons/customize.png"),
@@ -333,6 +334,7 @@ class SettingsPage(QWidget):
         self.right_stack.setStyleSheet("background: transparent;")
         
         self.right_stack.addWidget(self.create_network_page())
+        self.right_stack.addWidget(self.create_bluetooth_page())
         self.right_stack.addWidget(self.create_display_page())
         self.right_stack.addWidget(self.create_audio_page())
         self.right_stack.addWidget(self.create_customize_page())
@@ -467,13 +469,19 @@ class SettingsPage(QWidget):
                 if ip_address != "Not Connected" and ip_address != "127.0.0.1":
                     self.lbl_status.setText("Status: Connected to Ethernet")
                     self.lbl_status.setStyleSheet("color: #1ED760; border: none;")
+                    networks = [] # Hide wifi list
                 else:
                     self.lbl_status.setText("Status: Disconnected")
                     self.lbl_status.setStyleSheet("color: #E24A4A; border: none;")
                     
             self.lbl_ip.setText(f"IP Address: {ip_address}")
             
-            if not networks:
+            if ip_address != "Not Connected" and ip_address != "127.0.0.1" and not connected_ssid:
+                lbl = QLabel("Ethernet connection is active. Wi-Fi scanning is disabled.")
+                lbl.setStyleSheet("color: #5A8DEF;")
+                lbl.setFont(QFont("Google Sans", int(16 * self.scale)))
+                self.networks_layout.addWidget(lbl)
+            elif not networks:
                 lbl = QLabel("No Wi-Fi networks found.")
                 lbl.setStyleSheet("color: #AAAAAA;")
                 lbl.setFont(QFont("Google Sans", int(16 * self.scale)))
@@ -524,6 +532,87 @@ class SettingsPage(QWidget):
             lbl.setStyleSheet("color: #AAAAAA;")
             lbl.setFont(QFont("Google Sans", int(14 * self.scale)))
             self.networks_layout.addWidget(lbl)
+
+    def create_bluetooth_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        title = QLabel("Bluetooth")
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
+        title.setStyleSheet("color: white;")
+        layout.addWidget(title)
+        layout.addSpacing(int(20 * self.scale))
+
+        self.btn_bt_toggle = QPushButton("Bluetooth: ON" if self.get_saved_setting("bluetooth_enabled", False) else "Bluetooth: OFF")
+        self.btn_bt_toggle.setFixedSize(int(250 * self.scale), int(60 * self.scale)) 
+        self.btn_bt_toggle.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
+        self.update_toggle_btn(self.btn_bt_toggle, "Bluetooth: ON", self.get_saved_setting("bluetooth_enabled", False))
+        
+        self.btn_bt_toggle.clicked.connect(lambda: self.toggle_bluetooth())
+        layout.addWidget(self.btn_bt_toggle)
+        layout.addSpacing(int(20 * self.scale))
+
+        self.bt_container = QWidget()
+        self.bt_layout = QVBoxLayout(self.bt_container)
+        self.bt_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setWidget(self.bt_container)
+        layout.addWidget(scroll)
+        
+        self.refresh_bluetooth_devices()
+        return page
+
+    def toggle_bluetooth(self):
+        active = not self.get_saved_setting("bluetooth_enabled", False)
+        self.save_setting("bluetooth_enabled", active)
+        self.update_toggle_btn(self.btn_bt_toggle, "Bluetooth: ON" if active else "Bluetooth: OFF", active)
+        self.refresh_bluetooth_devices()
+
+    def refresh_bluetooth_devices(self):
+        while self.bt_layout.count():
+            item = self.bt_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+            
+        if not self.get_saved_setting("bluetooth_enabled", False):
+            lbl = QLabel("Bluetooth is turned off.")
+            lbl.setStyleSheet("color: #AAAAAA;")
+            lbl.setFont(QFont("Google Sans", int(16 * self.scale)))
+            self.bt_layout.addWidget(lbl)
+            return
+            
+        devices = [
+            ("AirPods Pro", "Connected"),
+            ("Keychron K2", "Paired"),
+            ("Logitech MX Master 3", "Available")
+        ]
+        
+        for name, status in devices:
+            card = QFrame()
+            card.setStyleSheet("background-color: #2A2A35; border-radius: 8px;")
+            c_layout = QHBoxLayout(card)
+            
+            lbl_name = QLabel(name)
+            lbl_name.setStyleSheet("color: white; font-weight: bold;")
+            lbl_name.setFont(QFont("Google Sans", int(16 * self.scale)))
+            
+            lbl_status = QLabel(status)
+            lbl_status.setStyleSheet("color: #1ED760;" if status == "Connected" else "color: #AAAAAA;")
+            lbl_status.setFont(QFont("Google Sans", int(14 * self.scale)))
+            
+            btn_connect = QPushButton("Disconnect" if status == "Connected" else "Connect")
+            btn_connect.setStyleSheet("QPushButton { background-color: #333340; color: white; border-radius: 6px; padding: 5px 15px; } QPushButton:hover { background-color: #5A8DEF; }")
+            
+            c_layout.addWidget(lbl_name)
+            c_layout.addWidget(lbl_status)
+            c_layout.addStretch()
+            c_layout.addWidget(btn_connect)
+            
+            self.bt_layout.addWidget(card)
 
     def create_display_page(self):
         page = QWidget()
