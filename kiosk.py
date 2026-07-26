@@ -1073,9 +1073,17 @@ class NestKiosk(QMainWindow):
         def cleanup_video():
             if getattr(self, 'video_cleaned_up', False): return
             self.video_cleaned_up = True
+            
             if hasattr(self, 'boot_cover') and self.boot_cover:
                 self.boot_cover.hide()
                 self.boot_cover.deleteLater()
+                
+            self.fade_overlay = QLabel(self)
+            self.fade_overlay.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+            self.fade_overlay.setStyleSheet("background-color: rgba(0, 0, 0, 255);")
+            self.fade_overlay.show()
+            self.fade_overlay.raise_()
+            
             if hasattr(self, 'video_widget') and self.video_widget:
                 self.video_widget.hide()
                 self.video_widget.deleteLater()
@@ -1083,6 +1091,22 @@ class NestKiosk(QMainWindow):
                 self.media_player.deleteLater()
             if hasattr(self, 'audio_output') and self.audio_output:
                 self.audio_output.deleteLater()
+                
+            self.fade_alpha = 255
+            self.fade_timer = QTimer(self)
+            def fade_step():
+                self.fade_alpha -= 10
+                if self.fade_alpha <= 0:
+                    self.fade_timer.stop()
+                    if hasattr(self, 'fade_overlay') and self.fade_overlay:
+                        self.fade_overlay.hide()
+                        self.fade_overlay.deleteLater()
+                else:
+                    if hasattr(self, 'fade_overlay') and self.fade_overlay:
+                        self.fade_overlay.setStyleSheet(f"background-color: rgba(0, 0, 0, {self.fade_alpha});")
+            
+            self.fade_timer.timeout.connect(fade_step)
+            self.fade_timer.start(30)
                 
         def on_media_status_changed(status):
             if status in (QMediaPlayer.MediaStatus.EndOfMedia, QMediaPlayer.MediaStatus.InvalidMedia):
