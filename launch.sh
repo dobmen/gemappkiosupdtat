@@ -59,5 +59,8 @@ if [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
+echo "[Kiosk OS] Starting X11 Compositor (picom)..."
+picom -b --vsync 2>/dev/null || true
+
 echo "[Kiosk OS] Starting system..."
 python3 main.py
