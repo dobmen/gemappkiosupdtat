@@ -1045,6 +1045,14 @@ class NestKiosk(QMainWindow):
     def play_update_boot_video(self):
         from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
         from PyQt6.QtMultimediaWidgets import QVideoWidget
+        from PyQt6.QtCore import QTimer
+        
+        self.boot_cover = QLabel(self)
+        self.boot_cover.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.boot_cover.setStyleSheet("background-color: black;")
+        self.boot_cover.show()
+        self.boot_cover.raise_()
+        
         self.video_widget = QVideoWidget(self)
         self.video_widget.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.video_widget.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatioByExpanding)
@@ -1061,14 +1069,38 @@ class NestKiosk(QMainWindow):
         self.video_widget.show()
         self.video_widget.raise_()
         
-        def on_playback_state_changed(state):
-            if state == QMediaPlayer.PlaybackState.StoppedState:
+        self.video_cleaned_up = False
+        def cleanup_video():
+            if getattr(self, 'video_cleaned_up', False): return
+            self.video_cleaned_up = True
+            if hasattr(self, 'boot_cover') and self.boot_cover:
+                self.boot_cover.hide()
+                self.boot_cover.deleteLater()
+            if hasattr(self, 'video_widget') and self.video_widget:
                 self.video_widget.hide()
                 self.video_widget.deleteLater()
+            if hasattr(self, 'media_player') and self.media_player:
                 self.media_player.deleteLater()
+            if hasattr(self, 'audio_output') and self.audio_output:
                 self.audio_output.deleteLater()
                 
+        def on_media_status_changed(status):
+            if status in (QMediaPlayer.MediaStatus.EndOfMedia, QMediaPlayer.MediaStatus.InvalidMedia):
+                cleanup_video()
+                
+        def on_playback_state_changed(state):
+            if state == QMediaPlayer.PlaybackState.PlayingState:
+                if hasattr(self, 'boot_cover') and self.boot_cover:
+                    self.boot_cover.hide()
+                    self.boot_cover.deleteLater()
+                    self.boot_cover = None
+                    
+        self.media_player.mediaStatusChanged.connect(on_media_status_changed)
         self.media_player.playbackStateChanged.connect(on_playback_state_changed)
+        
+        # Max video length failsafe (15 seconds)
+        QTimer.singleShot(15000, cleanup_video)
+        
         self.media_player.play()
 
     def take_screenshot(self):
