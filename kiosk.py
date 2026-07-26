@@ -1477,9 +1477,9 @@ class NestKiosk(QMainWindow):
                 
         elif intent == "system":
             if argument == "reboot":
-                os.system("sudo reboot")
+                os.system("systemctl reboot")
             elif argument == "shutdown":
-                os.system("sudo shutdown now")
+                os.system("systemctl poweroff")
 
     def closeEvent(self, event):
         if hasattr(self, 'voice_thread'):

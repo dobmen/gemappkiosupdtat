@@ -26,7 +26,7 @@ INSTALL_DIR="$REAL_HOME/kiosk_os"
 GITHUB_REPO_URL="https://github.com/dobmen/gemappkiosupdtat.git"
 
 echo "[1/8] Configuring passwordless sudo for system power & update commands..."
-SUDOERS_FILE="/etc/sudoers.d/kiosk_nopasswd"
+SUDOERS_FILE="/etc/sudoers.d/010_kiosk_nopasswd"
 cat <<EOF > "$SUDOERS_FILE"
 # Allow Kiosk OS user to perform all sudo commands without a password for seamless updates
 $REAL_USER ALL=(ALL) NOPASSWD: ALL
@@ -73,25 +73,19 @@ gpasswd -a $REAL_USER autologin
 groupadd -f nopasswdlogin
 gpasswd -a $REAL_USER nopasswdlogin
 
-LIGHTDM_CONF="/etc/lightdm/lightdm.conf"
-if [ -f "$LIGHTDM_CONF" ]; then
-    # Uncomment or set auto-login fields and session in lightdm.conf
-    sed -i "s/^#autologin-user=.*/autologin-user=$REAL_USER/" "$LIGHTDM_CONF"
-    sed -i "s/^#autologin-user-timeout=.*/autologin-user-timeout=0/" "$LIGHTDM_CONF"
-    sed -i "s/^#user-session=.*/user-session=openbox/" "$LIGHTDM_CONF"
-    
-    # If lines don't exist under [Seat:*], ensure they are added
-    if ! grep -q "^autologin-user=$REAL_USER" "$LIGHTDM_CONF"; then
-        sed -i "/\[Seat:\*\]/a autologin-user=$REAL_USER\nautologin-user-timeout=0\nuser-session=openbox" "$LIGHTDM_CONF"
-    else
-        # Make sure user-session is explicitly set to openbox if autologin existed
-        if ! grep -q "^user-session=openbox" "$LIGHTDM_CONF"; then
-            sed -i "/^autologin-user=$REAL_USER/a user-session=openbox" "$LIGHTDM_CONF"
-        fi
-    fi
-    echo " -> Auto-login enabled via LightDM (Session: Openbox)."
+LIGHTDM_CONF_DIR="/etc/lightdm/lightdm.conf.d"
+if [ -d "/etc/lightdm" ]; then
+    mkdir -p "$LIGHTDM_CONF_DIR"
+    cat <<EOF > "$LIGHTDM_CONF_DIR/50-kiosk-autologin.conf"
+[Seat:*]
+autologin-guest=false
+autologin-user=$REAL_USER
+autologin-user-timeout=0
+user-session=openbox
+EOF
+    echo " -> Auto-login enabled via LightDM drop-in config (Session: Openbox)."
 else
-    echo " ⚠ LightDM config not found. Skipping auto-login configuration."
+    echo " ⚠ LightDM config directory not found. Skipping auto-login configuration."
 fi
 
 echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."

@@ -1320,7 +1320,7 @@ class SettingsPage(QWidget):
             self.lbl_update_status.setText(f"Status: Pulling latest code from GitHub...\nPlease do not turn off the device.")
             
             self.save_setting("os_version", new_version)
-            git_cmd = f"git fetch origin && git switch -C {channel} origin/{channel} && sudo reboot"
+            git_cmd = f"git fetch origin && git switch -C {channel} origin/{channel} && systemctl reboot"
             QTimer.singleShot(1500, lambda: os.system(git_cmd))
 
     def create_power_page(self):
@@ -1406,9 +1406,9 @@ class SettingsPage(QWidget):
     def reboot_system(self):
         dialog = ModernDialog(self, "Reboot System", "Are you sure you want to reboot the kiosk?", "Reboot")
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            os.system("sudo reboot")
+            os.system("systemctl reboot")
 
     def shutdown_system(self):
         dialog = ModernDialog(self, "Shutdown System", "Are you sure you want to completely shut down?", "Shutdown")
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            os.system("sudo shutdown now")
+            os.system("systemctl poweroff")
