@@ -1322,7 +1322,7 @@ class SettingsPage(QWidget):
             self.save_setting("os_version", new_version)
             self.save_setting("just_updated", True)
             
-            git_cmd = f"git fetch origin && git switch -C {channel} origin/{channel} && systemctl reboot"
+            git_cmd = f"git fetch origin && git reset --hard origin/{channel} && systemctl reboot"
             QTimer.singleShot(1500, lambda: os.system(git_cmd))
 
     def create_power_page(self):
