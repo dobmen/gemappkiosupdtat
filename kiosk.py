@@ -516,40 +516,32 @@ class NestKiosk(QMainWindow):
         self.indicator.setStyleSheet(f"color: #444444; font-size: {int(14 * SCALE_FACTOR)}px; font-weight: bold; background-color: transparent;")
 
         # -------------------------------------------------------------
-        # 2. TOUCH-FRIENDLY CONTROL CENTER (Glassmorphism)
+        # 2A. QUICK SETTINGS PANEL (Right Side)
         # -------------------------------------------------------------
-        PANEL_WIDTH = int(SCREEN_WIDTH * 0.45)
-        if PANEL_WIDTH < 400: PANEL_WIDTH = 400
-        if PANEL_WIDTH > 600: PANEL_WIDTH = 600
+        QS_WIDTH = int(SCREEN_WIDTH * 0.40)
+        if QS_WIDTH < 350: QS_WIDTH = 350
+        if QS_WIDTH > 500: QS_WIDTH = 500
         
-        CC_HEIGHT = int(SCREEN_HEIGHT * 0.7)
-        if CC_HEIGHT > 800: CC_HEIGHT = 800
-        if CC_HEIGHT < 500: CC_HEIGHT = 500
-        
-        # Override global CC_HEIGHT so gestures use the right bounds
         global CC_HEIGHT_MOD
-        CC_HEIGHT_MOD = CC_HEIGHT
+        CC_HEIGHT_MOD = int(SCREEN_HEIGHT * 0.6)
+        if CC_HEIGHT_MOD > 700: CC_HEIGHT_MOD = 700
+        if CC_HEIGHT_MOD < 450: CC_HEIGHT_MOD = 450
         
-        x_pos = SCREEN_WIDTH - PANEL_WIDTH - int(20 * SCALE_FACTOR)
+        qs_x_pos = SCREEN_WIDTH - QS_WIDTH - int(20 * SCALE_FACTOR)
         self.control_center = SlidingPanel(self, 
-            QRect(x_pos, -CC_HEIGHT_MOD - 50, PANEL_WIDTH, CC_HEIGHT_MOD), 
-            QRect(x_pos, int(20 * SCALE_FACTOR), PANEL_WIDTH, CC_HEIGHT_MOD))
+            QRect(qs_x_pos, -CC_HEIGHT_MOD - 50, QS_WIDTH, CC_HEIGHT_MOD), 
+            QRect(qs_x_pos, int(20 * SCALE_FACTOR), QS_WIDTH, CC_HEIGHT_MOD))
         
         self.control_center.setStyleSheet(f"""
-            QWidget {{
-                background-color: rgba(30, 30, 35, 180);
-                border-radius: {int(24 * SCALE_FACTOR)}px;
-                border: 1px solid rgba(255, 255, 255, 20);
-            }}
+            QWidget {{ background-color: rgba(30, 30, 35, 180); border-radius: {int(24 * SCALE_FACTOR)}px; border: 1px solid rgba(255, 255, 255, 20); }}
         """)
         
         cc_layout = QVBoxLayout(self.control_center)
         cc_layout.setContentsMargins(int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR))
         cc_layout.setSpacing(int(20 * SCALE_FACTOR))
 
-        # --- Header ---
         cc_header = QHBoxLayout()
-        lbl_qs_title = QLabel("Control Center")
+        lbl_qs_title = QLabel("Quick Settings")
         lbl_qs_title.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
         lbl_qs_title.setStyleSheet("background: transparent; border: none; color: white;")
         cc_header.addWidget(lbl_qs_title)
@@ -559,63 +551,52 @@ class NestKiosk(QMainWindow):
         close_sys_btn.setFixedSize(int(44 * SCALE_FACTOR), int(44 * SCALE_FACTOR))
         close_sys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_sys_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: rgba(226, 74, 74, 200); 
-                color: white; 
-                border-radius: {int(22 * SCALE_FACTOR)}px; 
-                font-size: {int(20 * SCALE_FACTOR)}px;
-                border: none;
-            }}
+            QPushButton {{ background-color: rgba(226, 74, 74, 200); color: white; border-radius: {int(22 * SCALE_FACTOR)}px; font-size: {int(20 * SCALE_FACTOR)}px; border: none; }}
             QPushButton:pressed {{ background-color: rgba(200, 50, 50, 255); }}
         """)
         close_sys_btn.clicked.connect(self.close)
         cc_header.addWidget(close_sys_btn)
         cc_layout.addLayout(cc_header)
 
-        # --- Sliders (Brightness & Volume) ---
         sliders_layout = QHBoxLayout()
         sliders_layout.setSpacing(int(20 * SCALE_FACTOR))
         
-        # Brightness Pill
         b_container = QFrame()
         b_container.setStyleSheet(f"background-color: rgba(255, 255, 255, 15); border-radius: {int(24 * SCALE_FACTOR)}px; border: none;")
         b_layout = QVBoxLayout(b_container)
         b_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_b_icon = QLabel("☀️")
         lbl_b_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
-        lbl_b_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_b_icon.setStyleSheet("background: transparent;")
         
         b_slider = QSlider(Qt.Orientation.Vertical)
-        b_slider.setMinimumHeight(int(150 * SCALE_FACTOR))
+        b_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
         b_slider.setValue(80)
         b_slider.setStyleSheet(f"""
-            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(30 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
-            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(15 * SCALE_FACTOR)}px; }}
-            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(16 * SCALE_FACTOR)}px; border-radius: {int(8 * SCALE_FACTOR)}px; }}
+            QSlider::handle:vertical {{ background: white; height: {int(30 * SCALE_FACTOR)}px; margin: 0 -{int(4 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(8 * SCALE_FACTOR)}px; }}
         """)
         b_layout.addWidget(b_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
         b_layout.addSpacing(10)
         b_layout.addWidget(lbl_b_icon, alignment=Qt.AlignmentFlag.AlignHCenter)
         sliders_layout.addWidget(b_container)
 
-        # Volume Pill
         v_container = QFrame()
         v_container.setStyleSheet(f"background-color: rgba(255, 255, 255, 15); border-radius: {int(24 * SCALE_FACTOR)}px; border: none;")
         v_layout = QVBoxLayout(v_container)
         v_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_v_icon = QLabel("🔊")
         lbl_v_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
-        lbl_v_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_v_icon.setStyleSheet("background: transparent;")
         
         v_slider = QSlider(Qt.Orientation.Vertical)
-        v_slider.setMinimumHeight(int(150 * SCALE_FACTOR))
+        v_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
         v_slider.setValue(50)
         v_slider.setStyleSheet(f"""
-            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(30 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
-            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(15 * SCALE_FACTOR)}px; }}
-            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(16 * SCALE_FACTOR)}px; border-radius: {int(8 * SCALE_FACTOR)}px; }}
+            QSlider::handle:vertical {{ background: white; height: {int(30 * SCALE_FACTOR)}px; margin: 0 -{int(4 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(8 * SCALE_FACTOR)}px; }}
         """)
         v_layout.addWidget(v_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
         v_layout.addSpacing(10)
@@ -623,24 +604,37 @@ class NestKiosk(QMainWindow):
         sliders_layout.addWidget(v_container)
         
         cc_layout.addLayout(sliders_layout, stretch=1)
-
-        # --- Notifications Area ---
-        notifs_card = QFrame()
-        notifs_card.setStyleSheet(f"background-color: rgba(0, 0, 0, 80); border-radius: {int(20 * SCALE_FACTOR)}px; border: none;")
-        notifs_main_layout = QVBoxLayout(notifs_card)
-        notifs_main_layout.setContentsMargins(int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR))
+        
+        # -------------------------------------------------------------
+        # 2B. NOTIFICATIONS PANEL (Left Side)
+        # -------------------------------------------------------------
+        NOTIF_WIDTH = int(SCREEN_WIDTH * 0.45)
+        if NOTIF_WIDTH < 450: NOTIF_WIDTH = 450
+        if NOTIF_WIDTH > 650: NOTIF_WIDTH = 650
+        
+        notif_x_pos = int(20 * SCALE_FACTOR)
+        self.notifs_panel = SlidingPanel(self, 
+            QRect(notif_x_pos, -CC_HEIGHT_MOD - 50, NOTIF_WIDTH, CC_HEIGHT_MOD), 
+            QRect(notif_x_pos, int(20 * SCALE_FACTOR), NOTIF_WIDTH, CC_HEIGHT_MOD))
+        
+        self.notifs_panel.setStyleSheet(f"""
+            QWidget {{ background-color: rgba(30, 30, 35, 180); border-radius: {int(24 * SCALE_FACTOR)}px; border: 1px solid rgba(255, 255, 255, 20); }}
+        """)
+        
+        notifs_main_layout = QVBoxLayout(self.notifs_panel)
+        notifs_main_layout.setContentsMargins(int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR))
         
         notif_header = QHBoxLayout()
         self.lbl_notif_count = QLabel("Recent Alerts")
-        self.lbl_notif_count.setFont(QFont("Google Sans", int(16 * SCALE_FACTOR), QFont.Weight.Bold))
-        self.lbl_notif_count.setStyleSheet("background: transparent; color: #EEEEEE;")
+        self.lbl_notif_count.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
+        self.lbl_notif_count.setStyleSheet("background: transparent; color: white; border: none;")
         notif_header.addWidget(self.lbl_notif_count)
         notif_header.addStretch()
 
-        btn_clear_notifs = QPushButton("Clear")
-        btn_clear_notifs.setFixedSize(int(80 * SCALE_FACTOR), int(32 * SCALE_FACTOR))
+        btn_clear_notifs = QPushButton("Clear All")
+        btn_clear_notifs.setFixedSize(int(100 * SCALE_FACTOR), int(36 * SCALE_FACTOR))
         btn_clear_notifs.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_clear_notifs.setStyleSheet(f"background: rgba(255,255,255,30); color: white; border-radius: {int(16 * SCALE_FACTOR)}px; font-weight: bold;")
+        btn_clear_notifs.setStyleSheet(f"background: rgba(255,255,255,40); color: white; border-radius: {int(18 * SCALE_FACTOR)}px; font-weight: bold; border: none;")
         btn_clear_notifs.clicked.connect(self.clear_all_notifications)
         notif_header.addWidget(btn_clear_notifs)
         notifs_main_layout.addLayout(notif_header)
@@ -653,45 +647,50 @@ class NestKiosk(QMainWindow):
         QScroller.grabGesture(self.notif_scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
 
         self.notif_container = QWidget()
-        self.notif_container.setStyleSheet("background: transparent;")
+        self.notif_container.setStyleSheet("background: transparent; border: none;")
         self.notif_layout = QVBoxLayout(self.notif_container)
-        self.notif_layout.setContentsMargins(0, int(10 * SCALE_FACTOR), 0, 0)
-        self.notif_layout.setSpacing(int(12 * SCALE_FACTOR))
+        self.notif_layout.setContentsMargins(0, int(20 * SCALE_FACTOR), 0, 0)
+        self.notif_layout.setSpacing(int(16 * SCALE_FACTOR))
         self.notif_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         self.notif_scroll.setWidget(self.notif_container)
-        notifs_main_layout.addWidget(self.notif_scroll)
-        
-        cc_layout.addWidget(notifs_card, stretch=2)
+        notifs_main_layout.addWidget(self.notif_scroll, stretch=1)
         self.update_notif_header()
-        
+
         # Override slide_in/out to include blur animation
         self.blur_anim1 = QPropertyAnimation(self.main_blur, b"blurRadius")
         self.blur_anim1.setDuration(300)
         
-        original_slide_in = self.control_center.slide_in
-        original_slide_out = self.control_center.slide_out
+        orig_cc_in = self.control_center.slide_in
+        orig_cc_out = self.control_center.slide_out
+        orig_nf_in = self.notifs_panel.slide_in
+        orig_nf_out = self.notifs_panel.slide_out
         
-        def custom_slide_in():
-            original_slide_in()
-            self.main_blur.setEnabled(True)
+        def blur_in():
+            if not self.main_blur.isEnabled(): self.main_blur.setEnabled(True)
             self.blur_anim1.setEndValue(20)
             self.blur_anim1.start()
             if hasattr(self, 'app_stack_blur'):
-                self.app_stack_blur.setEnabled(True)
+                if not self.app_stack_blur.isEnabled(): self.app_stack_blur.setEnabled(True)
                 self.blur_anim2.setEndValue(20)
                 self.blur_anim2.start()
                 
-        def custom_slide_out():
-            original_slide_out()
+        def blur_out():
             self.blur_anim1.setEndValue(0)
             self.blur_anim1.start()
             if hasattr(self, 'app_stack_blur'):
                 self.blur_anim2.setEndValue(0)
                 self.blur_anim2.start()
 
-        self.control_center.slide_in = custom_slide_in
-        self.control_center.slide_out = custom_slide_out
+        def custom_cc_in(): orig_cc_in(); blur_in()
+        def custom_cc_out(): orig_cc_out(); blur_out()
+        def custom_nf_in(): orig_nf_in(); blur_in()
+        def custom_nf_out(): orig_nf_out(); blur_out()
+
+        self.control_center.slide_in = custom_cc_in
+        self.control_center.slide_out = custom_cc_out
+        self.notifs_panel.slide_in = custom_nf_in
+        self.notifs_panel.slide_out = custom_nf_out
 
         # -------------------------------------------------------------
         # 3. RESPONSIVE APP DRAWER
@@ -1187,7 +1186,7 @@ class NestKiosk(QMainWindow):
             self.drag_start_pos = event.position().toPoint()
             self.active_gesture = None
 
-            if self.home_index == 0 and self.app_view.isHidden() and not self.control_center.is_visible and not self.app_drawer.is_visible:
+            if self.home_index == 0 and self.app_view.isHidden() and not self.control_center.is_visible and not self.notifs_panel.is_visible and not self.app_drawer.is_visible:
                 self.long_press_timer.start(700) 
 
             if not self.app_view.isHidden() and self.drag_start_pos.x() <= int(50 * SCALE_FACTOR):
@@ -1210,15 +1209,21 @@ class NestKiosk(QMainWindow):
                     if dy > 0: self.active_gesture = 'close_drawer'
                 elif self.control_center.is_visible:
                     if dy < 0: self.active_gesture = 'close_controls'
+                elif self.notifs_panel.is_visible:
+                    if dy < 0: self.active_gesture = 'close_notifs'
                 elif self.app_view.isHidden():
                     if dy < 0:
                         self.active_gesture = 'open_drawer'
                         self.app_drawer.raise_()
                     elif dy > 0:
-                        self.active_gesture = 'open_controls'
-                        self.control_center.raise_()
+                        if self.drag_start_pos.x() >= SCREEN_WIDTH / 2:
+                            self.active_gesture = 'open_controls'
+                            self.control_center.raise_()
+                        else:
+                            self.active_gesture = 'open_notifs'
+                            self.notifs_panel.raise_()
             else:
-                if not self.app_drawer.is_visible and not self.control_center.is_visible and self.app_view.isHidden():
+                if not self.app_drawer.is_visible and not self.control_center.is_visible and not self.notifs_panel.is_visible and self.app_view.isHidden():
                     self.active_gesture = 'horizontal'
 
         if self.active_gesture == 'edge_swipe_back':
@@ -1230,24 +1235,14 @@ class NestKiosk(QMainWindow):
         elif self.active_gesture == 'close_drawer':
             new_y = max(0, min(SCREEN_HEIGHT, dy))
             self.app_drawer.move(0, new_y)
-        elif self.active_gesture == 'open_controls':
-            new_y = max(-CC_HEIGHT_MOD, min(0, -CC_HEIGHT_MOD + dy))
-            self.control_center.move(self.control_center.x(), new_y)
-            # Dynamic blur based on drag progress
-            progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
-            blur_val = int(20 * progress)
-            if blur_val > 0:
-                if not self.main_blur.isEnabled(): self.main_blur.setEnabled(True)
-                self.main_blur.setBlurRadius(blur_val)
-                if hasattr(self, 'app_stack_blur'):
-                    if not self.app_stack_blur.isEnabled(): self.app_stack_blur.setEnabled(True)
-                    self.app_stack_blur.setBlurRadius(blur_val)
+        elif self.active_gesture in ('open_controls', 'open_notifs', 'close_controls', 'close_notifs'):
+            target_panel = self.control_center if 'controls' in self.active_gesture else self.notifs_panel
+            if 'open' in self.active_gesture:
+                new_y = max(-CC_HEIGHT_MOD, min(0, -CC_HEIGHT_MOD + dy))
             else:
-                self.main_blur.setEnabled(False)
-                if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setEnabled(False)
-        elif self.active_gesture == 'close_controls':
-            new_y = max(-CC_HEIGHT_MOD, min(0, dy))
-            self.control_center.move(self.control_center.x(), new_y)
+                new_y = max(-CC_HEIGHT_MOD, min(0, dy))
+            
+            target_panel.move(target_panel.x(), new_y)
             progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
             blur_val = int(20 * progress)
             if blur_val > 0:
@@ -1287,19 +1282,20 @@ class NestKiosk(QMainWindow):
             else:        self.animate_app_snap_back()
         elif self.active_gesture == 'open_drawer':
             if dy < -int(120 * SCALE_FACTOR): 
-                self.rebuild_app_drawer()  
                 self.app_drawer.slide_in()
             else:         
                 self.app_drawer.slide_out()
-        elif self.active_gesture == 'open_controls':
-            if dy > int(120 * SCALE_FACTOR):  self.control_center.slide_in()
-            else:         self.control_center.slide_out()
+        elif self.active_gesture in ('open_controls', 'open_notifs'):
+            target_panel = self.control_center if self.active_gesture == 'open_controls' else self.notifs_panel
+            if dy > int(120 * SCALE_FACTOR): target_panel.slide_in()
+            else: target_panel.slide_out()
         elif self.active_gesture == 'close_drawer':
             if dy > int(120 * SCALE_FACTOR):  self.app_drawer.slide_out()
             else:         self.app_drawer.slide_in()
-        elif self.active_gesture == 'close_controls':
-            if dy < -int(120 * SCALE_FACTOR): self.control_center.slide_out()
-            else:         self.control_center.slide_in()
+        elif self.active_gesture in ('close_controls', 'close_notifs'):
+            target_panel = self.control_center if self.active_gesture == 'close_controls' else self.notifs_panel
+            if dy < -int(120 * SCALE_FACTOR): target_panel.slide_out()
+            else: target_panel.slide_in()
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             if dx < -int(200 * SCALE_FACTOR) and self.home_index < len(self.home_pages) - 1:
