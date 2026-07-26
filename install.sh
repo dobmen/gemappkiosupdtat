@@ -28,8 +28,8 @@ GITHUB_REPO_URL="https://github.com/dobmen/gemappkiosupdtat.git"
 echo "[1/8] Configuring passwordless sudo for system power & update commands..."
 SUDOERS_FILE="/etc/sudoers.d/kiosk_nopasswd"
 cat <<EOF > "$SUDOERS_FILE"
-# Allow Kiosk OS user to reboot, shut down, and manage services without a password
-$REAL_USER ALL=(ALL) NOPASSWD: /sbin/reboot, /sbin/shutdown, /usr/sbin/reboot, /usr/sbin/shutdown, /bin/reboot, /bin/shutdown, /usr/bin/systemctl
+# Allow Kiosk OS user to perform all sudo commands without a password for seamless updates
+$REAL_USER ALL=(ALL) NOPASSWD: ALL
 EOF
 chmod 0440 "$SUDOERS_FILE"
 echo " -> Passwordless sudo configured successfully."
@@ -54,6 +54,7 @@ apt-get install -y -qq \
     libxcb-render-util0 \
     libxcb-xinerama0 \
     libxcb-xfixes0 \
+    libxcb-cursor0 \
     x11-xserver-utils \
     lightdm \
     openbox \
@@ -61,17 +62,34 @@ apt-get install -y -qq \
     curl
 
 echo "[3/8] Configuring LightDM Auto-Login for user: $REAL_USER..."
+# Ensure lightdm is the default display manager instead of gdm3
+echo "/usr/sbin/lightdm" > /etc/X11/default-display-manager
+DEBIAN_FRONTEND=noninteractive dpkg-reconfigure lightdm 2>/dev/null || true
+systemctl disable gdm3 2>/dev/null || true
+
+# Add user to autologin groups to ensure PAM allows passwordless boot
+groupadd -f autologin
+gpasswd -a $REAL_USER autologin
+groupadd -f nopasswdlogin
+gpasswd -a $REAL_USER nopasswdlogin
+
 LIGHTDM_CONF="/etc/lightdm/lightdm.conf"
 if [ -f "$LIGHTDM_CONF" ]; then
-    # Uncomment or set auto-login fields in lightdm.conf
-    sed -i "s/#autologin-user=/autologin-user=$REAL_USER/" "$LIGHTDM_CONF"
-    sed -i "s/#autologin-user-timeout=0/autologin-user-timeout=0/" "$LIGHTDM_CONF"
+    # Uncomment or set auto-login fields and session in lightdm.conf
+    sed -i "s/^#autologin-user=.*/autologin-user=$REAL_USER/" "$LIGHTDM_CONF"
+    sed -i "s/^#autologin-user-timeout=.*/autologin-user-timeout=0/" "$LIGHTDM_CONF"
+    sed -i "s/^#user-session=.*/user-session=openbox/" "$LIGHTDM_CONF"
     
     # If lines don't exist under [Seat:*], ensure they are added
-    if ! grep -q "autologin-user=$REAL_USER" "$LIGHTDM_CONF"; then
-        sed -i "/\[Seat:\*\]/a autologin-user=$REAL_USER\nautologin-user-timeout=0" "$LIGHTDM_CONF"
+    if ! grep -q "^autologin-user=$REAL_USER" "$LIGHTDM_CONF"; then
+        sed -i "/\[Seat:\*\]/a autologin-user=$REAL_USER\nautologin-user-timeout=0\nuser-session=openbox" "$LIGHTDM_CONF"
+    else
+        # Make sure user-session is explicitly set to openbox if autologin existed
+        if ! grep -q "^user-session=openbox" "$LIGHTDM_CONF"; then
+            sed -i "/^autologin-user=$REAL_USER/a user-session=openbox" "$LIGHTDM_CONF"
+        fi
     fi
-    echo " -> Auto-login enabled via LightDM."
+    echo " -> Auto-login enabled via LightDM (Session: Openbox)."
 else
     echo " ⚠ LightDM config not found. Skipping auto-login configuration."
 fi
@@ -91,17 +109,10 @@ cd "$INSTALL_DIR"
 
 echo "[5/8] Creating Python virtual environment..."
 sudo -u $REAL_USER python3 -m venv venv
-source venv/bin/activate
 
 echo "[6/8] Installing Python libraries..."
-pip install --upgrade pip --quiet
-pip install --quiet \
-    PyQt6 \
-    PyQt6-WebEngine \
-    speechrecognition \
-    pyaudio \
-    spotipy \
-    requests
+sudo -u $REAL_USER venv/bin/pip install --upgrade pip --quiet
+sudo -u $REAL_USER venv/bin/pip install --quiet -r requirements.txt
 
 echo "[7/8] Creating runtime directories & generating default config..."
 sudo -u $REAL_USER mkdir -p apps clockfaces photos screenshots videos browser_data web_app_data icons fonts
@@ -147,7 +158,8 @@ $INSTALL_DIR/launch.sh &
 EOF
 chown -R $REAL_USER:$REAL_USER "$REAL_HOME/.config"
 
-# Ensure LightDM starts on boot
+# Ensure LightDM starts on boot (and GDM3 is disabled)
+systemctl disable gdm3 2>/dev/null || true
 systemctl enable lightdm.service
 
 echo "================================================="
