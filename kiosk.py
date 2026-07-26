@@ -171,6 +171,49 @@ class AppStoreUpdateCheckThread(QThread):
             pass
 
 
+class MarqueeLabel(QLabel):
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.offset = 0
+        self.direction = 1
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_offset)
+        self.timer.start(50)
+        
+    def setText(self, text):
+        super().setText(text)
+        self.offset = 0
+        self.direction = 1
+
+    def update_offset(self):
+        if not self.isVisible(): return
+        fm = QFontMetrics(self.font())
+        text_width = fm.horizontalAdvance(self.text())
+        if text_width > self.width():
+            self.offset += self.direction * 1
+            if self.offset >= text_width - self.width() + 20:
+                self.direction = -1
+            elif self.offset <= -20:
+                self.direction = 1
+            self.update()
+        else:
+            self.offset = 0
+            self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setPen(Qt.GlobalColor.white)
+        fm = QFontMetrics(self.font())
+        text_width = fm.horizontalAdvance(self.text())
+        if text_width > self.width():
+            path = QPainterPath()
+            path.addRect(0, 0, self.width(), self.height())
+            painter.setClipPath(path)
+            rect = QRect(-self.offset, 0, text_width, self.height())
+            painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
+        else:
+            super().paintEvent(event)
+
 class ToastNotification(QFrame):
     def __init__(self, parent, app_name, title, desc, icon_char, click_callback):
         super().__init__(parent)
@@ -569,15 +612,24 @@ class NestKiosk(QMainWindow):
         lbl_b_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
         lbl_b_icon.setStyleSheet("background: transparent;")
         
-        b_slider = QSlider(Qt.Orientation.Vertical)
-        b_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
-        b_slider.setValue(80)
-        b_slider.setStyleSheet(f"""
-            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(16 * SCALE_FACTOR)}px; border-radius: {int(8 * SCALE_FACTOR)}px; }}
-            QSlider::handle:vertical {{ background: white; height: {int(30 * SCALE_FACTOR)}px; margin: 0 -{int(4 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
-            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(8 * SCALE_FACTOR)}px; }}
+        self.lbl_b_percent = QLabel("80%")
+        self.lbl_b_percent.setFont(QFont("Google Sans", int(14 * SCALE_FACTOR), QFont.Weight.Bold))
+        self.lbl_b_percent.setStyleSheet("color: white; background: transparent;")
+        self.lbl_b_percent.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.b_slider = QSlider(Qt.Orientation.Vertical)
+        self.b_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
+        self.b_slider.setValue(80)
+        self.b_slider.setStyleSheet(f"""
+            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(40 * SCALE_FACTOR)}px; border-radius: {int(20 * SCALE_FACTOR)}px; }}
+            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(20 * SCALE_FACTOR)}px; }}
+            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(20 * SCALE_FACTOR)}px; }}
         """)
-        b_layout.addWidget(b_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.b_slider.valueChanged.connect(lambda v: self.lbl_b_percent.setText(f"{v}%"))
+        
+        b_layout.addWidget(self.lbl_b_percent, alignment=Qt.AlignmentFlag.AlignHCenter)
+        b_layout.addSpacing(5)
+        b_layout.addWidget(self.b_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
         b_layout.addSpacing(10)
         b_layout.addWidget(lbl_b_icon, alignment=Qt.AlignmentFlag.AlignHCenter)
         sliders_layout.addWidget(b_container)
@@ -590,15 +642,24 @@ class NestKiosk(QMainWindow):
         lbl_v_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
         lbl_v_icon.setStyleSheet("background: transparent;")
         
-        v_slider = QSlider(Qt.Orientation.Vertical)
-        v_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
-        v_slider.setValue(50)
-        v_slider.setStyleSheet(f"""
-            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(16 * SCALE_FACTOR)}px; border-radius: {int(8 * SCALE_FACTOR)}px; }}
-            QSlider::handle:vertical {{ background: white; height: {int(30 * SCALE_FACTOR)}px; margin: 0 -{int(4 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
-            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(8 * SCALE_FACTOR)}px; }}
+        self.lbl_v_percent = QLabel("50%")
+        self.lbl_v_percent.setFont(QFont("Google Sans", int(14 * SCALE_FACTOR), QFont.Weight.Bold))
+        self.lbl_v_percent.setStyleSheet("color: white; background: transparent;")
+        self.lbl_v_percent.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.v_slider = QSlider(Qt.Orientation.Vertical)
+        self.v_slider.setMinimumHeight(int(200 * SCALE_FACTOR))
+        self.v_slider.setValue(50)
+        self.v_slider.setStyleSheet(f"""
+            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(40 * SCALE_FACTOR)}px; border-radius: {int(20 * SCALE_FACTOR)}px; }}
+            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(20 * SCALE_FACTOR)}px; }}
+            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(20 * SCALE_FACTOR)}px; }}
         """)
-        v_layout.addWidget(v_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.v_slider.valueChanged.connect(lambda v: self.lbl_v_percent.setText(f"{v}%"))
+        
+        v_layout.addWidget(self.lbl_v_percent, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_layout.addSpacing(5)
+        v_layout.addWidget(self.v_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
         v_layout.addSpacing(10)
         v_layout.addWidget(lbl_v_icon, alignment=Qt.AlignmentFlag.AlignHCenter)
         sliders_layout.addWidget(v_container)
@@ -625,9 +686,10 @@ class NestKiosk(QMainWindow):
         notifs_main_layout.setContentsMargins(int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR))
         
         notif_header = QHBoxLayout()
-        self.lbl_notif_count = QLabel("Recent Alerts")
+        self.lbl_notif_count = MarqueeLabel("Recent Alerts")
         self.lbl_notif_count.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_notif_count.setStyleSheet("background: transparent; color: white; border: none;")
+        self.lbl_notif_count.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         notif_header.addWidget(self.lbl_notif_count)
         notif_header.addStretch()
 

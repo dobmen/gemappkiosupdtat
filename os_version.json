@@ -1,4 +1,4 @@
 {
-  "version": "0.1.4.1",
-  "notes": "Fixed QPainter crash when exiting Control Center while using custom high-refresh clockfaces."
+  "version": "0.1.4.2",
+  "notes": "Redesigned sliders to be wider and rounder with percentage text. Added a marquee scrolling effect for the notifications header when text is too long."
 }
