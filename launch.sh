@@ -60,4 +60,4 @@ if [ -d "venv" ]; then
 fi
 
 echo "[Kiosk OS] Starting system..."
-python3 kiosk.py
+python3 main.py
