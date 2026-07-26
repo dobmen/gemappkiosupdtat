@@ -507,6 +507,7 @@ class NestKiosk(QMainWindow):
 
         self.main_blur = QGraphicsBlurEffect(self.main_carousel)
         self.main_blur.setBlurRadius(0)
+        self.main_blur.setEnabled(False)
         self.main_carousel.setGraphicsEffect(self.main_blur)
 
         self.indicator = QLabel("▲ Swipe up for apps", self)
@@ -673,9 +674,11 @@ class NestKiosk(QMainWindow):
         
         def custom_slide_in():
             original_slide_in()
+            self.main_blur.setEnabled(True)
             self.blur_anim1.setEndValue(20)
             self.blur_anim1.start()
             if hasattr(self, 'app_stack_blur'):
+                self.app_stack_blur.setEnabled(True)
                 self.blur_anim2.setEndValue(20)
                 self.blur_anim2.start()
                 
@@ -781,10 +784,15 @@ class NestKiosk(QMainWindow):
         self.app_stack = QStackedWidget()
         self.app_stack_blur = QGraphicsBlurEffect(self.app_stack)
         self.app_stack_blur.setBlurRadius(0)
+        self.app_stack_blur.setEnabled(False)
         self.app_stack.setGraphicsEffect(self.app_stack_blur)
         
         self.blur_anim2 = QPropertyAnimation(self.app_stack_blur, b"blurRadius")
         self.blur_anim2.setDuration(300)
+        
+        # Disable effects when animation finishes and radius is 0
+        self.blur_anim1.finished.connect(lambda: self.main_blur.setEnabled(False) if self.main_blur.blurRadius() == 0 else None)
+        self.blur_anim2.finished.connect(lambda: self.app_stack_blur.setEnabled(False) if self.app_stack_blur.blurRadius() == 0 else None)
         
         self.app_view_layout.addWidget(self.app_stack)
 
@@ -1228,15 +1236,29 @@ class NestKiosk(QMainWindow):
             # Dynamic blur based on drag progress
             progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
             blur_val = int(20 * progress)
-            self.main_blur.setBlurRadius(blur_val)
-            if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setBlurRadius(blur_val)
+            if blur_val > 0:
+                if not self.main_blur.isEnabled(): self.main_blur.setEnabled(True)
+                self.main_blur.setBlurRadius(blur_val)
+                if hasattr(self, 'app_stack_blur'):
+                    if not self.app_stack_blur.isEnabled(): self.app_stack_blur.setEnabled(True)
+                    self.app_stack_blur.setBlurRadius(blur_val)
+            else:
+                self.main_blur.setEnabled(False)
+                if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setEnabled(False)
         elif self.active_gesture == 'close_controls':
             new_y = max(-CC_HEIGHT_MOD, min(0, dy))
             self.control_center.move(self.control_center.x(), new_y)
             progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
             blur_val = int(20 * progress)
-            self.main_blur.setBlurRadius(blur_val)
-            if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setBlurRadius(blur_val)
+            if blur_val > 0:
+                if not self.main_blur.isEnabled(): self.main_blur.setEnabled(True)
+                self.main_blur.setBlurRadius(blur_val)
+                if hasattr(self, 'app_stack_blur'):
+                    if not self.app_stack_blur.isEnabled(): self.app_stack_blur.setEnabled(True)
+                    self.app_stack_blur.setBlurRadius(blur_val)
+            else:
+                self.main_blur.setEnabled(False)
+                if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setEnabled(False)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             current_page.move(dx, 0)

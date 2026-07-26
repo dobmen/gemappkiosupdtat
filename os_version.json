@@ -1,4 +1,4 @@
 {
-  "version": "0.1.3.8",
-  "notes": "Redesigned Control Center with touch-friendly layout and dynamic background blur (hotfix import)."
+  "version": "0.1.3.9",
+  "notes": "Redesigned Control Center with touch-friendly layout and dynamic background blur (fix Painter not active spam)."
 }
