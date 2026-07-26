@@ -20,6 +20,8 @@ from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
     QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect, QGraphicsBlurEffect, QStackedWidget
 )
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PyQt6.QtMultimediaWidgets import QVideoWidget
 print("[DEBUG] kiosk.py: Qt modules imported")
 
 import subprocess
@@ -869,6 +871,11 @@ class NestKiosk(QMainWindow):
 
         print("[DEBUG] Rebuilding app drawer content...")
         self.rebuild_app_drawer()
+        
+        if get_system_setting("just_updated", False) and os.path.exists("videos/update_boot.mp4"):
+            save_system_setting("just_updated", False)
+            self.play_update_boot_video()
+            
         print("[DEBUG] Boot complete. Showing window...")
 
         # -------------------------------------------------------------
@@ -986,6 +993,35 @@ class NestKiosk(QMainWindow):
         if event.key() == Qt.Key.Key_Backslash:
             self.take_screenshot()
         super().keyPressEvent(event)
+
+    def play_update_boot_video(self):
+        from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+        from PyQt6.QtMultimediaWidgets import QVideoWidget
+        self.video_widget = QVideoWidget(self)
+        self.video_widget.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.video_widget.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatioByExpanding)
+        self.video_widget.setStyleSheet("background-color: black;")
+        
+        self.media_player = QMediaPlayer(self)
+        self.audio_output = QAudioOutput(self)
+        self.media_player.setAudioOutput(self.audio_output)
+        self.media_player.setVideoOutput(self.video_widget)
+        
+        video_path = os.path.abspath("videos/update_boot.mp4")
+        self.media_player.setSource(QUrl.fromLocalFile(video_path))
+        
+        self.video_widget.show()
+        self.video_widget.raise_()
+        
+        def on_playback_state_changed(state):
+            if state == QMediaPlayer.PlaybackState.StoppedState:
+                self.video_widget.hide()
+                self.video_widget.deleteLater()
+                self.media_player.deleteLater()
+                self.audio_output.deleteLater()
+                
+        self.media_player.playbackStateChanged.connect(on_playback_state_changed)
+        self.media_player.play()
 
     def take_screenshot(self):
         try:
