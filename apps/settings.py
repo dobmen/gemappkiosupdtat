@@ -751,6 +751,7 @@ class SettingsPage(QWidget):
             QSlider::handle:horizontal { width: 24px; margin: -8px 0; background: white; border-radius: 12px; }
         """)
         self.scale_slider.valueChanged.connect(self.update_scale_val)
+        self.scale_slider.sliderReleased.connect(self.apply_scale_val)
         c_layout.addWidget(self.scale_slider)
         
         c_layout.addSpacing(int(15 * self.scale))
@@ -1364,6 +1365,9 @@ class SettingsPage(QWidget):
 
     def update_scale_val(self, val):
         self.lbl_scale_val.setText(f"{val}%")
+
+    def apply_scale_val(self):
+        val = self.scale_slider.value()
         self.save_setting("app_drawer_scale", val)
         if hasattr(self.window(), 'rebuild_app_drawer'):
             self.window().rebuild_app_drawer()
