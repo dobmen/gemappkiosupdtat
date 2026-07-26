@@ -61,6 +61,7 @@ apt-get install -y -qq \
     alsa-utils \
     network-manager \
     bluez \
+    picom \
     libnss3 \
     libxcomposite1 \
     libxcursor1 \
