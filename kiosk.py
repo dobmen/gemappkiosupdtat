@@ -878,9 +878,8 @@ class NestKiosk(QMainWindow):
         self.app_view.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.app_view.hide()
         
-        self.app_opacity = None
-        # self.app_opacity = QGraphicsOpacityEffect(self.app_view)
-        # self.app_view.setGraphicsEffect(self.app_opacity)
+        self.app_opacity = QGraphicsOpacityEffect(self.app_view)
+        self.app_view.setGraphicsEffect(self.app_opacity)
         
         self.app_view_layout = QVBoxLayout(self.app_view)
         self.app_view_layout.setContentsMargins(0, 0, 0, 0)
@@ -893,9 +892,9 @@ class NestKiosk(QMainWindow):
 
         self.anim_app_group = QParallelAnimationGroup()
         self.anim_app_geom = QPropertyAnimation(self.app_view, b"geometry")
+        self.anim_app_fade = QPropertyAnimation(self.app_opacity, b"opacity")
         self.anim_app_group.addAnimation(self.anim_app_geom)
-        # self.anim_app_fade = QPropertyAnimation(self.app_opacity, b"opacity")
-        # self.anim_app_group.addAnimation(self.anim_app_fade)
+        self.anim_app_group.addAnimation(self.anim_app_fade)
 
         self.edge_interceptor = QWidget(self)
         self.edge_interceptor.setGeometry(0, 0, int(25 * SCALE_FACTOR), SCREEN_HEIGHT)
