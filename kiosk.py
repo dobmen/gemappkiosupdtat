@@ -370,7 +370,7 @@ class DynamicAppButton(QFrame):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.setStyleSheet("""
-            DynamicAppButton { background-color: transparent; border-radius: 16px; }
+            DynamicAppButton { background-color: transparent; border-radius: {int(20*SCALE_FACTOR)}px; }
             DynamicAppButton:hover { background-color: rgba(255, 255, 255, 12); }
         """)
 
@@ -652,8 +652,8 @@ class NestKiosk(QMainWindow):
         # 2A. QUICK SETTINGS PANEL (Right Side)
         # -------------------------------------------------------------
         QS_WIDTH = int(SCREEN_WIDTH * 0.40)
-        if QS_WIDTH < 350: QS_WIDTH = 350
-        if QS_WIDTH > 500: QS_WIDTH = 500
+        if QS_WIDTH < int(350 * SCALE_FACTOR): QS_WIDTH = int(350 * SCALE_FACTOR)
+        if QS_WIDTH > int(700 * SCALE_FACTOR): QS_WIDTH = int(700 * SCALE_FACTOR)
         
         global CC_HEIGHT_MOD
         CC_HEIGHT_MOD = int(SCREEN_HEIGHT * 0.6)
@@ -676,7 +676,7 @@ class NestKiosk(QMainWindow):
         # --- Header ---
         cc_header = QHBoxLayout()
         lbl_qs_title = QLabel("Control Center")
-        lbl_qs_title.setFont(QFont("Google Sans", int(20 * SCALE_FACTOR), QFont.Weight.Bold))
+        lbl_qs_title.setFont(QFont("Google Sans", int(16 * SCALE_FACTOR), QFont.Weight.Bold))
         lbl_qs_title.setStyleSheet("background: transparent; border: none; color: white;")
         cc_header.addWidget(lbl_qs_title)
         cc_header.addStretch()
@@ -706,9 +706,9 @@ class NestKiosk(QMainWindow):
         
         def style_conn_btn(btn, active):
             if active:
-                btn.setStyleSheet(f"QPushButton {{ background-color: #5A8DEF; color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: #4A7DE0; }}")
+                btn.setStyleSheet(f"QPushButton {{ background-color: #5A8DEF; color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(13 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: #4A7DE0; }}")
             else:
-                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: rgba(255, 255, 255, 30); }}")
+                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(13 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: rgba(255, 255, 255, 30); }}")
 
         net_active = get_system_setting("network_enabled", True)
         bt_active = get_system_setting("bluetooth_enabled", False)
@@ -756,9 +756,9 @@ class NestKiosk(QMainWindow):
         
         def style_mode_btn(btn, active, active_color):
             if active:
-                btn.setStyleSheet(f"QPushButton {{ background-color: {active_color}; color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ opacity: 0.8; }}")
+                btn.setStyleSheet(f"QPushButton {{ background-color: {active_color}; color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(13 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ opacity: 0.8; }}")
             else:
-                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(16 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: rgba(255, 255, 255, 30); }}")
+                btn.setStyleSheet(f"QPushButton {{ background-color: rgba(255, 255, 255, 15); color: white; font-weight: bold; border-radius: {int(20 * SCALE_FACTOR)}px; font-size: {int(13 * SCALE_FACTOR)}px; border: none; }} QPushButton:pressed {{ background-color: rgba(255, 255, 255, 30); }}")
 
         dnd_active = get_system_setting("dnd_mode", False)
         silent_active = get_system_setting("silent_mode", False)
@@ -837,8 +837,8 @@ class NestKiosk(QMainWindow):
         # 2B. NOTIFICATIONS PANEL (Left Side)
         # -------------------------------------------------------------
         NOTIF_WIDTH = int(SCREEN_WIDTH * 0.45)
-        if NOTIF_WIDTH < 450: NOTIF_WIDTH = 450
-        if NOTIF_WIDTH > 650: NOTIF_WIDTH = 650
+        if NOTIF_WIDTH < int(450 * SCALE_FACTOR): NOTIF_WIDTH = int(450 * SCALE_FACTOR)
+        if NOTIF_WIDTH > int(800 * SCALE_FACTOR): NOTIF_WIDTH = int(800 * SCALE_FACTOR)
         
         notif_x_pos = int(20 * SCALE_FACTOR)
         self.notifs_panel = SlidingPanel(self, 
@@ -854,7 +854,7 @@ class NestKiosk(QMainWindow):
         
         notif_header = QHBoxLayout()
         self.lbl_notif_count = MarqueeLabel("Recent Alerts")
-        self.lbl_notif_count.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
+        self.lbl_notif_count.setFont(QFont("Google Sans", int(18 * SCALE_FACTOR), QFont.Weight.Bold))
         self.lbl_notif_count.setStyleSheet("background: transparent; color: white; border: none;")
         self.lbl_notif_count.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         notif_header.addWidget(self.lbl_notif_count)
@@ -1338,7 +1338,7 @@ class NestKiosk(QMainWindow):
             self.lbl_notif_count.setText("No New Notifications")
             if not self.empty_label:
                 self.empty_label = QLabel("You're all caught up! ✨")
-                self.empty_label.setFont(QFont("Google Sans", 16))
+                self.empty_label.setFont(QFont("Google Sans", int(18 * SCALE_FACTOR)))
                 self.empty_label.setStyleSheet("color: #666670; margin-top: 40px;")
                 self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.notif_layout.addWidget(self.empty_label)
@@ -1395,9 +1395,9 @@ class NestKiosk(QMainWindow):
             
             if icon_path:
                 lbl_icon = QLabel()
-                pix = QIcon(icon_path).pixmap(QSize(32, 32))
+                pix = QIcon(icon_path).pixmap(QSize(int(32*SCALE_FACTOR), int(32*SCALE_FACTOR)))
                 lbl_icon.setPixmap(pix)
-                lbl_icon.setFixedSize(32, 32)
+                lbl_icon.setFixedSize(int(32*SCALE_FACTOR), int(32*SCALE_FACTOR))
                 card_layout.addWidget(lbl_icon)
             
             btn_switch = QPushButton(app_name)
@@ -1410,11 +1410,11 @@ class NestKiosk(QMainWindow):
             btn_switch.clicked.connect(lambda checked, a=app_name: self.launch_app(a))
             
             btn_kill = QPushButton("✕")
-            btn_kill.setFixedSize(32, 32)
+            btn_kill.setFixedSize(int(40*SCALE_FACTOR), int(40*SCALE_FACTOR))
             btn_kill.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_kill.setFont(QFont("Google Sans", 14, QFont.Weight.Bold))
+            btn_kill.setFont(QFont("Google Sans", int(14*SCALE_FACTOR), QFont.Weight.Bold))
             btn_kill.setStyleSheet("""
-                QPushButton { background-color: rgba(226, 74, 74, 30); color: #E24A4A; border-radius: 16px; border: none; }
+                QPushButton { background-color: rgba(226, 74, 74, 30); color: #E24A4A; border-radius: {int(20*SCALE_FACTOR)}px; border: none; }
                 QPushButton:hover { background-color: #E24A4A; color: white; }
             """)
             btn_kill.clicked.connect(lambda checked, a=app_name: self.kill_app(a))
@@ -1425,9 +1425,9 @@ class NestKiosk(QMainWindow):
 
         if count > 1:
             btn_close_all = QPushButton("Close All")
-            btn_close_all.setFixedSize(100, 75)
+            btn_close_all.setFixedSize(int(130 * SCALE_FACTOR), int(55 * SCALE_FACTOR))
             btn_close_all.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_close_all.setFont(QFont("Google Sans", 12, QFont.Weight.Bold))
+            btn_close_all.setFont(QFont("Google Sans", int(14 * SCALE_FACTOR), QFont.Weight.Bold))
             btn_close_all.setStyleSheet("""
                 QPushButton { background-color: rgba(226, 74, 74, 20); color: #E24A4A; border: 1px dashed #E24A4A; border-radius: 12px; }
                 QPushButton:hover { background-color: #E24A4A; color: white; border-style: solid; }
@@ -1759,7 +1759,7 @@ class NestKiosk(QMainWindow):
                     app_title = QLabel(f"{app_name} Module")
                     app_title.setFont(QFont("Google Sans", int(32 * SCALE_FACTOR), QFont.Weight.Bold))
                     desc = QLabel("Swipe from the far left edge of the screen to return home.")
-                    desc.setStyleSheet(f"color: #888888; font-size: {int(16 * SCALE_FACTOR)}px; margin-top: 10px;")
+                    desc.setStyleSheet(f"color: #888888; font-size: {int(13 * SCALE_FACTOR)}px; margin-top: 10px;")
                     layout.addWidget(app_title, alignment=Qt.AlignmentFlag.AlignCenter)
                     layout.addWidget(desc, alignment=Qt.AlignmentFlag.AlignCenter)
                     

@@ -822,7 +822,7 @@ class GalleryPage(QWidget):
         sidebar_layout.setSpacing(int(10 * self.scale))
 
         lbl_sections = QLabel("Albums")
-        lbl_sections.setFont(QFont("Google Sans", int(15 * self.scale), QFont.Weight.Bold))
+        lbl_sections.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
         lbl_sections.setStyleSheet("color: #666670; margin-left: 10px; margin-bottom: 5px;")
         sidebar_layout.addWidget(lbl_sections)
 
@@ -870,9 +870,9 @@ class GalleryPage(QWidget):
         painter.end()
         
         self.btn_upload.setIcon(QIcon(icon_pix))
-        self.btn_upload.setIconSize(QSize(int(20 * self.scale), int(20 * self.scale)))
+        self.btn_upload.setIconSize(QSize(int(26 * self.scale), int(26 * self.scale)))
         self.btn_upload.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_upload.setStyleSheet(f"QPushButton {{ background-color: #5A8DEF; color: white; border-radius: 12px; padding: 0px 20px; font-weight: bold; font-size: {int(16*self.scale)}px; border: none; height: {int(45*self.scale)}px; }} QPushButton:hover {{ background-color: #4A7DDF; }}")
+        self.btn_upload.setStyleSheet(f"QPushButton {{ background-color: #5A8DEF; color: white; border-radius: 12px; padding: 0px 25px; font-weight: bold; font-size: {int(18*self.scale)}px; border: none; height: {int(50*self.scale)}px; }} QPushButton:hover {{ background-color: #4A7DDF; }}")
         self.btn_upload.clicked.connect(self.show_qr_code)
         header.addWidget(self.btn_upload)
         

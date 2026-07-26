@@ -56,7 +56,7 @@ apt-get install -y -qq \
     libxcb-xfixes0 \
     libxcb-cursor0 \
     x11-xserver-utils \
-    xinput \
+     \
     x11-utils \
     alsa-utils \
     network-manager \

@@ -1231,7 +1231,7 @@ class SettingsPage(QWidget):
         layout.addSpacing(int(20 * self.scale))
         
         info = QLabel("Voice Assistant is coming soon in a future update.\\nIt will allow you to control your smart home, play music, and ask questions hands-free.")
-        info.setFont(QFont("Google Sans", int(16 * self.scale)))
+        info.setFont(QFont("Google Sans", int(20 * self.scale)))
         info.setStyleSheet("color: #AAAAAA;")
         info.setWordWrap(True)
         layout.addWidget(info)
@@ -1245,12 +1245,12 @@ class SettingsPage(QWidget):
         
         header = QHBoxLayout()
         lbl_enable = QLabel("Enable Voice Assistant")
-        lbl_enable.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
+        lbl_enable.setFont(QFont("Google Sans", int(22 * self.scale), QFont.Weight.Bold))
         lbl_enable.setStyleSheet("color: white; border: none;")
         
         toggle = QPushButton("Coming Soon")
-        toggle.setFixedSize(int(140 * self.scale), int(40 * self.scale))
-        toggle.setStyleSheet("QPushButton { background-color: #333340; color: #888890; border-radius: 20px; font-weight: bold; border: none; }")
+        toggle.setFixedSize(int(160 * self.scale), int(50 * self.scale))
+        toggle.setStyleSheet(f"QPushButton {{ background-color: #333340; color: #888890; border-radius: {int(25*self.scale)}px; font-weight: bold; font-size: {int(16*self.scale)}px; border: none; }}")
         toggle.setEnabled(False)
         
         header.addWidget(lbl_enable)
