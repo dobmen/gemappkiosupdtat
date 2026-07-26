@@ -225,6 +225,12 @@ class ClassicClock(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        radius = max(36, int(36 * (self.height() / 600.0)))
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+        painter.setClipPath(path)
+        
         draw_custom_background(painter, self.bg, self.width(), self.height())
         painter.end()
 
@@ -299,6 +305,12 @@ class StackedClock(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        radius = max(36, int(36 * (self.height() / 600.0)))
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+        painter.setClipPath(path)
+        
         draw_custom_background(painter, self.bg, self.width(), self.height())
         painter.end()
 
@@ -329,6 +341,11 @@ class AnalogClock(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        radius = max(36, int(36 * (self.height() / 600.0)))
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), radius, radius)
+        painter.setClipPath(path)
         
         is_light = (self.theme == "light")
         bg_col = QColor(245, 245, 245) if is_light else QColor(12, 12, 14)
