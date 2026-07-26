@@ -20,11 +20,8 @@ try:
 except ImportError:
     SPOTIPY_AVAILABLE = False
 
-try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    WEBENGINE_AVAILABLE = True
-except ImportError:
-    WEBENGINE_AVAILABLE = False
+# Force disable QtWebEngine on Linux VMs to prevent Chromium sandbox core dump
+WEBENGINE_AVAILABLE = False
 
 SPOTIFY_CLIENT_ID = "a31b1c1688c947bb98baa2ab3e8c053f"
 SPOTIFY_CLIENT_SECRET = "abce0502579346649aaf44549857971d"

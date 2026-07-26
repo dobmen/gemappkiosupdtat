@@ -1,27 +1,52 @@
+print("[DEBUG] kiosk.py: Starting module load")
 import os
+print("[DEBUG] kiosk.py: Imported os")
 import sys
+print("[DEBUG] kiosk.py: Imported sys")
 import json
+print("[DEBUG] kiosk.py: Imported json")
 import ssl
+print("[DEBUG] kiosk.py: Imported ssl")
 import time
+print("[DEBUG] kiosk.py: Imported time")
 import importlib
+print("[DEBUG] kiosk.py: Imported importlib")
 import urllib.request
+print("[DEBUG] kiosk.py: Imported urllib")
+print("[DEBUG] kiosk.py: About to import Qt modules...")
 from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint, QUrl
 from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor, QGuiApplication
 from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
     QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect, QGraphicsBlurEffect, QStackedWidget
 )
+print("[DEBUG] kiosk.py: Qt modules imported")
 
 import subprocess
 import threading
+print("[DEBUG] kiosk.py: Imported subprocess and threading")
 
+print("[DEBUG] kiosk.py: About to import custom modules (clockfaces, SlidingPanel)...")
 # Import our custom modules dynamically for hot-swapping
 import components.clockfaces as cf
 from components import SlidingPanel
+print("[DEBUG] kiosk.py: Imported clockfaces and SlidingPanel")
+
+print("[DEBUG] kiosk.py: About to import LocalMusicPage...")
 from apps.local_music import LocalMusicPage
+print("[DEBUG] kiosk.py: Imported LocalMusicPage")
+
+print("[DEBUG] kiosk.py: About to import create_web_app_view...")
 from apps.web_app import create_web_app_view
+print("[DEBUG] kiosk.py: Imported create_web_app_view")
+
+print("[DEBUG] kiosk.py: About to import AppStorePage...")
 from apps.app_store import AppStorePage
+print("[DEBUG] kiosk.py: Imported AppStorePage")
+
+print("[DEBUG] kiosk.py: About to import VoiceAssistantThread...")
 from components.voice_assistant import VoiceAssistantThread
+print("[DEBUG] kiosk.py: Module imports complete!")
 
 # =================================================================
 # 🖥️ DYNAMIC SCREEN & HARDWARE PROFILE ENGINE
@@ -476,44 +501,55 @@ class NestKiosk(QMainWindow):
         print(f" [System Boot] Default Columns : {DEFAULT_GRID_COLS}")
         print("=" * 50)
         
+        print("[DEBUG] Setting up fonts...")
         font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
         if os.path.exists(font_dir):
             for filename in os.listdir(font_dir):
                 if filename.endswith(".ttf") or filename.endswith(".otf"):
                     QFontDatabase.addApplicationFont(os.path.join(font_dir, filename))
 
+        print("[DEBUG] Applying font to application...")
         app_font = QFont("Google Sans")
         QApplication.setFont(app_font)
         
+        print("[DEBUG] Setting window size and flags...")
         self.setFixedSize(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setStyleSheet("background-color: #0C0C0E; color: #FFFFFF;")
 
+        print("[DEBUG] Setting up drag variables...")
         self.drag_start_pos = None
         self.active_gesture = None  
         self.running_apps = {} 
         self.current_toast = None
         self.empty_label = None
         
+        print("[DEBUG] Initializing long press timer...")
         self.long_press_timer = QTimer(self)
         self.long_press_timer.setSingleShot(True)
         self.long_press_timer.timeout.connect(self.open_clockface_selector)
 
+        print("[DEBUG] Setting up notification audio variables...")
         # Setup Notification Audio
         self.notif_sound_path = None
+        print("[DEBUG] Getting sound path...")
         sound_path = os.path.abspath("notification.wav")
+        print("[DEBUG] Checking if sound path exists...")
         if os.path.exists(sound_path):
             self.notif_sound_path = sound_path
 
+        print("[DEBUG] Building main screen carousel widget...")
         # -------------------------------------------------------------
         # 1. MAIN SCREEN CAROUSEL & CLOCKFACE INJECTION
         # -------------------------------------------------------------
         self.main_carousel = QWidget(self)
+        print("[DEBUG] Setting geometry for main carousel...")
         self.main_carousel.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.home_index = 0
         self.home_pages = []
         
+        print("[DEBUG] Creating page_clock widget...")
         self.page_clock = QWidget(self.main_carousel)
         self.page_clock.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
         self.clock_layout = QVBoxLayout(self.page_clock)

@@ -6,11 +6,8 @@ from PyQt6.QtWidgets import (
     QLabel, QProgressBar, QFrame
 )
 
-try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    WEBENGINE_AVAILABLE = True
-except ImportError:
-    WEBENGINE_AVAILABLE = False
+# Force disable QtWebEngine on Linux VMs to prevent Chromium sandbox core dump
+WEBENGINE_AVAILABLE = False
 
 
 def get_scale_factor():
