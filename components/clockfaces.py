@@ -226,6 +226,7 @@ class ClassicClock(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         draw_custom_background(painter, self.bg, self.width(), self.height())
+        painter.end()
 
 
 class StackedClock(QWidget):
@@ -299,6 +300,7 @@ class StackedClock(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         draw_custom_background(painter, self.bg, self.width(), self.height())
+        painter.end()
 
 
 class AnalogClock(QWidget):
