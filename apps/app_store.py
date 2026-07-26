@@ -287,23 +287,6 @@ class AppCard(QFrame):
         self.lbl_icon.setText("")
         self.lbl_icon.setStyleSheet("background: transparent; border: none;")
         self.lbl_icon.setPixmap(QPixmap.fromImage(thumb))
-            self.btn_install.setText("⬆ Update")
-            self.btn_install.setStyleSheet(f"""
-                QPushButton {{ background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: {int(15 * scale)}px; border: none; }}
-                QPushButton:hover {{ background-color: #E67E22; }}
-            """)
-        elif self.is_installed:
-            self.btn_install.setText("Installed")
-            self.btn_install.setStyleSheet(f"""
-                QPushButton {{ background-color: #2E2E38; color: #AAAAAA; border-radius: 8px; font-weight: bold; font-size: {int(15 * scale)}px; border: none; }}
-                QPushButton:hover {{ background-color: #383845; color: white; }}
-            """)
-        else:
-            self.btn_install.setText("⬇ Install")
-            self.btn_install.setStyleSheet(f"""
-                QPushButton {{ background-color: #5A8DEF; color: white; border-radius: 8px; font-weight: bold; font-size: {int(15 * scale)}px; border: none; }}
-                QPushButton:hover {{ background-color: #4A7DDF; }}
-            """)
 
     def on_install_click(self):
         self.btn_install.setEnabled(False)
