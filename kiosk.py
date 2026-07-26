@@ -1105,8 +1105,8 @@ class NestKiosk(QMainWindow):
             self.task_ribbon.hide()
             return
 
-        for i in reversed(range(self.ribbon_layout.count())):
-            item = self.ribbon_layout.itemAt(i)
+        while self.ribbon_layout.count():
+            item = self.ribbon_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
             elif item.layout():
@@ -1116,16 +1116,31 @@ class NestKiosk(QMainWindow):
 
         for app_name in list(self.running_apps.keys()):
             card = QFrame()
-            card.setFixedSize(200, 75)
+            card.setFixedSize(int(220 * SCALE_FACTOR), int(75 * SCALE_FACTOR))
             card.setStyleSheet("background-color: #24242E; border-radius: 12px; border: 1px solid #333340;")
             
             card_layout = QHBoxLayout(card)
             card_layout.setContentsMargins(12, 8, 10, 8)
             card_layout.setSpacing(10)
             
+            # Fetch icon if available
+            icon_path = ""
+            safe_name = app_name.lower().replace(" ", "_")
+            if os.path.exists(f"icons/{safe_name}.png"):
+                icon_path = f"icons/{safe_name}.png"
+            elif os.path.exists(f"icons/{safe_name}.svg"):
+                icon_path = f"icons/{safe_name}.svg"
+            
+            if icon_path:
+                lbl_icon = QLabel()
+                pix = QIcon(icon_path).pixmap(QSize(32, 32))
+                lbl_icon.setPixmap(pix)
+                lbl_icon.setFixedSize(32, 32)
+                card_layout.addWidget(lbl_icon)
+            
             btn_switch = QPushButton(app_name)
             btn_switch.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_switch.setFont(QFont("Google Sans", 13, QFont.Weight.Bold))
+            btn_switch.setFont(QFont("Google Sans", int(14 * SCALE_FACTOR), QFont.Weight.Bold))
             btn_switch.setStyleSheet("""
                 QPushButton { background: transparent; color: white; border: none; text-align: left; }
                 QPushButton:hover { color: #3EA6FF; }
@@ -1178,8 +1193,8 @@ class NestKiosk(QMainWindow):
         scale = 100
         layout_type = "grid"
         try:
-            if os.path.exists("config.json"):
-                with open("config.json", "r") as f:
+            if os.path.exists("settings.json"):
+                with open("settings.json", "r") as f:
                     conf = json.load(f)
                     scale = conf.get("app_drawer_scale", 100)
                     layout_type = conf.get("app_drawer_layout", "grid")

@@ -306,6 +306,7 @@ class SettingsPage(QWidget):
             ("Audio and Sound", "icons/audio.png"),
             ("Customize", "icons/customize.png"),
             ("Installed Apps", "icons/apps.png"),
+            ("Voice Assistant", "icons/assistant.svg"),
             ("System Storage", "icons/storage.png"),
             ("Software Update", "icons/update.png"),
             ("Power", "icons/power.png")
@@ -330,6 +331,7 @@ class SettingsPage(QWidget):
         self.right_stack.addWidget(self.create_audio_page())
         self.right_stack.addWidget(self.create_customize_page())
         self.right_stack.addWidget(self.create_apps_page())
+        self.right_stack.addWidget(self.create_assistant_page())
         self.right_stack.addWidget(self.create_storage_page())
         self.right_stack.addWidget(self.create_update_page()) 
         self.right_stack.addWidget(self.create_power_page())
@@ -390,31 +392,132 @@ class SettingsPage(QWidget):
         card = QFrame()
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
+        self.card_layout = QVBoxLayout(card)
+        self.card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
         
-        ip_address = self.get_local_ip()
-        lbl_status = QLabel("Status: Connected")
-        lbl_status.setFont(QFont("Google Sans", int(18 * self.scale)))
-        lbl_status.setStyleSheet("color: #1ED760; border: none;")
+        self.lbl_status = QLabel("Status: Checking...")
+        self.lbl_status.setFont(QFont("Google Sans", int(18 * self.scale)))
+        self.lbl_status.setStyleSheet("color: #CCCCCC; border: none;")
         
-        lbl_ip = QLabel(f"IP Address: {ip_address}")
-        lbl_ip.setFont(QFont("Google Sans", int(16 * self.scale)))
-        lbl_ip.setStyleSheet("color: #CCCCCC; border: none;")
+        self.lbl_ip = QLabel("IP Address: Checking...")
+        self.lbl_ip.setFont(QFont("Google Sans", int(16 * self.scale)))
+        self.lbl_ip.setStyleSheet("color: #CCCCCC; border: none;")
         
-        card_layout.addWidget(lbl_status)
-        card_layout.addWidget(lbl_ip)
+        self.card_layout.addWidget(self.lbl_status)
+        self.card_layout.addWidget(self.lbl_ip)
         layout.addWidget(card)
 
         btn_wifi = QPushButton("Scan Networks")
         btn_wifi.setFixedSize(int(200 * self.scale), int(60 * self.scale)) 
         btn_wifi.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
         btn_wifi.setStyleSheet("QPushButton { background-color: #5A8DEF; color: white; border-radius: 12px; }")
+        btn_wifi.clicked.connect(self.scan_networks)
         layout.addSpacing(int(20 * self.scale))
         layout.addWidget(btn_wifi)
         
-        layout.addStretch()
+        self.networks_container = QWidget()
+        self.networks_layout = QVBoxLayout(self.networks_container)
+        self.networks_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        scroll.setWidget(self.networks_container)
+        layout.addWidget(scroll)
+        
+        self.scan_networks()
         return page
+
+    def scan_networks(self):
+        # Clear existing
+        while self.networks_layout.count():
+            item = self.networks_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+            
+        import subprocess
+        try:
+            # Check current Wi-Fi connection
+            res = subprocess.check_output(["nmcli", "-t", "-f", "active,ssid,bssid,signal", "dev", "wifi"], stderr=subprocess.STDOUT).decode('utf-8')
+            lines = res.strip().split('\n')
+            
+            connected_ssid = None
+            networks = []
+            for line in lines:
+                parts = line.split(':')
+                if len(parts) >= 4:
+                    active = parts[0]
+                    ssid = parts[1]
+                    if active == 'yes':
+                        connected_ssid = ssid
+                    if ssid and ssid not in [n['ssid'] for n in networks]:
+                        networks.append({'ssid': ssid, 'signal': parts[3]})
+            
+            ip_address = self.get_local_ip()
+            if connected_ssid:
+                self.lbl_status.setText(f"Status: Connected to Wi-Fi ({connected_ssid})")
+                self.lbl_status.setStyleSheet("color: #1ED760; border: none;")
+            else:
+                # If no wifi, check if ethernet is connected (has IP and not loopback)
+                if ip_address != "Not Connected" and ip_address != "127.0.0.1":
+                    self.lbl_status.setText("Status: Connected to Ethernet")
+                    self.lbl_status.setStyleSheet("color: #1ED760; border: none;")
+                else:
+                    self.lbl_status.setText("Status: Disconnected")
+                    self.lbl_status.setStyleSheet("color: #E24A4A; border: none;")
+                    
+            self.lbl_ip.setText(f"IP Address: {ip_address}")
+            
+            if not networks:
+                lbl = QLabel("No Wi-Fi networks found.")
+                lbl.setStyleSheet("color: #AAAAAA;")
+                lbl.setFont(QFont("Google Sans", int(16 * self.scale)))
+                self.networks_layout.addWidget(lbl)
+            else:
+                for net in networks:
+                    card = QFrame()
+                    card.setStyleSheet("background-color: #24242E; border-radius: 8px; border: 1px solid #333340;")
+                    layout = QHBoxLayout(card)
+                    
+                    lbl_ssid = QLabel(net['ssid'])
+                    lbl_ssid.setFont(QFont("Google Sans", int(16 * self.scale), QFont.Weight.Bold))
+                    lbl_ssid.setStyleSheet("color: white; border: none;")
+                    
+                    lbl_sig = QLabel(f"Signal: {net['signal']}%")
+                    lbl_sig.setFont(QFont("Google Sans", int(14 * self.scale)))
+                    lbl_sig.setStyleSheet("color: #AAAAAA; border: none;")
+                    
+                    layout.addWidget(lbl_ssid)
+                    layout.addStretch()
+                    layout.addWidget(lbl_sig)
+                    
+                    if net['ssid'] != connected_ssid:
+                        btn = QPushButton("Connect")
+                        btn.setFixedSize(int(100 * self.scale), int(35 * self.scale))
+                        btn.setStyleSheet("QPushButton { background-color: #333340; color: white; border-radius: 6px; } QPushButton:hover { background-color: #5A8DEF; }")
+                        # (Connection logic would require password prompt, skipping for mock demo)
+                        layout.addWidget(btn)
+                    else:
+                        lbl_conn = QLabel("Connected")
+                        lbl_conn.setStyleSheet("color: #1ED760; border: none;")
+                        lbl_conn.setFont(QFont("Google Sans", int(14 * self.scale), QFont.Weight.Bold))
+                        layout.addWidget(lbl_conn)
+                        
+                    self.networks_layout.addWidget(card)
+        except Exception:
+            # Fallback if nmcli not available (e.g. Mac/Windows testing or no NetworkManager)
+            ip_address = self.get_local_ip()
+            if ip_address != "Not Connected" and ip_address != "127.0.0.1":
+                self.lbl_status.setText("Status: Connected (Ethernet/Unknown)")
+                self.lbl_status.setStyleSheet("color: #1ED760; border: none;")
+            else:
+                self.lbl_status.setText("Status: Disconnected")
+                self.lbl_status.setStyleSheet("color: #E24A4A; border: none;")
+            self.lbl_ip.setText(f"IP Address: {ip_address}")
+            
+            lbl = QLabel("Network Manager (nmcli) not available. Cannot scan Wi-Fi.")
+            lbl.setStyleSheet("color: #AAAAAA;")
+            lbl.setFont(QFont("Google Sans", int(14 * self.scale)))
+            self.networks_layout.addWidget(lbl)
 
     def create_display_page(self):
         page = QWidget()
@@ -880,7 +983,14 @@ class SettingsPage(QWidget):
             lbl_icon.setStyleSheet("background: transparent; border: none;")
             
             icon_path = ""
-            if os.path.exists(os.path.join("icons", f"{app_id}.png")):
+            png_name = filename.replace(".py", ".png")
+            svg_name = filename.replace(".py", ".svg")
+            
+            if os.path.exists(os.path.join("icons", png_name)):
+                icon_path = os.path.join("icons", png_name)
+            elif os.path.exists(os.path.join("icons", svg_name)):
+                icon_path = os.path.join("icons", svg_name)
+            elif os.path.exists(os.path.join("icons", f"{app_id}.png")):
                 icon_path = os.path.join("icons", f"{app_id}.png")
             elif os.path.exists(os.path.join("icons", f"{app_id}.svg")):
                 icon_path = os.path.join("icons", f"{app_id}.svg")
@@ -994,6 +1104,56 @@ class SettingsPage(QWidget):
             except Exception as e:
                 err_dialog = ModernDialog(self, "Uninstall Failed", f"Could not remove {app_name}: {str(e)}", "OK", "")
                 err_dialog.exec()
+
+    def create_assistant_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(int(30 * self.scale), int(20 * self.scale), int(30 * self.scale), int(30 * self.scale))
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        title = QLabel("Voice Assistant")
+        title.setFont(QFont("Google Sans", int(24 * self.scale), QFont.Weight.Bold))
+        title.setStyleSheet("color: white;")
+        layout.addWidget(title)
+        layout.addSpacing(int(20 * self.scale))
+        
+        info = QLabel("Voice Assistant is coming soon in a future update.\\nIt will allow you to control your smart home, play music, and ask questions hands-free.")
+        info.setFont(QFont("Google Sans", int(16 * self.scale)))
+        info.setStyleSheet("color: #AAAAAA;")
+        layout.addWidget(info)
+        layout.addSpacing(int(20 * self.scale))
+
+        card = QFrame()
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        card.setStyleSheet("background-color: #1C1C22; border-radius: 12px; border: 1px solid #2C2C35;")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(int(20 * self.scale), int(20 * self.scale), int(20 * self.scale), int(20 * self.scale))
+        
+        header = QHBoxLayout()
+        lbl_enable = QLabel("Enable Voice Assistant")
+        lbl_enable.setFont(QFont("Google Sans", int(18 * self.scale), QFont.Weight.Bold))
+        lbl_enable.setStyleSheet("color: white; border: none;")
+        
+        toggle = QPushButton("Coming Soon")
+        toggle.setFixedSize(int(140 * self.scale), int(40 * self.scale))
+        toggle.setStyleSheet("QPushButton { background-color: #333340; color: #888890; border-radius: 20px; font-weight: bold; border: none; }")
+        toggle.setEnabled(False)
+        
+        header.addWidget(lbl_enable)
+        header.addStretch()
+        header.addWidget(toggle)
+        
+        card_layout.addLayout(header)
+        
+        desc = QLabel("Say 'Hey Ghost' or your custom wake word to trigger the assistant.")
+        desc.setFont(QFont("Google Sans", int(14 * self.scale)))
+        desc.setStyleSheet("color: #888888; border: none;")
+        card_layout.addWidget(desc)
+        
+        layout.addWidget(card)
+        layout.addStretch()
+        
+        return page
 
     def create_storage_page(self):
         page = QWidget()

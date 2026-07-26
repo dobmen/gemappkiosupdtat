@@ -203,6 +203,23 @@ class AppCard(QFrame):
         layout.setContentsMargins(int(20 * scale), int(18 * scale), int(20 * scale), int(18 * scale))
         layout.setSpacing(int(15 * scale))
 
+        icon_size = int(60 * scale)
+        self.lbl_icon = QLabel()
+        self.lbl_icon.setFixedSize(icon_size, icon_size)
+        colors = ["#E24A4A", "#5A8DEF", "#F39C12", "#27AE60", "#8E44AD", "#9B59B6"]
+        c = colors[len(app_data.get('name', 'A')) % len(colors)]
+        self.lbl_icon.setStyleSheet(f"background-color: {c}; border-radius: {icon_size//2}px; color: white;")
+        self.lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_icon.setFont(QFont("Google Sans", int(28 * scale), QFont.Weight.Bold))
+        self.lbl_icon.setText(app_data.get('name', 'A')[0].upper())
+        
+        if app_data.get("icon_url"):
+            self.icon_thread = NetworkImageThread(app_data["icon_url"], self.lbl_icon, icon_size, icon_size, radius=icon_size//2)
+            self.icon_thread.on_image_ready.connect(self.set_icon)
+            self.icon_thread.start()
+
+        layout.addWidget(self.lbl_icon)
+
         info_layout = QVBoxLayout()
         info_layout.setSpacing(6)
         
@@ -248,6 +265,28 @@ class AppCard(QFrame):
     def update_button_style(self):
         scale = get_scale_factor()
         if self.needs_update:
+            self.btn_install.setText("Update")
+            self.btn_install.setStyleSheet(f"""
+                QPushButton {{ background-color: #5A8DEF; color: white; border-radius: {int(22 * scale)}px; font-size: {int(16 * scale)}px; font-weight: bold; border: none; }}
+                QPushButton:hover {{ background-color: #4A7DDF; }}
+            """)
+        elif self.is_installed:
+            self.btn_install.setText("Installed")
+            self.btn_install.setStyleSheet(f"""
+                QPushButton {{ background-color: #2C2C35; color: #AAAAAA; border-radius: {int(22 * scale)}px; font-size: {int(16 * scale)}px; font-weight: bold; border: none; }}
+            """)
+            self.btn_install.setEnabled(False)
+        else:
+            self.btn_install.setText("Install")
+            self.btn_install.setStyleSheet(f"""
+                QPushButton {{ background-color: #1ED760; color: white; border-radius: {int(22 * scale)}px; font-size: {int(16 * scale)}px; font-weight: bold; border: none; }}
+                QPushButton:hover {{ background-color: #1DB954; }}
+            """)
+
+    def set_icon(self, widget, thumb, orig):
+        self.lbl_icon.setText("")
+        self.lbl_icon.setStyleSheet("background: transparent; border: none;")
+        self.lbl_icon.setPixmap(QPixmap.fromImage(thumb))
             self.btn_install.setText("⬆ Update")
             self.btn_install.setStyleSheet(f"""
                 QPushButton {{ background-color: #F39C12; color: white; border-radius: 8px; font-weight: bold; font-size: {int(15 * scale)}px; border: none; }}

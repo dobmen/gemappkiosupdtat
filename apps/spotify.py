@@ -91,7 +91,10 @@ class ScrollLabel(QWidget):
 
     def update_metrics(self):
         fm = QFontMetrics(self._font)
-        self._fm_width = fm.horizontalAdvance(self._text)
+        # We use a crude way to strip HTML for width calculation, or just use QFontMetrics on raw text if it's simple
+        import re
+        clean_text = re.sub(r'<[^>]+>', '', self._text)
+        self._fm_width = fm.horizontalAdvance(clean_text)
         self.updateGeometry() 
         self.check_scroll()
 
@@ -118,22 +121,36 @@ class ScrollLabel(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setFont(self._font)
-        p.setPen(self._color)
         
-        fm = QFontMetrics(self._font)
-        y = (self.height() + fm.ascent() - fm.descent()) // 2
+        from PyQt6.QtGui import QTextDocument
+        doc = QTextDocument()
+        doc.setDefaultFont(self._font)
+        # Apply color via css
+        doc.setDefaultStyleSheet(f"body {{ color: {self._color.name()}; white-space: nowrap; margin: 0px; }}")
+        doc.setHtml(f"<body>{self._text}</body>")
+        
+        # calculate vertical centering
+        y = (self.height() - int(doc.size().height())) // 2
         
         if self._timer.isActive():
-            p.drawText(int(self._offset), y, self._text)
+            p.translate(int(self._offset), y)
+            doc.drawContents(p)
+            p.translate(-int(self._offset), -y)
+            
             gap = int(50 * self.scale)
-            p.drawText(int(self._offset) + self._fm_width + gap, y, self._text)
+            p.translate(int(self._offset) + self._fm_width + gap, y)
+            doc.drawContents(p)
+            p.translate(-(int(self._offset) + self._fm_width + gap), -y)
         else:
             if self.align_center:
                 x = max(0, (self.width() - self._fm_width) // 2)
-                p.drawText(x, y, self._text)
+                p.translate(x, y)
+                doc.drawContents(p)
+                p.translate(-x, -y)
             else:
-                p.drawText(0, y, self._text)
+                p.translate(0, y)
+                doc.drawContents(p)
+                p.translate(0, -y)
         p.end()
 
 
@@ -1010,10 +1027,9 @@ class LyricsPanel(QScrollArea):
         self.lyric_data.clear()
         self.active_index = -1
         for time_ms, text, words in lyrics_list:
-            lbl = QLabel(text)
+            lbl = ScrollLabel(text, align_center=True)
             lbl.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
-            lbl.setWordWrap(True)
-            lbl.setStyleSheet("color: rgba(255, 255, 255, 100); border: none; background: transparent;")
+            lbl.setTextColor("#646464")
             self.layout.addWidget(lbl)
             self.lyric_data.append([time_ms, lbl, words, -1])
         self.layout.addStretch()
@@ -1029,13 +1045,13 @@ class LyricsPanel(QScrollArea):
             for idx, item in enumerate(self.lyric_data):
                 lbl = item[1]
                 if idx == new_index:
-                    lbl.setStyleSheet("color: #FFFFFF; border: none; background: transparent;")
+                    lbl.setTextColor("#FFFFFF")
                     lbl.setFont(QFont("Google Sans", int(26 * self.scale), QFont.Weight.Bold))
                 elif abs(idx - new_index) == 1:
-                    lbl.setStyleSheet("color: rgba(255, 255, 255, 180); border: none; background: transparent;")
+                    lbl.setTextColor("#B4B4B4")
                     lbl.setFont(QFont("Google Sans", int(22 * self.scale), QFont.Weight.Bold))
                 else:
-                    lbl.setStyleSheet("color: rgba(255, 255, 255, 100); border: none; background: transparent;")
+                    lbl.setTextColor("#646464")
                     lbl.setFont(QFont("Google Sans", int(20 * self.scale), QFont.Weight.Bold))
 
             active_widget = self.lyric_data[new_index][1]
@@ -1368,7 +1384,7 @@ class SpotifyPage(QWidget):
         left_col.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         left_col.setSpacing(int(14 * self.scale))
 
-        art_size = int(300 * self.scale)
+        art_size = int(240 * self.scale)
         self.lbl_art = QLabel()
         self.lbl_art.setFixedSize(art_size, art_size)
         self.lbl_art.setStyleSheet("background-color: rgba(26, 26, 34, 150); border-radius: 20px; border: 1px solid rgba(255,255,255,20);")
@@ -1413,8 +1429,8 @@ class SpotifyPage(QWidget):
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setCursor(Qt.CursorShape.PointingHandCursor)
         self.progress_bar.setStyleSheet("""
-            QProgressBar { background-color: rgba(255, 255, 50); border: none; border-radius: 3px; }
-            QProgressBar::chunk { background-color: #FFFFFF; border-radius: 3px; }
+            QProgressBar { background-color: rgba(255, 255, 255, 50); border: none; border-radius: 3px; }
+            QProgressBar::chunk { background-color: #1ED760; border-radius: 3px; }
         """)
         self.progress_bar.on_seek.connect(self.handle_seek)
         scrub_layout.addWidget(self.progress_bar)

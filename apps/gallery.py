@@ -1102,7 +1102,7 @@ class GalleryPage(QWidget):
                     if entry.startswith(ig):
                         should_ignore = True
                         break
-                if not should_ignore and entry not in base_directories:
+                if not should_ignore and entry not in base_directories and entry != "clockfaces":
                     if entry not in self.albums: self.albums.append(entry)
 
     def populate_sidebar_items(self):
