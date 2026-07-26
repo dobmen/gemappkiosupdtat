@@ -548,10 +548,7 @@ class NestKiosk(QMainWindow):
         self.timer.start(1000)
         self.update_clock()
 
-        self.main_blur = QGraphicsBlurEffect(self.main_carousel)
-        self.main_blur.setBlurRadius(0)
-        self.main_blur.setEnabled(False)
-        self.main_carousel.setGraphicsEffect(self.main_blur)
+        # Blur effects are applied dynamically to prevent QPainter collisions
 
         self.indicator = QLabel("▲ Swipe up for apps", self)
         self.indicator.setGeometry(0, SCREEN_HEIGHT - int(40 * SCALE_FACTOR), SCREEN_WIDTH, int(40 * SCALE_FACTOR))
@@ -720,31 +717,37 @@ class NestKiosk(QMainWindow):
         self.update_notif_header()
 
         # Override slide_in/out to include blur animation
-        self.blur_anim1 = QPropertyAnimation(self.main_blur, b"blurRadius")
-        self.blur_anim1.setDuration(300)
-        
         orig_cc_in = self.control_center.slide_in
         orig_cc_out = self.control_center.slide_out
         orig_nf_in = self.notifs_panel.slide_in
         orig_nf_out = self.notifs_panel.slide_out
         
+        self._blur_animations = []
         def blur_in():
-            if not self.main_blur.isEnabled(): self.main_blur.setEnabled(True)
-            self.blur_anim1.setEndValue(20)
-            self.blur_anim1.start()
-            if hasattr(self, 'app_stack_blur'):
-                if not self.app_stack_blur.isEnabled(): self.app_stack_blur.setEnabled(True)
-                self.blur_anim2.setEndValue(20)
-                self.blur_anim2.start()
+            self._blur_animations.clear()
+            for widget in [self.main_carousel, getattr(self, 'app_stack', None)]:
+                if not widget: continue
+                effect = QGraphicsBlurEffect(widget)
+                effect.setBlurRadius(0)
+                widget.setGraphicsEffect(effect)
+                anim = QPropertyAnimation(effect, b"blurRadius")
+                anim.setDuration(300)
+                anim.setEndValue(20)
+                anim.start(QPropertyAnimation.DeletionPolicy.KeepWhenStopped)
+                self._blur_animations.append(anim)
                 
         def blur_out():
-            self.blur_anim1.stop()
-            self.main_blur.setEnabled(False)
-            self.main_blur.setBlurRadius(0)
-            if hasattr(self, 'app_stack_blur'):
-                self.blur_anim2.stop()
-                self.app_stack_blur.setEnabled(False)
-                self.app_stack_blur.setBlurRadius(0)
+            self._blur_animations.clear()
+            for widget in [self.main_carousel, getattr(self, 'app_stack', None)]:
+                if not widget: continue
+                effect = widget.graphicsEffect()
+                if effect:
+                    anim = QPropertyAnimation(effect, b"blurRadius")
+                    anim.setDuration(300)
+                    anim.setEndValue(0)
+                    anim.finished.connect(lambda w=widget: w.setGraphicsEffect(None))
+                    anim.start(QPropertyAnimation.DeletionPolicy.KeepWhenStopped)
+                    self._blur_animations.append(anim)
 
         def custom_cc_in(): orig_cc_in(); blur_in()
         def custom_cc_out(): orig_cc_out(); blur_out()
@@ -845,17 +848,7 @@ class NestKiosk(QMainWindow):
         self.app_view_layout.setSpacing(0)
         
         self.app_stack = QStackedWidget()
-        self.app_stack_blur = QGraphicsBlurEffect(self.app_stack)
-        self.app_stack_blur.setBlurRadius(0)
-        self.app_stack_blur.setEnabled(False)
-        self.app_stack.setGraphicsEffect(self.app_stack_blur)
-        
-        self.blur_anim2 = QPropertyAnimation(self.app_stack_blur, b"blurRadius")
-        self.blur_anim2.setDuration(300)
-        
-        # Disable effects when animation finishes and radius is 0
-        self.blur_anim1.finished.connect(lambda: self.main_blur.setEnabled(False) if self.main_blur.blurRadius() == 0 else None)
-        self.blur_anim2.finished.connect(lambda: self.app_stack_blur.setEnabled(False) if self.app_stack_blur.blurRadius() == 0 else None)
+        # App stack blur is handled dynamically
         
         self.app_view_layout.addWidget(self.app_stack)
 
@@ -1325,14 +1318,22 @@ class NestKiosk(QMainWindow):
             progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
             blur_val = int(20 * progress)
             if blur_val > 0:
-                if not self.main_blur.isEnabled(): self.main_blur.setEnabled(True)
-                self.main_blur.setBlurRadius(blur_val)
-                if hasattr(self, 'app_stack_blur'):
-                    if not self.app_stack_blur.isEnabled(): self.app_stack_blur.setEnabled(True)
-                    self.app_stack_blur.setBlurRadius(blur_val)
+                effect1 = self.main_carousel.graphicsEffect()
+                if not effect1:
+                    effect1 = QGraphicsBlurEffect(self.main_carousel)
+                    self.main_carousel.setGraphicsEffect(effect1)
+                effect1.setBlurRadius(blur_val)
+                
+                if hasattr(self, 'app_stack'):
+                    effect2 = self.app_stack.graphicsEffect()
+                    if not effect2:
+                        effect2 = QGraphicsBlurEffect(self.app_stack)
+                        self.app_stack.setGraphicsEffect(effect2)
+                    effect2.setBlurRadius(blur_val)
             else:
-                self.main_blur.setEnabled(False)
-                if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setEnabled(False)
+                self.main_carousel.setGraphicsEffect(None)
+                if hasattr(self, 'app_stack'): 
+                    self.app_stack.setGraphicsEffect(None)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             current_page.move(dx, 0)
