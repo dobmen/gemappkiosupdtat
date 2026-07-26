@@ -222,16 +222,17 @@ class MarqueeLabel(QLabel):
             self.update()
 
     def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setPen(Qt.GlobalColor.white)
         fm = QFontMetrics(self.font())
         text_width = fm.horizontalAdvance(self.text())
         if text_width > self.width():
+            painter = QPainter(self)
+            painter.setPen(Qt.GlobalColor.white)
             path = QPainterPath()
             path.addRect(0, 0, self.width(), self.height())
             painter.setClipPath(path)
             rect = QRect(-self.offset, 0, text_width, self.height())
             painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.text())
+            painter.end()
         else:
             super().paintEvent(event)
 
