@@ -1,4 +1,4 @@
 {
-  "version": "0.1.6 Beta",
-  "notes": "Added passwordless updates, custom update boot video animation, fixed App Drawer settings syncing, and improved system stability."
+  "version": "0.1.7 Beta",
+  "notes": "Added Do Not Disturb and Silent Mode toggles to Control Center, fixed UI bugs in App Drawer and Settings, and improved scrolling physics."
 }
