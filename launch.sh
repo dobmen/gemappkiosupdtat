@@ -35,6 +35,12 @@ if [[ "$RES" == *"1200x1920"* ]]; then
     echo "[Hardware Detect] ⟳ Portrait Display Detected ($RES) on $OUTPUT. Rotating to Landscape..."
     if [ -n "$OUTPUT" ]; then
         xrandr --output $OUTPUT --rotate right
+        
+        # When X11 rotates the screen, touch coordinates don't rotate automatically.
+        # Apply the 90-degree clockwise (right) Transformation Matrix to all pointers.
+        for device in $(xinput list | grep "pointer" | grep -v "master" | grep -v "Virtual" | sed -n 's/.*id=\([0-9]*\).*/\1/p'); do
+            xinput set-prop "$device" "Coordinate Transformation Matrix" 0 -1 1 1 0 0 0 0 1 2>/dev/null || true
+        done
     fi
     export KIOSK_DISPLAY_MODE="WIDESCREEN_1200P"
 elif [[ "$RES" == *"1920x1200"* ]] || [[ "$RES" == *"1920x1080"* ]]; then
