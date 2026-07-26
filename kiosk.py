@@ -522,7 +522,9 @@ class NestKiosk(QMainWindow):
         self.clock_layout.setSpacing(0)
         
         self.active_clock_widget = None
+        print("[DEBUG] Applying clockface...")
         self.apply_clockface(get_system_setting("clockface_index", 0))
+        print("[DEBUG] Clockface applied successfully")
         
         self.page_media = QWidget(self.main_carousel)
         self.page_media.setGeometry(SCREEN_WIDTH, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -550,6 +552,7 @@ class NestKiosk(QMainWindow):
         self.indicator.setStyleSheet(f"color: #444444; font-size: {int(14 * SCALE_FACTOR)}px; font-weight: bold; background-color: transparent;")
 
         # -------------------------------------------------------------
+        print("[DEBUG] Building quick settings panel...")
         # 2A. QUICK SETTINGS PANEL (Right Side)
         # -------------------------------------------------------------
         QS_WIDTH = int(SCREEN_WIDTH * 0.40)
@@ -658,6 +661,7 @@ class NestKiosk(QMainWindow):
         cc_layout.addLayout(sliders_layout, stretch=1)
         
         # -------------------------------------------------------------
+        print("[DEBUG] Building notifications panel...")
         # 2B. NOTIFICATIONS PANEL (Left Side)
         # -------------------------------------------------------------
         NOTIF_WIDTH = int(SCREEN_WIDTH * 0.45)
@@ -754,6 +758,7 @@ class NestKiosk(QMainWindow):
         self.notifs_panel.slide_out = custom_nf_out
 
         # -------------------------------------------------------------
+        print("[DEBUG] Building responsive app drawer...")
         # 3. RESPONSIVE APP DRAWER
         # -------------------------------------------------------------
         self.app_drawer = SlidingPanel(self, QRect(0, SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT), QRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -825,7 +830,9 @@ class NestKiosk(QMainWindow):
         self.drawer_scroll.setWidget(self.drawer_container)
         drawer_main_layout.addWidget(self.drawer_scroll)
 
+        print("[DEBUG] Rebuilding app drawer content...")
         self.rebuild_app_drawer()
+        print("[DEBUG] Boot complete. Showing window...")
 
         # -------------------------------------------------------------
         # 4. ACTIVE APP VIEW CONTAINER
