@@ -505,86 +505,141 @@ class NestKiosk(QMainWindow):
         self.timer.start(1000)
         self.update_clock()
 
+        self.main_blur = QGraphicsBlurEffect(self.main_carousel)
+        self.main_blur.setBlurRadius(0)
+        self.main_carousel.setGraphicsEffect(self.main_blur)
+
         self.indicator = QLabel("▲ Swipe up for apps", self)
         self.indicator.setGeometry(0, SCREEN_HEIGHT - int(40 * SCALE_FACTOR), SCREEN_WIDTH, int(40 * SCALE_FACTOR))
         self.indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.indicator.setStyleSheet(f"color: #444444; font-size: {int(14 * SCALE_FACTOR)}px; font-weight: bold; background-color: transparent;")
 
         # -------------------------------------------------------------
-        # 2. SPLIT-SCREEN CONTROL CENTER
+        # 2. TOUCH-FRIENDLY CONTROL CENTER (Glassmorphism)
         # -------------------------------------------------------------
-        self.control_center = SlidingPanel(self, QRect(0, -CC_HEIGHT, SCREEN_WIDTH, CC_HEIGHT), QRect(0, 0, SCREEN_WIDTH, CC_HEIGHT))
-        self.control_center.setStyleSheet("background-color: rgba(22, 22, 26, 245); border-bottom: 2px solid #282830;")
+        PANEL_WIDTH = int(SCREEN_WIDTH * 0.45)
+        if PANEL_WIDTH < 400: PANEL_WIDTH = 400
+        if PANEL_WIDTH > 600: PANEL_WIDTH = 600
         
-        cc_layout = QHBoxLayout(self.control_center)
-        cc_layout.setContentsMargins(int(50 * SCALE_FACTOR), int(40 * SCALE_FACTOR), int(50 * SCALE_FACTOR), int(40 * SCALE_FACTOR))
-        cc_layout.setSpacing(int(40 * SCALE_FACTOR))
-
-        self.page_settings = QWidget()
-        self.page_settings.setFixedWidth(int(400 * SCALE_FACTOR))
-        settings_layout = QVBoxLayout(self.page_settings)
-        settings_layout.setContentsMargins(0, 0, 0, 0)
-        settings_layout.setSpacing(int(20 * SCALE_FACTOR))
-
-        lbl_qs_title = QLabel("⚙️ Quick Settings")
-        lbl_qs_title.setFont(QFont("Google Sans", int(22 * SCALE_FACTOR), QFont.Weight.Bold))
-        settings_layout.addWidget(lbl_qs_title)
-
-        qs_card = QFrame()
-        qs_card.setStyleSheet("background-color: #22222B; border-radius: 12px; border: 1px solid #2F2F3B;")
-        qs_card_layout = QVBoxLayout(qs_card)
-        qs_card_layout.setContentsMargins(int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR))
-
-        slider_layout = QGridLayout()
-        slider_layout.setSpacing(int(20 * SCALE_FACTOR))
+        CC_HEIGHT = int(SCREEN_HEIGHT * 0.7)
+        if CC_HEIGHT > 800: CC_HEIGHT = 800
+        if CC_HEIGHT < 500: CC_HEIGHT = 500
         
-        lbl_b = QLabel("☀️ Brightness")
-        lbl_b.setStyleSheet("background: transparent; border: none;")
-        slider_layout.addWidget(lbl_b, 0, 0)
-        b_slider = QSlider(Qt.Orientation.Horizontal)
-        b_slider.setValue(80)
-        slider_layout.addWidget(b_slider, 0, 1)
-
-        lbl_v = QLabel("🔊 Volume")
-        lbl_v.setStyleSheet("background: transparent; border: none;")
-        slider_layout.addWidget(lbl_v, 1, 0)
-        v_slider = QSlider(Qt.Orientation.Horizontal)
-        v_slider.setValue(50)
-        slider_layout.addWidget(v_slider, 1, 1)
+        # Override global CC_HEIGHT so gestures use the right bounds
+        global CC_HEIGHT_MOD
+        CC_HEIGHT_MOD = CC_HEIGHT
         
-        qs_card_layout.addLayout(slider_layout)
-        settings_layout.addWidget(qs_card)
-        settings_layout.addStretch()
+        x_pos = SCREEN_WIDTH - PANEL_WIDTH - int(20 * SCALE_FACTOR)
+        self.control_center = SlidingPanel(self, 
+            QRect(x_pos, -CC_HEIGHT_MOD - 50, PANEL_WIDTH, CC_HEIGHT_MOD), 
+            QRect(x_pos, int(20 * SCALE_FACTOR), PANEL_WIDTH, CC_HEIGHT_MOD))
+        
+        self.control_center.setStyleSheet(f"""
+            QWidget {{
+                background-color: rgba(30, 30, 35, 180);
+                border-radius: {int(24 * SCALE_FACTOR)}px;
+                border: 1px solid rgba(255, 255, 255, 20);
+            }}
+        """)
+        
+        cc_layout = QVBoxLayout(self.control_center)
+        cc_layout.setContentsMargins(int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR), int(30 * SCALE_FACTOR))
+        cc_layout.setSpacing(int(20 * SCALE_FACTOR))
 
-        close_sys_btn = QPushButton("✕ Exit Kiosk OS")
-        close_sys_btn.setFixedHeight(int(48 * SCALE_FACTOR))
+        # --- Header ---
+        cc_header = QHBoxLayout()
+        lbl_qs_title = QLabel("Control Center")
+        lbl_qs_title.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR), QFont.Weight.Bold))
+        lbl_qs_title.setStyleSheet("background: transparent; border: none; color: white;")
+        cc_header.addWidget(lbl_qs_title)
+        cc_header.addStretch()
+        
+        close_sys_btn = QPushButton("⏻")
+        close_sys_btn.setFixedSize(int(44 * SCALE_FACTOR), int(44 * SCALE_FACTOR))
         close_sys_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_sys_btn.setStyleSheet(f"background-color: #E24A4A; color: white; border-radius: 10px; font-size: {int(16 * SCALE_FACTOR)}px; font-weight: bold;")
+        close_sys_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(226, 74, 74, 200); 
+                color: white; 
+                border-radius: {int(22 * SCALE_FACTOR)}px; 
+                font-size: {int(20 * SCALE_FACTOR)}px;
+                border: none;
+            }}
+            QPushButton:pressed {{ background-color: rgba(200, 50, 50, 255); }}
+        """)
         close_sys_btn.clicked.connect(self.close)
-        settings_layout.addWidget(close_sys_btn)
+        cc_header.addWidget(close_sys_btn)
+        cc_layout.addLayout(cc_header)
 
-        cc_layout.addWidget(self.page_settings)
+        # --- Sliders (Brightness & Volume) ---
+        sliders_layout = QHBoxLayout()
+        sliders_layout.setSpacing(int(20 * SCALE_FACTOR))
+        
+        # Brightness Pill
+        b_container = QFrame()
+        b_container.setStyleSheet(f"background-color: rgba(255, 255, 255, 15); border-radius: {int(24 * SCALE_FACTOR)}px; border: none;")
+        b_layout = QVBoxLayout(b_container)
+        b_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_b_icon = QLabel("☀️")
+        lbl_b_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
+        lbl_b_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_b_icon.setStyleSheet("background: transparent;")
+        
+        b_slider = QSlider(Qt.Orientation.Vertical)
+        b_slider.setMinimumHeight(int(150 * SCALE_FACTOR))
+        b_slider.setValue(80)
+        b_slider.setStyleSheet(f"""
+            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(30 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(15 * SCALE_FACTOR)}px; }}
+        """)
+        b_layout.addWidget(b_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        b_layout.addSpacing(10)
+        b_layout.addWidget(lbl_b_icon, alignment=Qt.AlignmentFlag.AlignHCenter)
+        sliders_layout.addWidget(b_container)
 
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.VLine)
-        divider.setStyleSheet("background-color: #33333F;")
-        cc_layout.addWidget(divider)
+        # Volume Pill
+        v_container = QFrame()
+        v_container.setStyleSheet(f"background-color: rgba(255, 255, 255, 15); border-radius: {int(24 * SCALE_FACTOR)}px; border: none;")
+        v_layout = QVBoxLayout(v_container)
+        v_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_v_icon = QLabel("🔊")
+        lbl_v_icon.setFont(QFont("Google Sans", int(24 * SCALE_FACTOR)))
+        lbl_v_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_v_icon.setStyleSheet("background: transparent;")
+        
+        v_slider = QSlider(Qt.Orientation.Vertical)
+        v_slider.setMinimumHeight(int(150 * SCALE_FACTOR))
+        v_slider.setValue(50)
+        v_slider.setStyleSheet(f"""
+            QSlider::groove:vertical {{ background: rgba(0,0,0,80); width: {int(30 * SCALE_FACTOR)}px; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::handle:vertical {{ background: white; height: {int(40 * SCALE_FACTOR)}px; margin: 0; border-radius: {int(15 * SCALE_FACTOR)}px; }}
+            QSlider::add-page:vertical {{ background: rgba(255, 255, 255, 220); border-radius: {int(15 * SCALE_FACTOR)}px; }}
+        """)
+        v_layout.addWidget(v_slider, alignment=Qt.AlignmentFlag.AlignHCenter)
+        v_layout.addSpacing(10)
+        v_layout.addWidget(lbl_v_icon, alignment=Qt.AlignmentFlag.AlignHCenter)
+        sliders_layout.addWidget(v_container)
+        
+        cc_layout.addLayout(sliders_layout, stretch=1)
 
-        self.page_notifs = QWidget()
-        notifs_main_layout = QVBoxLayout(self.page_notifs)
-        notifs_main_layout.setContentsMargins(0, 0, 0, 0)
-        notifs_main_layout.setSpacing(int(10 * SCALE_FACTOR))
-
+        # --- Notifications Area ---
+        notifs_card = QFrame()
+        notifs_card.setStyleSheet(f"background-color: rgba(0, 0, 0, 80); border-radius: {int(20 * SCALE_FACTOR)}px; border: none;")
+        notifs_main_layout = QVBoxLayout(notifs_card)
+        notifs_main_layout.setContentsMargins(int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR), int(20 * SCALE_FACTOR))
+        
         notif_header = QHBoxLayout()
         self.lbl_notif_count = QLabel("Recent Alerts")
-        self.lbl_notif_count.setFont(QFont("Google Sans", int(22 * SCALE_FACTOR), QFont.Weight.Bold))
+        self.lbl_notif_count.setFont(QFont("Google Sans", int(16 * SCALE_FACTOR), QFont.Weight.Bold))
+        self.lbl_notif_count.setStyleSheet("background: transparent; color: #EEEEEE;")
         notif_header.addWidget(self.lbl_notif_count)
         notif_header.addStretch()
 
-        btn_clear_notifs = QPushButton("Clear All")
-        btn_clear_notifs.setFixedSize(int(100 * SCALE_FACTOR), int(32 * SCALE_FACTOR))
+        btn_clear_notifs = QPushButton("Clear")
+        btn_clear_notifs.setFixedSize(int(80 * SCALE_FACTOR), int(32 * SCALE_FACTOR))
         btn_clear_notifs.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_clear_notifs.setStyleSheet("background: rgba(255,255,255,15); color: white; border-radius: 6px; font-weight: bold;")
+        btn_clear_notifs.setStyleSheet(f"background: rgba(255,255,255,30); color: white; border-radius: {int(16 * SCALE_FACTOR)}px; font-weight: bold;")
         btn_clear_notifs.clicked.connect(self.clear_all_notifications)
         notif_header.addWidget(btn_clear_notifs)
         notifs_main_layout.addLayout(notif_header)
@@ -599,15 +654,41 @@ class NestKiosk(QMainWindow):
         self.notif_container = QWidget()
         self.notif_container.setStyleSheet("background: transparent;")
         self.notif_layout = QVBoxLayout(self.notif_container)
-        self.notif_layout.setContentsMargins(0, 0, 0, 10)
+        self.notif_layout.setContentsMargins(0, int(10 * SCALE_FACTOR), 0, 0)
         self.notif_layout.setSpacing(int(12 * SCALE_FACTOR))
         self.notif_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
         self.notif_scroll.setWidget(self.notif_container)
         notifs_main_layout.addWidget(self.notif_scroll)
-
-        cc_layout.addWidget(self.page_notifs)
+        
+        cc_layout.addWidget(notifs_card, stretch=2)
         self.update_notif_header()
+        
+        # Override slide_in/out to include blur animation
+        self.blur_anim1 = QPropertyAnimation(self.main_blur, b"blurRadius")
+        self.blur_anim1.setDuration(300)
+        
+        original_slide_in = self.control_center.slide_in
+        original_slide_out = self.control_center.slide_out
+        
+        def custom_slide_in():
+            original_slide_in()
+            self.blur_anim1.setEndValue(20)
+            self.blur_anim1.start()
+            if hasattr(self, 'app_stack_blur'):
+                self.blur_anim2.setEndValue(20)
+                self.blur_anim2.start()
+                
+        def custom_slide_out():
+            original_slide_out()
+            self.blur_anim1.setEndValue(0)
+            self.blur_anim1.start()
+            if hasattr(self, 'app_stack_blur'):
+                self.blur_anim2.setEndValue(0)
+                self.blur_anim2.start()
+
+        self.control_center.slide_in = custom_slide_in
+        self.control_center.slide_out = custom_slide_out
 
         # -------------------------------------------------------------
         # 3. RESPONSIVE APP DRAWER
@@ -698,6 +779,13 @@ class NestKiosk(QMainWindow):
         self.app_view_layout.setSpacing(0)
         
         self.app_stack = QStackedWidget()
+        self.app_stack_blur = QGraphicsBlurEffect(self.app_stack)
+        self.app_stack_blur.setBlurRadius(0)
+        self.app_stack.setGraphicsEffect(self.app_stack_blur)
+        
+        self.blur_anim2 = QPropertyAnimation(self.app_stack_blur, b"blurRadius")
+        self.blur_anim2.setDuration(300)
+        
         self.app_view_layout.addWidget(self.app_stack)
 
         self.anim_app_group = QParallelAnimationGroup()
@@ -1135,11 +1223,20 @@ class NestKiosk(QMainWindow):
             new_y = max(0, min(SCREEN_HEIGHT, dy))
             self.app_drawer.move(0, new_y)
         elif self.active_gesture == 'open_controls':
-            new_y = max(-CC_HEIGHT, min(0, -CC_HEIGHT + dy))
-            self.control_center.move(0, new_y)
+            new_y = max(-CC_HEIGHT_MOD, min(0, -CC_HEIGHT_MOD + dy))
+            self.control_center.move(self.control_center.x(), new_y)
+            # Dynamic blur based on drag progress
+            progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
+            blur_val = int(20 * progress)
+            self.main_blur.setBlurRadius(blur_val)
+            if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setBlurRadius(blur_val)
         elif self.active_gesture == 'close_controls':
-            new_y = max(-CC_HEIGHT, min(0, dy))
-            self.control_center.move(0, new_y)
+            new_y = max(-CC_HEIGHT_MOD, min(0, dy))
+            self.control_center.move(self.control_center.x(), new_y)
+            progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
+            blur_val = int(20 * progress)
+            self.main_blur.setBlurRadius(blur_val)
+            if hasattr(self, 'app_stack_blur'): self.app_stack_blur.setBlurRadius(blur_val)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             current_page.move(dx, 0)
