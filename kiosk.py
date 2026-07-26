@@ -14,8 +14,8 @@ print("[DEBUG] kiosk.py: Imported importlib")
 import urllib.request
 print("[DEBUG] kiosk.py: Imported urllib")
 print("[DEBUG] kiosk.py: About to import Qt modules...")
-from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint, QUrl
-from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor, QGuiApplication
+from PyQt6.QtCore import QDate, QEasingCurve, QPropertyAnimation, QParallelAnimationGroup, QRect, Qt, QTime, QTimer, QThread, pyqtSignal, QPoint, QUrl, QSize
+from PyQt6.QtGui import QFont, QFontDatabase, QPixmap, QPainter, QPainterPath, QColor, QGuiApplication, QIcon
 from PyQt6.QtWidgets import (
     QApplication, QGridLayout, QHBoxLayout, QLabel, QMainWindow, 
     QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect, QGraphicsBlurEffect, QStackedWidget
