@@ -1,4 +1,4 @@
 {
-  "version": "0.1.4.0",
-  "notes": "Separated Notifications and Quick Settings into dual swipe-down panels. Fixed app drawer lag."
+  "version": "0.1.4.1",
+  "notes": "Fixed QPainter crash when exiting Control Center while using custom high-refresh clockfaces."
 }

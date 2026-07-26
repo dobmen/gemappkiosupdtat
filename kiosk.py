@@ -676,11 +676,13 @@ class NestKiosk(QMainWindow):
                 self.blur_anim2.start()
                 
         def blur_out():
-            self.blur_anim1.setEndValue(0)
-            self.blur_anim1.start()
+            self.blur_anim1.stop()
+            self.main_blur.setEnabled(False)
+            self.main_blur.setBlurRadius(0)
             if hasattr(self, 'app_stack_blur'):
-                self.blur_anim2.setEndValue(0)
-                self.blur_anim2.start()
+                self.blur_anim2.stop()
+                self.app_stack_blur.setEnabled(False)
+                self.app_stack_blur.setBlurRadius(0)
 
         def custom_cc_in(): orig_cc_in(); blur_in()
         def custom_cc_out(): orig_cc_out(); blur_out()
