@@ -1,4 +1,4 @@
 {
-  "version": "0.1.7 Beta",
-  "notes": "Added Do Not Disturb and Silent Mode toggles to Control Center, fixed UI bugs in App Drawer and Settings, and improved scrolling physics."
+  "version": "0.1.8 Beta",
+  "notes": "Added a cinematic fade-to-black and fade-in transition for the update boot video."
 }
