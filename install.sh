@@ -92,6 +92,7 @@ echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
 if [ -d "$INSTALL_DIR/.git" ]; then
     echo " -> Existing Git repo found at $INSTALL_DIR. Pulling latest changes..."
     sudo -u $REAL_USER git -C "$INSTALL_DIR" fetch origin
+    sudo -u $REAL_USER git -C "$INSTALL_DIR" reset --hard origin/main
     sudo -u $REAL_USER git -C "$INSTALL_DIR" checkout -B main origin/main
 else
     echo " -> Cloning fresh Kiosk OS repository into $INSTALL_DIR..."
