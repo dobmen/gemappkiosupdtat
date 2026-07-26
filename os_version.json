@@ -1,4 +1,4 @@
 {
-  "version": "0.1.9 Beta",
-  "notes": "Emergency hotfix to resolve a crash when opening the Settings app due to a missing comma in imports."
+  "version": "0.1.10 Beta",
+  "notes": "Completely rebuilt the background dimming engine to eliminate QGraphicsBlurEffect crashes. The OS is now incredibly stable and will not glitch out or turn black when opening apps like Neon Clock."
 }

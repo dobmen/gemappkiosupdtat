@@ -593,12 +593,27 @@ class NestKiosk(QMainWindow):
         self.timer.start(1000)
         self.update_clock()
 
-        # Blur effects are applied dynamically to prevent QPainter collisions
-
         self.indicator = QLabel("▲ Swipe up for apps", self)
         self.indicator.setGeometry(0, SCREEN_HEIGHT - int(40 * SCALE_FACTOR), SCREEN_WIDTH, int(40 * SCALE_FACTOR))
         self.indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.indicator.setStyleSheet(f"color: #444444; font-size: {int(14 * SCALE_FACTOR)}px; font-weight: bold; background-color: transparent;")
+
+        # -------------------------------------------------------------
+        # DIM OVERLAY (Replaces QGraphicsBlurEffect)
+        # -------------------------------------------------------------
+        self.dim_overlay = QFrame(self)
+        self.dim_overlay.setGeometry(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.dim_alpha = 0
+        self.dim_overlay.setStyleSheet("background-color: rgba(0, 0, 0, 0);")
+        self.dim_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.dim_overlay.show()
+        
+        self.dim_anim = QVariantAnimation()
+        self.dim_anim.setDuration(250)
+        def update_dim(v):
+            self.dim_alpha = v
+            self.dim_overlay.setStyleSheet(f"background-color: rgba(0, 0, 0, {v});")
+        self.dim_anim.valueChanged.connect(update_dim)
 
         # -------------------------------------------------------------
         print("[DEBUG] Building quick settings panel...")
@@ -807,32 +822,17 @@ class NestKiosk(QMainWindow):
         orig_nf_in = self.notifs_panel.slide_in
         orig_nf_out = self.notifs_panel.slide_out
         
-        self._blur_animations = []
         def blur_in():
-            self._blur_animations.clear()
-            for widget in [self.main_carousel, getattr(self, 'app_stack', None)]:
-                if not widget: continue
-                effect = QGraphicsBlurEffect(widget)
-                effect.setBlurRadius(0)
-                widget.setGraphicsEffect(effect)
-                anim = QPropertyAnimation(effect, b"blurRadius")
-                anim.setDuration(300)
-                anim.setEndValue(20)
-                anim.start(QPropertyAnimation.DeletionPolicy.KeepWhenStopped)
-                self._blur_animations.append(anim)
+            self.dim_anim.stop()
+            self.dim_anim.setStartValue(self.dim_alpha)
+            self.dim_anim.setEndValue(180)
+            self.dim_anim.start()
                 
         def blur_out():
-            self._blur_animations.clear()
-            for widget in [self.main_carousel, getattr(self, 'app_stack', None)]:
-                if not widget: continue
-                effect = widget.graphicsEffect()
-                if effect:
-                    anim = QPropertyAnimation(effect, b"blurRadius")
-                    anim.setDuration(300)
-                    anim.setEndValue(0)
-                    anim.finished.connect(lambda w=widget: w.setGraphicsEffect(None))
-                    anim.start(QPropertyAnimation.DeletionPolicy.KeepWhenStopped)
-                    self._blur_animations.append(anim)
+            self.dim_anim.stop()
+            self.dim_anim.setStartValue(self.dim_alpha)
+            self.dim_anim.setEndValue(0)
+            self.dim_anim.start()
 
         def custom_cc_in(): orig_cc_in(); blur_in()
         def custom_cc_out(): orig_cc_out(); blur_out()
