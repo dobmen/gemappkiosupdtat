@@ -12,12 +12,8 @@ from PyQt6.QtWidgets import (
     QPushButton, QSlider, QVBoxLayout, QWidget, QScrollArea, QScroller, QFrame, QSizePolicy, QGraphicsOpacityEffect, QGraphicsBlurEffect, QStackedWidget
 )
 
-# Optional Multimedia for Notification Sounds
-try:
-    from PyQt6.QtMultimedia import QSoundEffect
-    MULTIMEDIA_AVAILABLE = True
-except ImportError:
-    MULTIMEDIA_AVAILABLE = False
+import subprocess
+import threading
 
 # Import our custom modules dynamically for hot-swapping
 import components.clockfaces as cf
@@ -504,12 +500,10 @@ class NestKiosk(QMainWindow):
         self.long_press_timer.timeout.connect(self.open_clockface_selector)
 
         # Setup Notification Audio
-        self.notif_sound = None
-        if MULTIMEDIA_AVAILABLE:
-            sound_path = os.path.abspath("notification.wav")
-            if os.path.exists(sound_path):
-                self.notif_sound = QSoundEffect()
-                self.notif_sound.setSource(QUrl.fromLocalFile(sound_path))
+        self.notif_sound_path = None
+        sound_path = os.path.abspath("notification.wav")
+        if os.path.exists(sound_path):
+            self.notif_sound_path = sound_path
 
         # -------------------------------------------------------------
         # 1. MAIN SCREEN CAROUSEL & CLOCKFACE INJECTION
@@ -901,10 +895,16 @@ class NestKiosk(QMainWindow):
         except RuntimeError: pass
             
         silent_mode = get_system_setting("silent_mode", False)
-        if self.notif_sound and not silent_mode:
-            sys_vol = get_system_setting("system_volume", 80)
-            self.notif_sound.setVolume(sys_vol / 100.0)
-            self.notif_sound.play()
+        if getattr(self, 'notif_sound_path', None) and not silent_mode:
+            def play_sound():
+                try:
+                    if sys.platform == "darwin":
+                        subprocess.run(['afplay', self.notif_sound_path], check=False)
+                    else:
+                        subprocess.run(['aplay', '-q', self.notif_sound_path], check=False)
+                except Exception:
+                    pass
+            threading.Thread(target=play_sound, daemon=True).start()
             
         self.current_toast = ToastNotification(self, app_name, title, desc, icon, self.launch_app)
         self.current_toast.show_toast()
