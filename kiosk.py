@@ -502,6 +502,38 @@ class VoiceOverlay(QFrame):
         self.lbl_text.setText(text)
 
 
+# =================================================================
+# 🖥️ HARDWARE BUTTONS & UI COMPONENTS
+# =================================================================
+class LongPressButton(QPushButton):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.long_press_timer = QTimer(self)
+        self.long_press_timer.setSingleShot(True)
+        self.long_press_timer.timeout.connect(self.emit_long_press)
+        self.long_pressed = False
+        self.on_long_press = None
+        
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.long_pressed = False
+            self.long_press_timer.start(600)  # 600ms hold time
+        super().mousePressEvent(event)
+        
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.long_press_timer.stop()
+            if self.long_pressed:
+                return  # Block the click if long press fired
+        super().mouseReleaseEvent(event)
+        
+    def emit_long_press(self):
+        self.long_pressed = True
+        self.setDown(False)
+        if self.on_long_press:
+            self.on_long_press()
+
+
 class NestKiosk(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -1284,35 +1316,6 @@ class NestKiosk(QMainWindow):
         self.notif_layout.insertWidget(0, card)
         self.update_notif_header()
 
-class LongPressButton(QPushButton):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.long_press_timer = QTimer(self)
-        self.long_press_timer.setSingleShot(True)
-        self.long_press_timer.timeout.connect(self.emit_long_press)
-        self.long_pressed = False
-        self.on_long_press = None
-        
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.long_pressed = False
-            self.long_press_timer.start(600)  # 600ms hold time
-        super().mousePressEvent(event)
-        
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.long_press_timer.stop()
-            if self.long_pressed:
-                return  # Block the click if long press fired
-        super().mouseReleaseEvent(event)
-        
-    def emit_long_press(self):
-        self.long_pressed = True
-        self.setDown(False)
-        if self.on_long_press:
-            self.on_long_press()
-
-class AppCard(QWidget):
     def remove_notification(self, card_widget):
         card_widget.deleteLater()
         QTimer.singleShot(50, self.update_notif_header)
