@@ -1782,6 +1782,9 @@ class NestKiosk(QMainWindow):
         self.app_view.show()
         self.app_view.raise_()
         
+        if hasattr(self, 'clock_container'):
+            self.clock_container.hide()
+        
         if hasattr(self, 'edge_interceptor'):
             self.edge_interceptor.raise_()
 
@@ -1837,6 +1840,9 @@ class NestKiosk(QMainWindow):
         self.app_view.hide()
         self.app_opacity.setOpacity(1.0) 
         self.app_view.move(0, 0)
+        
+        if hasattr(self, 'clock_container'):
+            self.clock_container.show()
 
     def minimize_app(self):
         self.animate_app_close()
