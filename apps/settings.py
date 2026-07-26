@@ -8,7 +8,7 @@ from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal, QSize, QRect, QPropert
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QPainter, QPainterPath, QColor, QPen, QGuiApplication
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit,
+    QScrollArea, QFrame, QSlider, QStackedWidget, QScroller, QSizePolicy, QProgressBar, QDialog, QLineEdit, QScrollerProperties
     QListWidget, QListWidgetItem
 )
 
@@ -290,6 +290,12 @@ class SettingsPage(QWidget):
         nav_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        nav_scroller = QScroller.scroller(nav_scroll.viewport())
+        nav_props = nav_scroller.scrollerProperties()
+        nav_props.setScrollMetric(QScrollerProperties.ScrollMetric.HorizontalOvershootPolicy, QScrollerProperties.OvershootPolicy.OvershootAlwaysOff)
+        nav_scroller.setScrollerProperties(nav_props)
+        
         QScroller.grabGesture(nav_scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
 
         nav_content = QWidget()
@@ -590,6 +596,12 @@ class SettingsPage(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        scroller = QScroller.scroller(scroll.viewport())
+        props = scroller.scrollerProperties()
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.HorizontalOvershootPolicy, QScrollerProperties.OvershootPolicy.OvershootAlwaysOff)
+        scroller.setScrollerProperties(props)
+        
         QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         
         container = QWidget()
@@ -712,6 +724,12 @@ class SettingsPage(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        scroller = QScroller.scroller(scroll.viewport())
+        props = scroller.scrollerProperties()
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.HorizontalOvershootPolicy, QScrollerProperties.OvershootPolicy.OvershootAlwaysOff)
+        scroller.setScrollerProperties(props)
+        
         QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
 
         container = QWidget()
@@ -924,6 +942,10 @@ class SettingsPage(QWidget):
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroller = QScroller.scroller(scroll.viewport())
+        props = scroller.scrollerProperties()
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.HorizontalOvershootPolicy, QScrollerProperties.OvershootPolicy.OvershootAlwaysOff)
+        scroller.setScrollerProperties(props)
         QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         
         self.apps_container = QWidget()
