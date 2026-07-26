@@ -30,7 +30,11 @@ if [ -z "$RES" ]; then
 fi
 
 # Classify the connected display hardware
-if [[ "$RES" == *"1920x1200"* ]] || [[ "$RES" == *"1920x1080"* ]]; then
+if [[ "$RES" == *"1200x1920"* ]]; then
+    echo "[Hardware Detect] ⟳ Portrait Display Detected ($RES). Rotating DSI-1 to Landscape..."
+    xrandr --output DSI-1 --rotate right
+    export KIOSK_DISPLAY_MODE="WIDESCREEN_1200P"
+elif [[ "$RES" == *"1920x1200"* ]] || [[ "$RES" == *"1920x1080"* ]]; then
     export KIOSK_DISPLAY_MODE="WIDESCREEN_1200P"
     echo "[Hardware Detect] ✔ Identified Display: Pro Widescreen ($RES)"
 elif [[ "$RES" == *"1024x600"* ]] || [[ "$RES" == *"1024x768"* ]]; then
