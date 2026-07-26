@@ -1287,7 +1287,7 @@ class SettingsPage(QWidget):
         
         if latest_version > self.current_os_version:
             self.lbl_update_status.setText(f"Kiosk OS Version: v{self.current_os_version}\n\nNew Version Available: v{latest_version}  ({payload_size})\nNotes: {release_notes}")
-            self.btn_check_update.setText("⬇ Download & Install")
+            self.btn_check_update.setText("⬇ Download && Install")
             self.btn_check_update.setStyleSheet("""
                 QPushButton { background-color: #1ED760; color: #0C0C0E; border-radius: 12px; }
             """)
@@ -1310,7 +1310,7 @@ class SettingsPage(QWidget):
             self, 
             "Confirm Update", 
             f"Installing version {new_version} from the {channel} channel will automatically reboot the Kiosk system.\n\nDo you want to proceed?",
-            "Install & Reboot"
+            "Install && Reboot"
         )
         
         if dialog.exec() == QDialog.DialogCode.Accepted:
