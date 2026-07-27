@@ -31,7 +31,7 @@ ApplicationWindow {
             id: homePage
             Rectangle {
                 anchors.fill: parent
-                color: "transparent"
+                color: "#0C0C0E"
                 
                 Text {
                     anchors.centerIn: parent
@@ -428,10 +428,9 @@ ApplicationWindow {
             
             ShaderEffectSource {
                 id: effectSource
-                sourceItem: root.contentItem
+                sourceItem: swipeView
                 sourceRect: Qt.rect(ccPanel.x, ccPanel.y - ccTranslate.y, ccPanel.width, ccPanel.height)
                 visible: false
-                live: true
             }
             
             MultiEffect {
@@ -580,5 +579,31 @@ ApplicationWindow {
         property: "ccOpacity"
         duration: 350
         easing.type: Easing.OutCubic
+    }
+    
+    // ==========================================
+    // SYSTEM APP TRANSITION OVERLAY
+    // ==========================================
+    Rectangle {
+        id: appTransitionOverlay
+        anchors.fill: parent
+        color: "black"
+        opacity: 0.0
+        z: 999
+        visible: opacity > 0
+        
+        Behavior on opacity {
+            NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+        }
+    }
+    
+    Connections {
+        target: backend
+        function onAppOpened(appName) {
+            appTransitionOverlay.opacity = 1.0
+        }
+        function onAppMinimized() {
+            appTransitionOverlay.opacity = 0.0
+        }
     }
 }

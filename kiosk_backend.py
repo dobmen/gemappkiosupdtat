@@ -11,6 +11,8 @@ class KioskBackend(QObject):
     bluetoothChanged = pyqtSignal()
     appsChanged = pyqtSignal()
     activeTasksChanged = pyqtSignal()
+    appOpened = pyqtSignal(str)
+    appMinimized = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -137,15 +139,10 @@ class KioskBackend(QObject):
     @pyqtSlot()
     def minimize_app(self):
         print("[QML Backend] Minimizing active app")
+        self.appMinimized.emit()
         for widget in self.running_apps.values():
             if widget.isVisible():
-                widget._fade_anim = QPropertyAnimation(widget, b"windowOpacity")
-                widget._fade_anim.setDuration(300)
-                widget._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-                widget._fade_anim.setStartValue(1.0)
-                widget._fade_anim.setEndValue(0.0)
-                widget._fade_anim.finished.connect(widget.hide)
-                widget._fade_anim.start()
+                widget.hide()
 
     @pyqtSlot(str)
     def kill_app(self, app_name):
@@ -211,20 +208,16 @@ class KioskBackend(QObject):
         if page_instance is not None:
             self.running_apps[app_name] = page_instance
             
-            # Enable Wayland translucent buffers so opacity animations work
-            page_instance.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            # Start QML fade-out animation instantly
+            self.appOpened.emit(app_name)
             
-            page_instance.setWindowOpacity(0.0)
-            page_instance.showFullScreen()
-            page_instance.raise_()
-            page_instance.activateWindow()
+            def do_show():
+                page_instance.showFullScreen()
+                page_instance.raise_()
+                page_instance.activateWindow()
             
-            page_instance._fade_anim = QPropertyAnimation(page_instance, b"windowOpacity")
-            page_instance._fade_anim.setDuration(300)
-            page_instance._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-            page_instance._fade_anim.setStartValue(0.0)
-            page_instance._fade_anim.setEndValue(1.0)
-            page_instance._fade_anim.start()
+            # Delay Wayland window pop-in by 350ms to allow QML fade-out
+            QTimer.singleShot(350, do_show)
             
             self._update_active_tasks()
 
