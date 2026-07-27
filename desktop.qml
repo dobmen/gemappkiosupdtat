@@ -106,13 +106,179 @@ ApplicationWindow {
             color: "#121215"
         }
         
+        // Header Row for Drawer
+        RowLayout {
+            id: drawerHeader
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.margins: 40
+            height: 60
+            
+            Rectangle {
+                id: activeTasksBtn
+                height: 50
+                width: 250
+                color: "transparent"
+                radius: 10
+                border.color: tapBtn.pressed ? "#333333" : "transparent"
+                
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 15
+                    Text {
+                        text: "🗂️ Active Tasks"
+                        color: "white"
+                        font.family: boldFont.name
+                        font.pixelSize: 26
+                    }
+                    Rectangle {
+                        visible: backend && backend.activeTasks.length > 0
+                        width: 40
+                        height: 40
+                        radius: 20
+                        color: "#E24A4A"
+                        Text {
+                            anchors.centerIn: parent
+                            text: backend ? backend.activeTasks.length : "0"
+                            color: "white"
+                            font.family: boldFont.name
+                            font.pixelSize: 20
+                        }
+                    }
+                }
+                MouseArea {
+                    id: tapBtn
+                    anchors.fill: parent
+                    onClicked: taskRibbon.visible = !taskRibbon.visible
+                }
+            }
+            
+            Item { Layout.fillWidth: true } // Spacer
+            
+            Text {
+                text: "▼ Pull down to close"
+                color: "#555555"
+                font.family: boldFont.name
+                font.pixelSize: 24
+            }
+            
+            Item { width: 250 } // Right spacer to balance center
+        }
+
+        // Active Tasks Ribbon
+        Rectangle {
+            id: taskRibbon
+            anchors.top: drawerHeader.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: 20
+            height: 140
+            color: "#1A1A22"
+            visible: false
+            border.color: "#2A2A35"
+            border.width: 1
+            
+            ListView {
+                anchors.fill: parent
+                anchors.margins: 20
+                orientation: ListView.Horizontal
+                spacing: 20
+                model: backend ? backend.activeTasks : []
+                clip: true
+                
+                delegate: Rectangle {
+                    width: 320
+                    height: 100
+                    radius: 12
+                    color: "#24242E"
+                    border.color: "#333340"
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 15
+                        spacing: 20
+                        
+                        Image {
+                            source: modelData.icon
+                            Layout.preferredWidth: 50
+                            Layout.preferredHeight: 50
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        
+                        Text {
+                            text: modelData.name
+                            color: "white"
+                            font.family: boldFont.name
+                            font.pixelSize: 24
+                            Layout.fillWidth: true
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    if (backend) backend.launch_app(modelData.name)
+                                    appDrawer.close()
+                                }
+                            }
+                        }
+                        
+                        Rectangle {
+                            Layout.preferredWidth: 60
+                            Layout.preferredHeight: 60
+                            radius: 30
+                            color: tapKill.pressed ? "#E24A4A" : "rgba(226,74,74,0.15)"
+                            Text {
+                                anchors.centerIn: parent
+                                text: "✕"
+                                color: tapKill.pressed ? "white" : "#E24A4A"
+                                font.family: boldFont.name
+                                font.pixelSize: 24
+                            }
+                            MouseArea {
+                                id: tapKill
+                                anchors.fill: parent
+                                onClicked: if (backend) backend.kill_app(modelData.name)
+                            }
+                        }
+                    }
+                }
+                
+                footer: Rectangle {
+                    width: 200
+                    height: 100
+                    radius: 12
+                    color: tapCloseAll.pressed ? "#E24A4A" : "rgba(226,74,74,0.1)"
+                    border.color: "#E24A4A"
+                    border.width: 1
+                    visible: backend && backend.activeTasks.length > 1
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Close All"
+                        color: tapCloseAll.pressed ? "white" : "#E24A4A"
+                        font.family: boldFont.name
+                        font.pixelSize: 24
+                    }
+                    
+                    MouseArea {
+                        id: tapCloseAll
+                        anchors.fill: parent
+                        onClicked: if (backend) backend.kill_all_apps()
+                    }
+                }
+            }
+        }
+        
         GridView {
             id: appGrid
-            anchors.fill: parent
+            anchors.top: taskRibbon.visible ? taskRibbon.bottom : drawerHeader.bottom
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
             anchors.margins: 40
-            anchors.topMargin: 100
+            anchors.topMargin: 60
             cellWidth: width / 4
-            cellHeight: 260
+            cellHeight: 250
             model: backend ? backend.apps : []
             clip: true
             
@@ -132,9 +298,9 @@ ApplicationWindow {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
                     anchors.topMargin: 20
-                    width: 160
-                    height: 160
-                    radius: 80 
+                    width: 130
+                    height: 130
+                    radius: 65 
                     
                     property var colors: ["#E24A4A", "#5A8DEF", "#F39C12", "#27AE60", "#8E44AD", "#9B59B6"]
                     property string fallbackColor: colors[modelData.name.length % colors.length]
@@ -146,7 +312,7 @@ ApplicationWindow {
                         text: modelData.name.charAt(0).toUpperCase()
                         color: "white"
                         font.family: boldFont.name
-                        font.pixelSize: 60
+                        font.pixelSize: 50
                         visible: (appIcon.status === Image.Error || appIcon.status === Image.Null)
                     }
                     
@@ -154,7 +320,7 @@ ApplicationWindow {
                     Rectangle {
                         id: maskRect
                         anchors.fill: parent
-                        radius: 80
+                        radius: 65
                         visible: false
                     }
                     
@@ -189,7 +355,7 @@ ApplicationWindow {
                     text: modelData.name
                     color: "white"
                     font.family: boldFont.name
-                    font.pixelSize: 26
+                    font.pixelSize: 32
                     font.weight: Font.Bold
                 }
                 
@@ -201,16 +367,6 @@ ApplicationWindow {
                     }
                 }
             }
-        }
-        
-        Text {
-            anchors.top: parent.top
-            anchors.topMargin: 40
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: "▼ Pull down to close"
-            color: "#555555"
-            font.family: boldFont.name
-            font.pixelSize: 24
         }
     }
 

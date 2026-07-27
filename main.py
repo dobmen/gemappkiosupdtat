@@ -1,6 +1,6 @@
 import sys
 import os
-from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtWidgets import QApplication
 from PyQt6.QtQml import QQmlApplicationEngine
 from kiosk_backend import KioskBackend
 
@@ -10,7 +10,7 @@ def main():
     # Enforce Wayland natively for QML hardware acceleration
     # os.environ["QT_QPA_PLATFORM"] = "wayland"
     
-    app = QGuiApplication(sys.argv)
+    app = QApplication(sys.argv)
     engine = QQmlApplicationEngine()
     
     print("[DEBUG] main.py: Initializing QML Backend")
