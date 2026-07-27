@@ -982,34 +982,13 @@ ApplicationWindow {
     Rectangle {
         id: clockSelector
         anchors.fill: parent
-        color: "transparent"
+        color: "#1A1A24"
         z: 980
         visible: opacity > 0
         opacity: 0.0
-        
-        ShaderEffectSource {
-            id: clockEffectSource
-            sourceItem: swipeView
-            sourceRect: Qt.rect(0, 0, clockSelector.width, clockSelector.height)
-            visible: false
-            live: false // Only capture once when opening
-        }
-        
-        MultiEffect {
-            source: clockEffectSource
-            anchors.fill: parent
-            blurEnabled: true
-            blurMax: 32
-            blur: 1.0
-            saturation: 0.2
-        }
-        
-        Rectangle {
-            anchors.fill: parent
-            color: "#E60C0C0E"
-        }
 
         property var faces: ["ClassicClock", "StackedClock", "AnalogClock"]
+        property bool showCustomizer: false
 
         ColumnLayout {
             anchors.fill: parent
@@ -1033,6 +1012,9 @@ ApplicationWindow {
                 highlightRangeMode: ListView.StrictlyEnforceRange
                 model: clockSelector.faces
                 spacing: 40
+                
+                scale: 0.8 + (clockSelector.opacity * 0.2)
+                opacity: clockSelector.opacity
                 
                 delegate: Item {
                     width: clockListView.width
@@ -1066,27 +1048,72 @@ ApplicationWindow {
                 }
             }
 
-            Rectangle {
-                width: 160
-                height: 60
-                radius: 30
-                color: "#2C2C35"
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.bottomMargin: 60
+                spacing: 30
+                visible: !clockSelector.showCustomizer
                 
-                Text {
-                    anchors.centerIn: parent
-                    text: "Cancel"
-                    color: "white"
-                    font.family: boldFont.name
-                    font.pixelSize: 20
+                Rectangle {
+                    width: 160
+                    height: 60
+                    radius: 30
+                    color: "#2C2C35"
+                    Text { anchors.centerIn: parent; text: "Cancel"; color: "white"; font.family: boldFont.name; font.pixelSize: 20 }
+                    MouseArea { 
+                        anchors.fill: parent
+                        onClicked: {
+                            clockSelectorAnim.to = 0.0
+                            clockSelectorAnim.start()
+                        }
+                    }
                 }
                 
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        clockSelectorAnim.to = 0.0
-                        clockSelectorAnim.start()
+                Rectangle {
+                    width: 160
+                    height: 60
+                    radius: 30
+                    color: "#5A8DEF"
+                    Text { anchors.centerIn: parent; text: "Customize"; color: "white"; font.family: boldFont.name; font.pixelSize: 20 }
+                    MouseArea { 
+                        anchors.fill: parent
+                        onClicked: clockSelector.showCustomizer = true 
+                    }
+                }
+            }
+            
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.bottomMargin: 60
+                spacing: 20
+                visible: clockSelector.showCustomizer
+                
+                Repeater {
+                    model: ["#FFFFFF", "#E24A4A", "#5A8DEF", "#7B61FF", "#4AE28A", "#F2C94C"]
+                    delegate: Rectangle {
+                        width: 60
+                        height: 60
+                        radius: 30
+                        color: modelData
+                        border.color: "white"
+                        border.width: (backend && backend.clockAccentColor === modelData) ? 4 : 0
+                        
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.clockAccentColor = modelData
+                        }
+                    }
+                }
+                
+                Rectangle {
+                    width: 60
+                    height: 60
+                    radius: 30
+                    color: "#2C2C35"
+                    Text { anchors.centerIn: parent; text: "✕"; color: "white"; font.pixelSize: 24 }
+                    MouseArea { 
+                        anchors.fill: parent
+                        onClicked: clockSelector.showCustomizer = false 
                     }
                 }
             }
@@ -1098,7 +1125,7 @@ ApplicationWindow {
             property: "opacity"
             duration: 300
             easing.type: Easing.OutCubic
-            onStarted: if (clockSelectorAnim.to === 1.0) clockEffectSource.scheduleUpdate()
+            onFinished: if (clockSelectorAnim.to === 0.0) clockSelector.showCustomizer = false
         }
     }
 

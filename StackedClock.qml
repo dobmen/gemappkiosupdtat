@@ -40,7 +40,7 @@ Item {
 
             Text {
                 text: minStr
-                color: "#5A8DEF"
+                color: backend ? backend.clockAccentColor : "#5A8DEF"
                 font.family: "Google Sans"
                 font.weight: Font.Bold
                 font.pixelSize: 280

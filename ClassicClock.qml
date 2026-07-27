@@ -29,7 +29,7 @@ Item {
 
             Text {
                 text: timeStr
-                color: "white"
+                color: backend ? backend.clockAccentColor : "white"
                 font.family: "Google Sans"
                 font.weight: Font.Bold
                 font.pixelSize: 220

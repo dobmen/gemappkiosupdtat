@@ -91,6 +91,7 @@ class KioskBackend(QObject):
         self._brightness = 80
         self._volume = 50
         self._active_clockface = self.get_system_setting("clockface", "ClassicClock")
+        self._clock_accent_color = self.get_system_setting("clock_accent", "#FFFFFF")
         self._apps = self.build_app_list()
         self._notifications = []
         
@@ -242,6 +243,16 @@ class KioskBackend(QObject):
         if self._active_clockface != value:
             self._active_clockface = value
             self.save_system_setting("clockface", value)
+            self.activeClockfaceChanged.emit()
+
+    @pyqtProperty(str, notify=activeClockfaceChanged)
+    def clockAccentColor(self): return self._clock_accent_color
+    
+    @clockAccentColor.setter
+    def clockAccentColor(self, color):
+        if self._clock_accent_color != color:
+            self._clock_accent_color = color
+            self.save_system_setting("clock_accent", color)
             self.activeClockfaceChanged.emit()
         
     @pyqtProperty(list, notify=activeTasksChanged)

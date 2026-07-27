@@ -75,7 +75,7 @@ Item {
             Rectangle {
                 width: 8
                 height: 160
-                color: "#5A8DEF"
+                color: backend ? backend.clockAccentColor : "#5A8DEF"
                 radius: 4
                 x: parent.width / 2 - width / 2
                 y: parent.height / 2 - height + 10
@@ -88,7 +88,7 @@ Item {
             Rectangle {
                 width: 4
                 height: 180
-                color: "#E24A4A"
+                color: backend ? backend.clockAccentColor : "#E24A4A"
                 radius: 2
                 x: parent.width / 2 - width / 2
                 y: parent.height / 2 - height + 30
