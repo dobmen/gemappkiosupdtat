@@ -110,12 +110,20 @@ ApplicationWindow {
             GridView {
                 id: appGrid
                 anchors.fill: parent
-                anchors.margins: 60
+                anchors.margins: 40
                 anchors.topMargin: 100
                 cellWidth: parent.width / 4
                 cellHeight: cellWidth * 1.2
                 model: backend ? backend.apps : []
                 clip: true
+                
+                // Close the drawer if pulled down past the top!
+                onMovementEnded: {
+                    if (atYBeginning && contentY < -150) {
+                        drawerAnim.to = 0.0
+                        drawerAnim.start()
+                    }
+                }
                 
                 delegate: Item {
                     width: appGrid.cellWidth
@@ -124,15 +132,15 @@ ApplicationWindow {
                     Rectangle {
                         id: appBg
                         anchors.centerIn: parent
-                        width: parent.width * 0.8
-                        height: parent.width * 0.8
-                        color: tapArea.pressed ? "#19FFFFFF" : "transparent"
-                        radius: 30
+                        width: 140
+                        height: 140
+                        color: tapArea.pressed ? "rgba(255,255,255,0.15)" : "transparent"
+                        radius: 70 // Perfect circle like old DynamicAppButton
                         
                         Image {
                             anchors.centerIn: parent
-                            width: parent.width * 0.6
-                            height: parent.width * 0.6
+                            width: 120
+                            height: 120
                             source: modelData.icon
                             fillMode: Image.PreserveAspectFit
                         }
@@ -140,12 +148,12 @@ ApplicationWindow {
                     
                     Text {
                         anchors.top: appBg.bottom
-                        anchors.topMargin: 15
+                        anchors.topMargin: 10
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: modelData.name
                         color: "white"
                         font.family: boldFont.name
-                        font.pixelSize: 18
+                        font.pixelSize: 20
                     }
                     
                     MouseArea {
@@ -158,15 +166,27 @@ ApplicationWindow {
                 }
             }
         }
+        
+        // Add a "Swipe down to close" indicator at the top
+        Text {
+            anchors.top: parent.top
+            anchors.topMargin: 40
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: "▼ Pull down to close"
+            color: "#555555"
+            font.family: boldFont.name
+            font.pixelSize: 24
+        }
     }
 
-    // Gesture Handle for App Drawer (Bottom edge)
+    // Gesture Handle for App Drawer (Bottom edge - to open it)
     MouseArea {
         id: drawerHandle
         width: parent.width
         height: 150
-        // Ensure this handle moves up with the drawer so we can drag it back down!
-        y: parent.height - appDrawer.drawerOffset - height
+        // Ensure this handle only exists at the bottom when drawer is closed
+        y: parent.height - height
+        visible: appDrawer.drawerOffset < root.height * 0.1
         
         property real startY: 0
         property real startOffset: 0
@@ -193,30 +213,6 @@ ApplicationWindow {
                 drawerAnim.start()
             } else {
                 drawerAnim.to = 0.0
-                drawerAnim.start()
-            }
-        }
-    }
-    
-    // Allow dragging down anywhere on the opened drawer to close it
-    MouseArea {
-        anchors.fill: appDrawer
-        visible: appDrawer.drawerOffset === root.height
-        property real startY: 0
-        
-        onPressed: (mouse) => { startY = mouse.y }
-        onPositionChanged: (mouse) => {
-            let dy = mouse.y - startY
-            if (dy > 0) {
-                appDrawer.drawerOffset = root.height - dy
-            }
-        }
-        onReleased: (mouse) => {
-            if (appDrawer.drawerOffset < root.height * 0.8) {
-                drawerAnim.to = 0.0
-                drawerAnim.start()
-            } else {
-                drawerAnim.to = root.height
                 drawerAnim.start()
             }
         }
