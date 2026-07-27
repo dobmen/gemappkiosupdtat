@@ -31,10 +31,14 @@ Item {
         anchors.fill: parent
         color: bgType === "solid" ? bgValue : "black"
         
-        gradient: bgType === "gradient" ? Gradient {
-            GradientStop { position: 0.0; color: bgValue }
-            GradientStop { position: 1.0; color: bgValue2 }
-        } : null
+        Rectangle {
+            anchors.fill: parent
+            visible: bgType === "gradient"
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: bgType === "gradient" ? bgValue : "transparent" }
+                GradientStop { position: 1.0; color: bgType === "gradient" ? bgValue2 : "transparent" }
+            }
+        }
         
         Image {
             anchors.fill: parent

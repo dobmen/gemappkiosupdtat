@@ -403,14 +403,7 @@ class KioskBackend(QObject):
             geom_anim.setEndValue(target_rect)
             geom_anim.setEasingCurve(QEasingCurve.Type.InCubic)
             
-            op_anim = QPropertyAnimation(widget, b"windowOpacity")
-            op_anim.setDuration(300)
-            op_anim.setStartValue(widget.windowOpacity())
-            op_anim.setEndValue(0.0)
-            op_anim.setEasingCurve(QEasingCurve.Type.InCubic)
-            
             self._min_anim_group.addAnimation(geom_anim)
-            self._min_anim_group.addAnimation(op_anim)
             
             def on_finished():
                 widget.hide()
@@ -520,14 +513,7 @@ class KioskBackend(QObject):
             geom_anim.setEndValue(screen_rect)
             geom_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
             
-            op_anim = QPropertyAnimation(widget, b"windowOpacity")
-            op_anim.setDuration(400)
-            op_anim.setStartValue(0.0)
-            op_anim.setEndValue(1.0)
-            op_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-            
             self._launch_anim_group.addAnimation(geom_anim)
-            self._launch_anim_group.addAnimation(op_anim)
             
             self._launch_anim_group.finished.connect(widget.showFullScreen)
             self._launch_anim_group.start()
