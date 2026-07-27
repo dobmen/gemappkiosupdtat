@@ -48,6 +48,8 @@ Item {
         ColumnLayout {
             anchors.centerIn: parent
             spacing: 10
+            
+            Text {
                 text: timeStr
                 color: backend ? backend.clockAccentColor : "white"
                 font.family: "Google Sans"

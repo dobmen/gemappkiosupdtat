@@ -24,7 +24,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: "transparent"
+        color: bg
         
         property var settings: backend ? JSON.parse(backend.clockSettingsJson || "{}") : {}
         property var clockConfig: settings["AnalogClock"] || {}
