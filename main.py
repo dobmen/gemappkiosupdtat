@@ -37,6 +37,12 @@ def main():
     app = QApplication(sys.argv)
     engine = QQmlApplicationEngine()
     
+    qml_errors = []
+    def on_warnings(warnings):
+        for w in warnings:
+            qml_errors.append(w.toString())
+    engine.warnings.connect(on_warnings)
+    
     print("[DEBUG] main.py: Initializing QML Backend")
     backend = KioskBackend()
     
@@ -52,6 +58,15 @@ def main():
     
     if not engine.rootObjects():
         print("[ERROR] main.py: Failed to load QML file!")
+        print("\n".join(qml_errors))
+        try:
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox()
+            msg.setWindowTitle("Fatal QML Error")
+            msg.setText("Failed to start Kiosk OS. QML Errors:\n" + "\n".join(qml_errors))
+            msg.exec()
+        except:
+            pass
         sys.exit(-1)
         
     print("[DEBUG] main.py: QML Engine started successfully!")
