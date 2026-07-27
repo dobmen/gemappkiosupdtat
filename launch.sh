@@ -85,6 +85,11 @@ EOF
     <cornerRadius>0</cornerRadius>
     <borderWidth>0</borderWidth>
   </theme>
+  <libinput>
+    <device category="touch">
+      <mapToOutput>$OUTPUT</mapToOutput>
+    </device>
+  </libinput>
 </labwc_config>
 EOF
 
