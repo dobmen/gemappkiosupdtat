@@ -32,7 +32,8 @@ Item {
             Text {
                 text: hourStr
                 color: "white"
-                font.family: typeof boldFont !== "undefined" ? boldFont.name : "sans-serif"
+                font.family: "Google Sans"
+                font.weight: Font.Bold
                 font.pixelSize: 280
                 Layout.alignment: Qt.AlignHCenter
             }
@@ -40,7 +41,8 @@ Item {
             Text {
                 text: minStr
                 color: "#5A8DEF"
-                font.family: typeof boldFont !== "undefined" ? boldFont.name : "sans-serif"
+                font.family: "Google Sans"
+                font.weight: Font.Bold
                 font.pixelSize: 280
                 Layout.alignment: Qt.AlignHCenter
             }
@@ -50,7 +52,7 @@ Item {
             Text {
                 text: dateStr
                 color: "#AAAAAA"
-                font.family: typeof mainFont !== "undefined" ? mainFont.name : "sans-serif"
+                font.family: "Google Sans"
                 font.pixelSize: 32
                 Layout.alignment: Qt.AlignHCenter
             }

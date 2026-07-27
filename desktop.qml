@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
-import QtMultimedia
 
 ApplicationWindow {
     id: root
@@ -1113,46 +1112,15 @@ ApplicationWindow {
     // ==========================================
     // 8. BOOT VIDEO PLAYER
     // ==========================================
-    Rectangle {
-        id: bootVideoOverlay
+    Loader {
+        id: bootVideoLoader
         anchors.fill: parent
-        color: "black"
         z: 1000
-        visible: false
-        opacity: 0.0
-        
-        MediaPlayer {
-            id: bootPlayer
-            source: "file://" + Qt.application.dir + "/videos/update_boot.mp4"
-            audioOutput: AudioOutput {}
-            videoOutput: bootVideoOut
-            
-            onPlaybackStateChanged: {
-                if (playbackState === MediaPlayer.StoppedState) {
-                    bootFadeOut.start()
-                }
-            }
-            onErrorOccurred: {
-                bootFadeOut.start()
-            }
-        }
-        
-        VideoOutput {
-            id: bootVideoOut
-            anchors.fill: parent
-            fillMode: VideoOutput.PreserveAspectCrop
-        }
-        
-        NumberAnimation {
-            id: bootFadeOut
-            target: bootVideoOverlay
-            property: "opacity"
-            to: 0.0
-            duration: 800
-            easing.type: Easing.InOutQuad
-            onFinished: {
-                bootVideoOverlay.visible = false
-                bootPlayer.stop()
+        active: false
+        source: "BootVideoPlayer.qml"
+        onLoaded: {
+            if (item && item.play) {
+                item.play()
             }
         }
     }
@@ -1185,9 +1153,7 @@ ApplicationWindow {
             voiceOverlay.opacity = 0.0
         }
         function onPlayBootVideo() {
-            bootVideoOverlay.opacity = 1.0
-            bootVideoOverlay.visible = true
-            bootPlayer.play()
+            bootVideoLoader.active = true
         }
     }
 }
