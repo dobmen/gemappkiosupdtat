@@ -17,14 +17,18 @@ class GlobalSwipeFilter(QObject):
         self.start_pos = None
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Type.MouseButtonPress or event.type() == QEvent.Type.TouchBegin:
-            pos = event.globalPosition() if hasattr(event, 'globalPosition') else event.position() if hasattr(event, 'position') else None
+        pos = None
+        if event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease, QEvent.Type.MouseMove):
+            pos = event.globalPosition().toPoint()
+        elif event.type() in (QEvent.Type.TouchBegin, QEvent.Type.TouchUpdate, QEvent.Type.TouchEnd):
+            if event.points():
+                pos = event.points()[0].globalPosition().toPoint()
+        
+        if event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.TouchBegin):
             if pos:
                 self.start_pos = pos
-        elif event.type() == QEvent.Type.MouseMove or event.type() == QEvent.Type.TouchUpdate:
-            if self.start_pos:
-                pos = event.globalPosition() if hasattr(event, 'globalPosition') else event.position() if hasattr(event, 'position') else None
-                if pos:
+        elif event.type() in (QEvent.Type.MouseMove, QEvent.Type.TouchUpdate):
+            if self.start_pos and pos:
                     dx = pos.x() - self.start_pos.x()
                     dy = pos.y() - self.start_pos.y()
                     if self.start_pos.x() < 50 and self.backend.current_app_widget:
@@ -44,10 +48,8 @@ class GlobalSwipeFilter(QObject):
                             x = int(screen.width()/2 - w/2)
                             y = int(pos.y() - h/2) # center on finger roughly
                             app_widget.setGeometry(x, y, w, h)
-        elif event.type() == QEvent.Type.MouseButtonRelease or event.type() == QEvent.Type.TouchEnd:
-            if self.start_pos:
-                pos = event.globalPosition() if hasattr(event, 'globalPosition') else event.position() if hasattr(event, 'position') else None
-                if pos:
+        elif event.type() in (QEvent.Type.MouseButtonRelease, QEvent.Type.TouchEnd):
+            if self.start_pos and pos:
                     dx = pos.x() - self.start_pos.x()
                     dy = pos.y() - self.start_pos.y()
                     

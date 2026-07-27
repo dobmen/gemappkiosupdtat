@@ -442,10 +442,25 @@ ApplicationWindow {
             color: "transparent"
             opacity: controlCenter.ccOpacity
             
+            ShaderEffectSource {
+                id: ccBlurSource
+                sourceItem: swipeView
+                sourceRect: Qt.rect(ccPanel.x, ccPanel.y, ccPanel.width, ccPanel.height)
+                visible: false
+            }
+            
+            MultiEffect {
+                anchors.fill: parent
+                source: ccBlurSource
+                blurEnabled: true
+                blur: 1.0
+                blurMax: 48
+            }
+            
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#D9111118"
+                color: "#99111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
             }
@@ -719,10 +734,26 @@ ApplicationWindow {
             anchors.leftMargin: 20
             visible: notifsPanel.nfOpacity > 0
             
+            ShaderEffectSource {
+                id: nfBlurSource
+                sourceItem: swipeView
+                sourceRect: Qt.rect(nfContainer.x, nfContainer.y, nfContainer.width, nfContainer.height)
+                visible: false
+            }
+            
+            MultiEffect {
+                anchors.fill: parent
+                source: nfBlurSource
+                blurEnabled: true
+                blur: 1.0
+                blurMax: 48
+                opacity: notifsPanel.nfOpacity
+            }
+            
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#D9111118"
+                color: "#99111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
                 opacity: notifsPanel.nfOpacity

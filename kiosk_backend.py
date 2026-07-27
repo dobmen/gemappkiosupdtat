@@ -386,7 +386,9 @@ class KioskBackend(QObject):
     @pyqtSlot()
     def minimize_app(self):
         print("[QML Backend] Minimizing active app")
+        if getattr(self, '_is_animating', False): return
         if self.current_app_widget:
+            self._is_animating = True
             widget = self.current_app_widget
             screen_rect = widget.geometry()
             
@@ -407,10 +409,12 @@ class KioskBackend(QObject):
             
             def on_finished():
                 widget.hide()
+                self._is_animating = False
             
             self._min_anim_group.finished.connect(on_finished)
             self._min_anim_group.start()
             
+            self.appMinimized.emit()
             self.current_app_widget = None
 
     @pyqtSlot(str)
@@ -437,6 +441,7 @@ class KioskBackend(QObject):
     @pyqtSlot(str)
     def launch_app(self, app_name):
         print(f"[QML Backend] Launching app: {app_name}")
+        if getattr(self, '_is_animating', False): return
         if app_name in self.running_apps:
             widget = self.running_apps[app_name]
             self._morph_app(widget)
@@ -491,6 +496,7 @@ class KioskBackend(QObject):
         QTimer.singleShot(350, do_launch)
         
     def _morph_app(self, widget):
+        self._is_animating = True
         self.current_app_widget = widget
         target_rect = getattr(self, '_last_icon_rect', None)
         
@@ -512,12 +518,17 @@ class KioskBackend(QObject):
             
             self._launch_anim_group.addAnimation(geom_anim)
             
-            self._launch_anim_group.finished.connect(widget.showFullScreen)
+            def on_launch_finished():
+                widget.showFullScreen()
+                self._is_animating = False
+            
+            self._launch_anim_group.finished.connect(on_launch_finished)
             self._launch_anim_group.start()
         else:
             widget.showFullScreen()
             widget.raise_()
             widget.activateWindow()
+            self._is_animating = False
 
     @pyqtSlot()
     def shutdown(self):

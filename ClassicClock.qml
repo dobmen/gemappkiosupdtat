@@ -22,7 +22,7 @@ Item {
     property var settings: backend ? JSON.parse(backend.clockSettingsJson || "{}") : {}
     property var clockConfig: settings["ClassicClock"] || {}
     property string bgType: clockConfig.bgType ? clockConfig.bgType : "solid"
-    property string bgValue: clockConfig.bgValue ? clockConfig.bgValue : (backend ? backend.clockAccentColor : "#3498db")
+    property string bgValue: clockConfig.bgValue ? clockConfig.bgValue : "#000000"
     property string bgValue2: clockConfig.bgValue2 ? clockConfig.bgValue2 : "#000000"
 
     Rectangle {

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.Effects
 
 Item {
     id: root
@@ -10,133 +11,245 @@ Item {
     
     signal close()
     
+    // Smooth fade in
+    opacity: 0
+    Component.onCompleted: opacity = 1.0
+    Behavior on opacity { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
+    
     Rectangle {
         anchors.fill: parent
-        color: "#E60C0C0E" // Semi-transparent black
+        color: "#99000000" // Dim background
         
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 40
-            spacing: 20
+        MouseArea { anchors.fill: parent; onClicked: root.close() }
+        
+        // One UI Style Card at the bottom
+        Rectangle {
+            width: parent.width
+            height: parent.height * 0.6
+            anchors.bottom: parent.bottom
+            color: "#18181A"
+            radius: 40
             
-            Text {
-                text: "Customize " + root.activeClock
-                color: "white"
-                font.pixelSize: 32
-                font.bold: true
-                Layout.alignment: Qt.AlignHCenter
-            }
+            // Prevent clicks from falling through
+            MouseArea { anchors.fill: parent }
             
-            // Analog Clock gets Black/White theme
-            RowLayout {
-                visible: root.activeClock === "AnalogClock"
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 40
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 40
+                spacing: 30
                 
-                Button {
-                    text: "Dark Theme"
-                    onClicked: if (backend) backend.setClockSetting("AnalogClock", "theme", "dark")
+                Text {
+                    text: "Customize " + root.activeClock
+                    color: "white"
+                    font.pixelSize: 32
+                    font.bold: true
+                    font.family: "Google Sans"
+                    Layout.alignment: Qt.AlignHCenter
                 }
-                Button {
-                    text: "Light Theme"
-                    onClicked: if (backend) backend.setClockSetting("AnalogClock", "theme", "light")
-                }
-            }
-            
-            // Other clocks get Solid/Gradient/Photo
-            TabBar {
-                id: tabs
-                visible: root.activeClock !== "AnalogClock"
-                Layout.fillWidth: true
-                Layout.preferredHeight: 50
-                TabButton { text: "Solid Colors" }
-                TabButton { text: "Gradients" }
-                TabButton { text: "Photo" }
-            }
-            
-            StackLayout {
-                visible: root.activeClock !== "AnalogClock"
-                currentIndex: tabs.currentIndex
-                Layout.fillWidth: true
-                Layout.fillHeight: true
                 
-                // Solid Colors
+                // Analog Clock gets Black/White theme
+                RowLayout {
+                    visible: root.activeClock === "AnalogClock"
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 40
+                    
+                    Rectangle {
+                        width: 150; height: 60; radius: 30
+                        color: clockConfig.theme === "dark" || !clockConfig.theme ? "#333333" : "#222222"
+                        Text { anchors.centerIn: parent; text: "Dark Theme"; color: "white"; font.family: "Google Sans"; font.pixelSize: 18 }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.setClockSetting("AnalogClock", "theme", "dark")
+                        }
+                    }
+                    Rectangle {
+                        width: 150; height: 60; radius: 30
+                        color: clockConfig.theme === "light" ? "#333333" : "#222222"
+                        Text { anchors.centerIn: parent; text: "Light Theme"; color: "white"; font.family: "Google Sans"; font.pixelSize: 18 }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.setClockSetting("AnalogClock", "theme", "light")
+                        }
+                    }
+                }
+                
+                // Segmented Control (One UI style) for Solid/Gradient/Photo
                 Item {
+                    id: segmentedControl
+                    visible: root.activeClock !== "AnalogClock"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 60
+                    
+                    property int currentIndex: 0
+                    
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "#222222"
+                        radius: 30
+                    }
+                    
                     RowLayout {
-                        anchors.centerIn: parent
-                        spacing: 20
+                        anchors.fill: parent
+                        spacing: 0
+                        
                         Repeater {
-                            model: ["#FFFFFF", "#E24A4A", "#5A8DEF", "#7B61FF", "#4AE28A", "#F2C94C"]
-                            Rectangle {
-                                width: 80; height: 80; radius: 40
-                                color: modelData
-                                border.width: clockConfig["bgValue"] === modelData ? 4 : 0
-                                border.color: "white"
+                            model: ["Solid", "Gradient", "Photo"]
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.margins: 5
+                                    radius: 25
+                                    color: segmentedControl.currentIndex === index ? "#444444" : "transparent"
+                                    Behavior on color { ColorAnimation { duration: 200 } }
+                                }
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData
+                                    color: segmentedControl.currentIndex === index ? "white" : "#AAAAAA"
+                                    font.family: "Google Sans"
+                                    font.pixelSize: 18
+                                    font.bold: segmentedControl.currentIndex === index
+                                }
+                                
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: if (backend) {
-                                        backend.setClockSetting(root.activeClock, "bgType", "solid")
-                                        backend.setClockSetting(root.activeClock, "bgValue", modelData)
-                                    }
+                                    onClicked: segmentedControl.currentIndex = index
                                 }
                             }
                         }
                     }
                 }
                 
-                // Gradients
-                Item {
-                    RowLayout {
-                        anchors.centerIn: parent
-                        spacing: 20
-                        Repeater {
-                            model: [
-                                ["#ff9966", "#ff5e62"],
-                                ["#56ab2f", "#a8e063"],
-                                ["#4568dc", "#b06ab3"]
-                            ]
-                            Rectangle {
-                                width: 80; height: 80; radius: 40
-                                gradient: Gradient {
-                                    GradientStop { position: 0.0; color: modelData[0] }
-                                    GradientStop { position: 1.0; color: modelData[1] }
+                StackLayout {
+                    visible: root.activeClock !== "AnalogClock"
+                    currentIndex: segmentedControl.currentIndex
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    
+                    // Solid Colors
+                    Item {
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 30
+                            Repeater {
+                                model: ["#000000", "#FFFFFF", "#E24A4A", "#5A8DEF", "#7B61FF", "#4AE28A", "#F2C94C"]
+                                Rectangle {
+                                    width: 80; height: 80; radius: 40
+                                    color: modelData
+                                    border.width: (clockConfig["bgValue"] === modelData || (clockConfig["bgValue"] === undefined && modelData === "#000000")) ? 5 : 0
+                                    border.color: "#888888"
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: if (backend) {
+                                            backend.setClockSetting(root.activeClock, "bgType", "solid")
+                                            backend.setClockSetting(root.activeClock, "bgValue", modelData)
+                                        }
+                                    }
                                 }
-                                border.width: clockConfig["bgValue"] === modelData[0] ? 4 : 0
-                                border.color: "white"
+                            }
+                        }
+                    }
+                    
+                    // Gradients
+                    Item {
+                        RowLayout {
+                            anchors.centerIn: parent
+                            spacing: 30
+                            Repeater {
+                                model: [
+                                    ["#ff9966", "#ff5e62"],
+                                    ["#56ab2f", "#a8e063"],
+                                    ["#4568dc", "#b06ab3"],
+                                    ["#232526", "#414345"]
+                                ]
+                                Rectangle {
+                                    width: 80; height: 80; radius: 40
+                                    gradient: Gradient {
+                                        GradientStop { position: 0.0; color: modelData[0] }
+                                        GradientStop { position: 1.0; color: modelData[1] }
+                                    }
+                                    border.width: clockConfig["bgValue"] === modelData[0] ? 5 : 0
+                                    border.color: "#888888"
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: if (backend) {
+                                            backend.setClockSetting(root.activeClock, "bgType", "gradient")
+                                            backend.setClockSetting(root.activeClock, "bgValue", modelData[0])
+                                            backend.setClockSetting(root.activeClock, "bgValue2", modelData[1])
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Photo
+                    Item {
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            Rectangle {
+                                width: 300; height: 80; radius: 40
+                                color: "#333333"
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 15
+                                    Text { text: "🖼️"; font.pixelSize: 24 }
+                                    Text {
+                                        text: "Select Photo"
+                                        color: "white"
+                                        font.family: "Google Sans"
+                                        font.pixelSize: 20
+                                    }
+                                }
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: if (backend) {
-                                        backend.setClockSetting(root.activeClock, "bgType", "gradient")
-                                        backend.setClockSetting(root.activeClock, "bgValue", modelData[0])
-                                        backend.setClockSetting(root.activeClock, "bgValue2", modelData[1])
-                                    }
+                                    onClicked: galleryPicker.visible = true
                                 }
                             }
                         }
                     }
                 }
                 
-                // Photo
-                Item {
-                    ColumnLayout {
+                // Done Button
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    width: 200
+                    height: 60
+                    radius: 30
+                    color: "#5A8DEF"
+                    
+                    Text {
                         anchors.centerIn: parent
-                        Button {
-                            text: "Select Photo from Gallery"
-                            onClicked: galleryPicker.visible = true
+                        text: "Done"
+                        color: "white"
+                        font.family: "Google Sans"
+                        font.pixelSize: 20
+                        font.bold: true
+                    }
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            root.opacity = 0.0
+                            hideTimer.start()
                         }
                     }
                 }
-            }
-            
-            Button {
-                Layout.alignment: Qt.AlignHCenter
-                text: "Done"
-                onClicked: root.close()
             }
         }
     }
     
-    // Simple Gallery Picker Overlay
+    Timer {
+        id: hideTimer
+        interval: 300
+        onTriggered: root.close()
+    }
+    
+    // Gallery Picker Overlay
     Rectangle {
         id: galleryPicker
         anchors.fill: parent
@@ -146,107 +259,55 @@ Item {
         
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
+            anchors.margins: 40
+            spacing: 20
             
             Text {
-                text: "Choose a Photo"
+                text: "Gallery"
                 color: "white"
-                font.pixelSize: 24
+                font.family: "Google Sans"
+                font.pixelSize: 32
+                font.bold: true
                 Layout.alignment: Qt.AlignHCenter
             }
             
             GridView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                cellWidth: 150
-                cellHeight: 150
-                model: ["gallery/1.jpg", "gallery/2.jpg", "gallery/3.jpg"] // MOCK
-                delegate: Image {
-                    width: 140; height: 140
-                    source: modelData
-                    fillMode: Image.PreserveAspectCrop
+                cellWidth: 200
+                cellHeight: 200
+                model: ["gallery/1.jpg", "gallery/2.jpg", "gallery/3.jpg"]
+                delegate: Rectangle {
+                    width: 180; height: 180
+                    color: "transparent"
+                    Image {
+                        anchors.fill: parent
+                        source: "file:///" + backend.getAppPath() + "/" + modelData
+                        fillMode: Image.PreserveAspectCrop
+                        layer.enabled: true
+                        layer.effect: MultiEffect { blurEnabled: false; maskEnabled: true; maskSource: maskRect }
+                    }
+                    Rectangle { id: maskRect; anchors.fill: parent; radius: 20; visible: false }
+                    
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            cropperOverlay.sourceImage = modelData
-                            cropperOverlay.visible = true
+                            if (backend) {
+                                backend.setClockSetting(root.activeClock, "bgType", "photo")
+                                backend.setClockSetting(root.activeClock, "bgValue", backend.getAppPath() + "/" + modelData)
+                            }
                             galleryPicker.visible = false
                         }
                     }
                 }
             }
             
-            Button {
-                text: "Cancel"
+            Rectangle {
+                width: 200; height: 60; radius: 30
+                color: "#333333"
                 Layout.alignment: Qt.AlignHCenter
-                onClicked: galleryPicker.visible = false
-            }
-        }
-    }
-    
-    // Simple Cropper Overlay
-    Rectangle {
-        id: cropperOverlay
-        anchors.fill: parent
-        color: "black"
-        visible: false
-        z: 20
-        
-        property string sourceImage: ""
-        
-        Flickable {
-            anchors.fill: parent
-            contentWidth: img.width * img.scale
-            contentHeight: img.height * img.scale
-            boundsBehavior: Flickable.StopAtBounds
-            
-            PinchArea {
-                width: Math.max(parent.width, img.width * img.scale)
-                height: Math.max(parent.height, img.height * img.scale)
-                
-                property real initialWidth
-                property real initialHeight
-                
-                onPinchStarted: {
-                    initialWidth = img.width * img.scale
-                    initialHeight = img.height * img.scale
-                }
-                
-                onPinchUpdated: (pinch) => {
-                    img.scale += pinch.scale - pinch.previousScale
-                    img.scale = Math.max(0.1, Math.min(img.scale, 5.0))
-                }
-                
-                Image {
-                    id: img
-                    source: cropperOverlay.sourceImage
-                    anchors.centerIn: parent
-                    fillMode: Image.PreserveAspectFit
-                }
-            }
-        }
-        
-        RowLayout {
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 40
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 40
-            
-            Button {
-                text: "Cancel"
-                onClicked: cropperOverlay.visible = false
-            }
-            Button {
-                text: "Apply"
-                onClicked: {
-                    cropperOverlay.visible = false
-                    if (backend) {
-                        backend.setClockSetting(root.activeClock, "bgType", "photo")
-                        backend.setClockSetting(root.activeClock, "bgValue", cropperOverlay.sourceImage)
-                        // Note: A true image crop would save a new file here using QImage in python.
-                        // For Kiosk OS, applying the photo and letting QML scale it is sufficient.
-                    }
-                }
+                Text { anchors.centerIn: parent; text: "Cancel"; color: "white"; font.family: "Google Sans"; font.pixelSize: 20 }
+                MouseArea { anchors.fill: parent; onClicked: galleryPicker.visible = false }
             }
         }
     }
