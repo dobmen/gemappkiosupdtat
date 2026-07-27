@@ -109,9 +109,9 @@ ApplicationWindow {
         GridView {
             id: appGrid
             anchors.fill: parent
-            anchors.margins: 40
+            anchors.margins: 60
             anchors.topMargin: 100
-            cellWidth: parent.width / 4
+            cellWidth: parent.width / 5
             cellHeight: cellWidth * 1.2
             model: backend ? backend.apps : []
             clip: true
@@ -130,23 +130,38 @@ ApplicationWindow {
                 Rectangle {
                     id: appBg
                     anchors.centerIn: parent
-                    width: 140
-                    height: 140
-                    color: tapArea.pressed ? "rgba(255,255,255,0.15)" : "transparent"
-                    radius: 70 
+                    width: 160
+                    height: 160
+                    radius: 80 
+                    
+                    property var colors: ["#E24A4A", "#5A8DEF", "#F39C12", "#27AE60", "#8E44AD", "#9B59B6"]
+                    property string fallbackColor: colors[modelData.name.length % colors.length]
+                    
+                    color: (appIcon.status === Image.Error || appIcon.status === Image.Null) ? fallbackColor : (tapArea.pressed ? "rgba(255,255,255,0.15)" : "transparent")
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: modelData.name.charAt(0).toUpperCase()
+                        color: "white"
+                        font.family: boldFont.name
+                        font.pixelSize: 60
+                        visible: (appIcon.status === Image.Error || appIcon.status === Image.Null)
+                    }
                     
                     Image {
+                        id: appIcon
                         anchors.centerIn: parent
-                        width: 120
-                        height: 120
+                        width: 160
+                        height: 160
                         source: modelData.icon
                         fillMode: Image.PreserveAspectFit
+                        visible: (status === Image.Ready)
                     }
                 }
                 
                 Text {
                     anchors.top: appBg.bottom
-                    anchors.topMargin: 10
+                    anchors.topMargin: 15
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: modelData.name
                     color: "white"
