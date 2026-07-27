@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
-import Qt5Compat.GraphicalEffects
+
 
 Item {
     id: root
@@ -280,15 +280,19 @@ Item {
                 delegate: Rectangle {
                     width: 180; height: 180
                     color: "transparent"
-                    Image {
-                        id: galleryImg
+                    Rectangle {
                         anchors.fill: parent
-                        source: "file:///" + backend.getAppPath() + "/" + modelData
-                        fillMode: Image.PreserveAspectCrop
-                        layer.enabled: true
-                        layer.effect: OpacityMask { maskSource: maskRect }
+                        color: "transparent"
+                        clip: true
+                        radius: 20
+                        
+                        Image {
+                            id: galleryImg
+                            anchors.fill: parent
+                            source: "file:///" + backend.getAppPath() + "/" + modelData
+                            fillMode: Image.PreserveAspectCrop
+                        }
                     }
-                    Rectangle { id: maskRect; anchors.fill: parent; radius: 20; visible: false }
                     
                     MouseArea {
                         anchors.fill: parent
