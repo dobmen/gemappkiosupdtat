@@ -55,8 +55,8 @@ if [ "$XDG_SESSION_TYPE" == "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
         source venv/bin/activate
     fi
 
-    echo "[Kiosk OS] Starting system (QML Beta)..."
-    python3 main_qml.py
+    echo "[Kiosk OS] Starting system..."
+    python3 main.py
 else
     # We are NOT in Wayland yet. Launch labwc!
     echo "[Kiosk OS] Starting Wayland Compositor (labwc)..."

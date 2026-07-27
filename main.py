@@ -1,26 +1,31 @@
-print("[DEBUG] main.py: Starting execution")
 import sys
-print("[DEBUG] main.py: Imported sys")
-from PyQt6.QtWidgets import QApplication
-print("[DEBUG] main.py: Imported QApplication")
+import os
+from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtQml import QQmlApplicationEngine
+from kiosk_backend import KioskBackend
 
-# CRITICAL: QApplication MUST be created before importing kiosk.py
-# because kiosk.py and its components query QGuiApplication.primaryScreen() at module level!
-app = QApplication(sys.argv)
-
-print("[DEBUG] main.py: About to import NestKiosk from kiosk.py")
-from kiosk import NestKiosk
-print("[DEBUG] main.py: Imported NestKiosk successfully")
+print("[DEBUG] main.py: Starting execution in QML Mode")
 
 def main():
-    # Initialize and display the main Kiosk OS window
-    print("[DEBUG] main.py: Instantiating NestKiosk...")
-    window = NestKiosk()
+    # Enforce Wayland natively for QML hardware acceleration
+    os.environ["QT_QPA_PLATFORM"] = "wayland"
     
-    print("[DEBUG] main.py: Calling window.show()...")
-    window.show()
+    app = QGuiApplication(sys.argv)
+    engine = QQmlApplicationEngine()
     
-    print("[DEBUG] main.py: window.show() succeeded! Calling app.exec()...")
+    print("[DEBUG] main.py: Initializing QML Backend")
+    backend = KioskBackend()
+    engine.rootContext().setContextProperty("backend", backend)
+    
+    qml_file = os.path.join(os.path.dirname(__file__), 'desktop.qml')
+    print(f"[DEBUG] main.py: Loading {qml_file}")
+    engine.load(qml_file)
+    
+    if not engine.rootObjects():
+        print("[ERROR] main.py: Failed to load QML file!")
+        sys.exit(-1)
+        
+    print("[DEBUG] main.py: QML Engine started successfully!")
     sys.exit(app.exec())
 
 if __name__ == "__main__":

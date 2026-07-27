@@ -10,29 +10,72 @@ ApplicationWindow {
     height: 1920
     title: "Kiosk OS"
     
-    // Transparent background for true Wayland overlay (if supported)
     color: "#0C0C0E"
-
-    // The backend bridge
-    // backend property will be injected from Python via QQmlApplicationEngine
     
-    // Main content area (App Drawer, Clock, etc.)
+    FontLoader { id: mainFont; source: "fonts/GoogleSans-Regular.ttf" }
+    FontLoader { id: boldFont; source: "fonts/GoogleSans-Bold.ttf" }
+
     SwipeView {
         id: swipeView
         anchors.fill: parent
-        currentIndex: 1 // Start on the middle page (Clock)
+        currentIndex: 1 
         
         // Page 0: App Drawer
         Item {
             id: appDrawerPage
             Rectangle {
                 anchors.fill: parent
-                color: "#181825"
-                Text {
-                    anchors.centerIn: parent
-                    text: "App Drawer (QML)"
-                    color: "white"
-                    font.pixelSize: 48
+                color: "#121215"
+                
+                GridView {
+                    id: appGrid
+                    anchors.fill: parent
+                    anchors.margins: 60
+                    anchors.topMargin: 100
+                    cellWidth: parent.width / 4
+                    cellHeight: cellWidth * 1.2
+                    model: backend ? backend.apps : []
+                    clip: true
+                    
+                    delegate: Item {
+                        width: appGrid.cellWidth
+                        height: appGrid.cellHeight
+                        
+                        Rectangle {
+                            id: appBg
+                            anchors.centerIn: parent
+                            width: parent.width * 0.8
+                            height: parent.width * 0.8
+                            color: tapArea.pressed ? "rgba(255,255,255,0.1)" : "transparent"
+                            radius: 30
+                            
+                            Image {
+                                anchors.centerIn: parent
+                                width: parent.width * 0.6
+                                height: parent.width * 0.6
+                                source: modelData.icon
+                                fillMode: Image.PreserveAspectFit
+                            }
+                        }
+                        
+                        Text {
+                            anchors.top: appBg.bottom
+                            anchors.topMargin: 15
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: modelData.name
+                            color: "white"
+                            font.family: boldFont.name
+                            font.pixelSize: 18
+                        }
+                        
+                        MouseArea {
+                            id: tapArea
+                            anchors.fill: parent
+                            onClicked: {
+                                if (backend) backend.launch_app(modelData.name)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -43,33 +86,57 @@ ApplicationWindow {
             Rectangle {
                 anchors.fill: parent
                 color: "transparent"
+                
                 Text {
                     anchors.centerIn: parent
                     text: backend ? backend.currentTime : "12:00"
                     color: "white"
-                    font.pixelSize: 120
-                    font.bold: true
+                    font.family: boldFont.name
+                    font.pixelSize: 220
+                }
+                
+                Text {
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 80
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "▲ Swipe right for apps"
+                    color: "#555555"
+                    font.family: boldFont.name
+                    font.pixelSize: 24
                 }
             }
         }
         
-        // Page 2: Settings
+        // Page 2: Media
         Item {
-            id: settingsPage
+            id: mediaPage
             Rectangle {
                 anchors.fill: parent
                 color: "#181825"
-                Text {
+                
+                ColumnLayout {
                     anchors.centerIn: parent
-                    text: "Settings (QML)"
-                    color: "white"
-                    font.pixelSize: 48
+                    spacing: 20
+                    
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "Now Playing"
+                        color: "white"
+                        font.family: boldFont.name
+                        font.pixelSize: 48
+                    }
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "No active stream • Swipe up to launch Spotify"
+                        color: "#AAAAAA"
+                        font.family: mainFont.name
+                        font.pixelSize: 24
+                    }
                 }
             }
         }
     }
 
-    // Page indicator
     PageIndicator {
         id: indicator
         count: swipeView.count
@@ -79,73 +146,136 @@ ApplicationWindow {
         anchors.horizontalCenter: parent.horizontalCenter
     }
 
-    // Control Center (Hardware Accelerated Blur)
+    // Hardware Accelerated Control Center
     Item {
         id: controlCenter
         anchors.fill: parent
         visible: ccOpacity > 0
-        
         property real ccOpacity: 0.0
         
-        // Dim overlay
         Rectangle {
             anchors.fill: parent
             color: "black"
             opacity: controlCenter.ccOpacity * 0.4
+            
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    ccAnim.to = 0.0
+                    ccAnim.start()
+                }
+            }
         }
         
-        // Glassmorphic Panel
         Rectangle {
             id: ccPanel
-            width: parent.width * 0.4
-            height: parent.height * 0.8
+            width: parent.width * 0.45
+            height: parent.height * 0.65
             anchors.top: parent.top
             anchors.right: parent.right
             anchors.topMargin: 20
             anchors.rightMargin: 20
             radius: 40
-            color: Qt.rgba(0.2, 0.2, 0.2, 0.5)
+            color: Qt.rgba(0.1, 0.1, 0.1, 0.6)
             opacity: controlCenter.ccOpacity
             
-            // This is the Qt6 hardware blur effect
+            // True GPU Hardware Blur
             layer.enabled: true
             layer.effect: MultiEffect {
                 blurEnabled: true
-                blurMax: 64
-                blur: 1.0 // 100% of blurMax
+                blurMax: 80
+                blur: 1.0 
                 saturation: 0.2
             }
             
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 40
+                spacing: 30
                 
-                Text {
-                    text: "Control Center"
-                    color: "white"
-                    font.pixelSize: 48
-                    font.bold: true
-                }
-                
-                // Brightness Slider
-                Slider {
+                // Header
+                RowLayout {
                     Layout.fillWidth: true
-                    value: 0.8
+                    Text {
+                        text: "Control Center"
+                        color: "white"
+                        font.family: boldFont.name
+                        font.pixelSize: 32
+                        Layout.fillWidth: true
+                    }
+                    Rectangle {
+                        width: 50
+                        height: 50
+                        radius: 25
+                        color: "rgba(255, 50, 50, 0.8)"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "⏻"
+                            color: "white"
+                            font.pixelSize: 24
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.shutdown()
+                        }
+                    }
                 }
                 
+                // Connection Toggles
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 20
+                    
+                    // Network
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 90
+                        radius: 30
+                        color: (backend && backend.networkEnabled) ? "#5A8DEF" : "rgba(255,255,255,0.1)"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "📶 Network"
+                            color: "white"
+                            font.family: boldFont.name
+                            font.pixelSize: 20
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.toggleNetwork()
+                        }
+                    }
+                    
+                    // Bluetooth
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 90
+                        radius: 30
+                        color: (backend && backend.bluetoothEnabled) ? "#5A8DEF" : "rgba(255,255,255,0.1)"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "󰂯 Bluetooth"
+                            color: "white"
+                            font.family: boldFont.name
+                            font.pixelSize: 20
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.toggleBluetooth()
+                        }
+                    }
+                }
+                
+                // Sliders
                 Item { Layout.fillHeight: true }
             }
             
-            // Slide animation
             transform: Translate {
                 y: -ccPanel.height * (1.0 - controlCenter.ccOpacity)
             }
         }
-        
-        // Mouse area for swiping down from top right
     }
     
-    // Invisible drag handle for Control Center
+    // Top right invisible swipe handle
     MouseArea {
         id: ccDragHandle
         anchors.top: parent.top
@@ -172,23 +302,20 @@ ApplicationWindow {
         onReleased: {
             isDragging = false
             if (controlCenter.ccOpacity > 0.3) {
-                // Snap open
                 ccAnim.to = 1.0
                 ccAnim.start()
             } else {
-                // Snap closed
                 ccAnim.to = 0.0
                 ccAnim.start()
             }
         }
     }
     
-    // Animation for snapping
     NumberAnimation {
         id: ccAnim
         target: controlCenter
         property: "ccOpacity"
-        duration: 300
+        duration: 350
         easing.type: Easing.OutCubic
     }
 }
