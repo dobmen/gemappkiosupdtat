@@ -39,7 +39,7 @@ apt-get install -y -qq \
     qt6-wayland \
     libqt6webenginecore6 libqt6webenginewidgets6 \
     alsa-utils network-manager bluez \
-    libnss3 git curl unzip wget
+    libnss3 git curl unzip wget openssh-server
 
 echo "[3/8] Removing legacy LightDM & Openbox to ensure pure Wayland boot..."
 systemctl disable lightdm 2>/dev/null || true
