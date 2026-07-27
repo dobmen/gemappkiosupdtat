@@ -139,13 +139,13 @@ class KioskBackend(QObject):
         print("[QML Backend] Minimizing active app")
         for widget in self.running_apps.values():
             if widget.isVisible():
-                anim = QPropertyAnimation(widget, b"windowOpacity", widget)
-                anim.setDuration(300)
-                anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-                anim.setStartValue(1.0)
-                anim.setEndValue(0.0)
-                anim.finished.connect(widget.hide)
-                anim.start()
+                widget._fade_anim = QPropertyAnimation(widget, b"windowOpacity")
+                widget._fade_anim.setDuration(300)
+                widget._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+                widget._fade_anim.setStartValue(1.0)
+                widget._fade_anim.setEndValue(0.0)
+                widget._fade_anim.finished.connect(widget.hide)
+                widget._fade_anim.start()
 
     @pyqtSlot(str)
     def kill_app(self, app_name):
@@ -215,12 +215,12 @@ class KioskBackend(QObject):
             page_instance.raise_()
             page_instance.activateWindow()
             
-            anim = QPropertyAnimation(page_instance, b"windowOpacity", page_instance)
-            anim.setDuration(350)
-            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-            anim.setStartValue(0.0)
-            anim.setEndValue(1.0)
-            anim.start()
+            page_instance._fade_anim = QPropertyAnimation(page_instance, b"windowOpacity")
+            page_instance._fade_anim.setDuration(350)
+            page_instance._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            page_instance._fade_anim.setStartValue(0.0)
+            page_instance._fade_anim.setEndValue(1.0)
+            page_instance._fade_anim.start()
             
             self._update_active_tasks()
 
