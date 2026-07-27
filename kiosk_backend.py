@@ -98,6 +98,7 @@ class KioskBackend(QObject):
         self._notifications = []
         
         self.running_apps = {}
+        self.current_app_widget = None
         self._active_tasks = []
         
         if self.get_system_setting("just_updated", False) and os.path.exists("videos/update_boot.mp4"):

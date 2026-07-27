@@ -1094,7 +1094,8 @@ ApplicationWindow {
             }
             
             Loader {
-                anchors.fill: parent
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 active: clockSelector.showCustomizer
                 source: "ClockCustomizer.qml"
                 onLoaded: {

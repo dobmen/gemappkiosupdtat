@@ -26,6 +26,13 @@ Item {
         anchors.fill: parent
         color: "transparent"
         
+        property var settings: backend ? JSON.parse(backend.clockSettingsJson || "{}") : {}
+        property var clockConfig: settings["AnalogClock"] || {}
+        property string theme: clockConfig.theme ? clockConfig.theme : "dark"
+        property color bg: theme === "dark" ? "#121215" : "#EEEEEE"
+        property color fg: theme === "dark" ? "white" : "black"
+        property color accent: backend ? backend.clockAccentColor : "#3498db"
+
         Item {
             anchors.centerIn: parent
             width: 400
