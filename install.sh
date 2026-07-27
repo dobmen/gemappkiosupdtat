@@ -47,6 +47,7 @@ systemctl disable lightdm 2>/dev/null || true
 systemctl disable gdm3 2>/dev/null || true
 
 echo "[3.5/8] Granting hardware permissions to user..."
+getent group seat || groupadd seat
 usermod -a -G seat,video,render,input $REAL_USER
 systemctl enable seatd
 
