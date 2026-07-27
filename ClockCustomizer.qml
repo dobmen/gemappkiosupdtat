@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
-import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 
 Item {
     id: root
@@ -281,11 +281,12 @@ Item {
                     width: 180; height: 180
                     color: "transparent"
                     Image {
+                        id: galleryImg
                         anchors.fill: parent
                         source: "file:///" + backend.getAppPath() + "/" + modelData
                         fillMode: Image.PreserveAspectCrop
                         layer.enabled: true
-                        layer.effect: MultiEffect { blurEnabled: false; maskEnabled: true; maskSource: maskRect }
+                        layer.effect: OpacityMask { maskSource: maskRect }
                     }
                     Rectangle { id: maskRect; anchors.fill: parent; radius: 20; visible: false }
                     

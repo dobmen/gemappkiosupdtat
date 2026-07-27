@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 
 ApplicationWindow {
     id: root
@@ -449,12 +449,10 @@ ApplicationWindow {
                 visible: false
             }
             
-            MultiEffect {
+            FastBlur {
                 anchors.fill: parent
                 source: ccBlurSource
-                blurEnabled: true
-                blur: 1.0
-                blurMax: 48
+                radius: 48
             }
             
             Rectangle {
@@ -741,12 +739,10 @@ ApplicationWindow {
                 visible: false
             }
             
-            MultiEffect {
+            FastBlur {
                 anchors.fill: parent
                 source: nfBlurSource
-                blurEnabled: true
-                blur: 1.0
-                blurMax: 48
+                radius: 48
                 opacity: notifsPanel.nfOpacity
             }
             
