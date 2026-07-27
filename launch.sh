@@ -14,6 +14,11 @@ export QT_QPA_PLATFORM=wayland
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export PYGAME_HIDE_SUPPORT_PROMPT=1
 
+# Systemd system services drop XDG_RUNTIME_DIR even with PAMName=login
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+fi
+
 # Check if we are already inside Wayland
 if [ "$XDG_SESSION_TYPE" == "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
     echo "[Hardware Detect] Checking connected display resolution..."
@@ -77,11 +82,6 @@ EOF
     <cornerRadius>0</cornerRadius>
     <borderWidth>0</borderWidth>
   </theme>
-  <keyboard>
-    <default>
-      <keybind key="W-q"><action name="Exit"/></keybind>
-    </default>
-  </keyboard>
 </labwc_config>
 EOF
 
