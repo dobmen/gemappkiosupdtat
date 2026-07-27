@@ -3,32 +3,122 @@ import os
 import time
 import json
 import importlib
-from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve
+import ssl
+import urllib.request
+import subprocess
+import threading
+from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve, QThread
+
+class SystemUpdateCheckThread(QThread):
+    update_detected = pyqtSignal(str)
+    def run(self):
+        try:
+            local_version = "0.1.0"
+            if os.path.exists("os_version.json"):
+                with open("os_version.json", "r") as f:
+                    local_version = json.load(f).get("version", "0.1.0")
+            channel = "main"
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            url = f"https://raw.githubusercontent.com/dobmen/gemappkiosupdtat/{channel}/os_version.json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'KioskOS-Updater/1.0'})
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
+                remote_version = json.loads(response.read().decode('utf-8')).get("version", local_version)
+                if remote_version != local_version:
+                    self.update_detected.emit(remote_version)
+        except Exception: pass
+
+class AppStoreUpdateCheckThread(QThread):
+    updates_detected = pyqtSignal(list)
+    def run(self):
+        try:
+            installed_modules = []
+            if os.path.exists("apps"):
+                for filename in os.listdir("apps"):
+                    if filename.endswith(".py") and filename not in ["__init__.py", "app_store.py", "local_music.py", "web_app.py", "settings.py", "gallery.py"]:
+                        installed_modules.append(filename.replace(".py", ""))
+            if not installed_modules: return
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            url = "https://raw.githubusercontent.com/dobmen/gemappkiosstor/main/store_manifest.json"
+            req = urllib.request.Request(url, headers={'User-Agent': 'KioskOS-AppUpdater/1.0'})
+            with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
+                remote_apps = json.loads(response.read().decode('utf-8')).get("apps", [])
+                remote_versions = {app["filename"].replace(".py", ""): app["version"] for app in remote_apps}
+                apps_needing_update = []
+                for app_id in installed_modules:
+                    if app_id in remote_versions:
+                        ver_path = os.path.join("apps", f"{app_id}.ver")
+                        current_v = "0.0.0"
+                        if os.path.exists(ver_path):
+                            with open(ver_path, "r") as f: current_v = f.read().strip()
+                        if remote_versions[app_id] > current_v:
+                            apps_needing_update.append(app_id.replace("_", " ").title())
+                if apps_needing_update:
+                    self.updates_detected.emit(apps_needing_update)
+        except Exception: pass
 
 class KioskBackend(QObject):
     timeChanged = pyqtSignal()
     networkChanged = pyqtSignal()
     bluetoothChanged = pyqtSignal()
+    dndChanged = pyqtSignal()
+    silentChanged = pyqtSignal()
+    brightnessChanged = pyqtSignal()
+    volumeChanged = pyqtSignal()
     appsChanged = pyqtSignal()
     activeTasksChanged = pyqtSignal()
+    notificationsChanged = pyqtSignal()
+    
     appOpened = pyqtSignal(str)
     appMinimized = pyqtSignal()
+    showToast = pyqtSignal(str, str, str, str)
+    voiceListening = pyqtSignal()
+    voiceUpdate = pyqtSignal(str)
+    voiceHide = pyqtSignal()
 
     def __init__(self):
         super().__init__()
         self._current_time = "12:00"
         self._network_enabled = self.get_system_setting("network_enabled", True)
         self._bluetooth_enabled = self.get_system_setting("bluetooth_enabled", False)
+        self._dnd_enabled = self.get_system_setting("dnd_mode", False)
+        self._silent_enabled = self.get_system_setting("silent_mode", False)
+        self._brightness = 80
+        self._volume = 50
         self._apps = self.build_app_list()
+        self._notifications = []
         
         self.running_apps = {}
         self._active_tasks = []
         
-        # Timer for clock
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_time)
         self.timer.start(1000)
         self.update_time()
+        
+        self.update_check_timer = QTimer(self)
+        self.update_check_timer.timeout.connect(self.check_for_system_update)
+        self.update_check_timer.start(86400000)
+        QTimer.singleShot(5000, self.check_for_system_update)
+
+        self.app_update_timer = QTimer(self)
+        self.app_update_timer.timeout.connect(self.check_for_app_updates)
+        self.app_update_timer.start(86400000)
+        QTimer.singleShot(8000, self.check_for_app_updates)
+        
+        try:
+            from components.voice_assistant import VoiceAssistantThread
+            self.voice_thread = VoiceAssistantThread()
+            self.voice_thread.command_recognized.connect(self.handle_voice_intent)
+            self.voice_thread.wake_word_detected.connect(self.voiceListening)
+            self.voice_thread.transcription_update.connect(self.voiceUpdate)
+            self.voice_thread.sleep_mode.connect(self.voiceHide)
+            self.voice_thread.start()
+        except Exception as e:
+            print("Could not start Voice Assistant:", e)
 
     def get_system_setting(self, key, default):
         try:
@@ -101,6 +191,31 @@ class KioskBackend(QObject):
     def bluetoothEnabled(self):
         return self._bluetooth_enabled
         
+    @pyqtProperty(bool, notify=dndChanged)
+    def dndEnabled(self): return self._dnd_enabled
+        
+    @pyqtProperty(bool, notify=silentChanged)
+    def silentEnabled(self): return self._silent_enabled
+        
+    @pyqtProperty(int, notify=brightnessChanged)
+    def brightness(self): return self._brightness
+        
+    @brightness.setter
+    def brightness(self, value):
+        self._brightness = value
+        self.brightnessChanged.emit()
+
+    @pyqtProperty(int, notify=volumeChanged)
+    def volume(self): return self._volume
+        
+    @volume.setter
+    def volume(self, value):
+        self._volume = value
+        self.volumeChanged.emit()
+        
+    @pyqtProperty(list, notify=notificationsChanged)
+    def notifications(self): return self._notifications
+        
     @pyqtProperty(list, notify=activeTasksChanged)
     def activeTasks(self):
         return self._active_tasks
@@ -135,6 +250,66 @@ class KioskBackend(QObject):
         self._bluetooth_enabled = not self._bluetooth_enabled
         self.save_system_setting("bluetooth_enabled", self._bluetooth_enabled)
         self.bluetoothChanged.emit()
+
+    @pyqtSlot()
+    def toggleDND(self):
+        self._dnd_enabled = not self._dnd_enabled
+        self.save_system_setting("dnd_mode", self._dnd_enabled)
+        self.dndChanged.emit()
+        
+    @pyqtSlot()
+    def toggleSilent(self):
+        self._silent_enabled = not self._silent_enabled
+        self.save_system_setting("silent_mode", self._silent_enabled)
+        self.silentChanged.emit()
+        
+    @pyqtSlot()
+    def clearNotifications(self):
+        self._notifications.clear()
+        self.notificationsChanged.emit()
+        
+    @pyqtSlot(int)
+    def removeNotification(self, index):
+        if 0 <= index < len(self._notifications):
+            self._notifications.pop(index)
+            self.notificationsChanged.emit()
+
+    def add_notification(self, app, title, desc, icon="🔔"):
+        self._notifications.insert(0, {"app": app, "title": title, "desc": desc, "icon": icon})
+        self.notificationsChanged.emit()
+        self.showToast.emit(app, title, desc, icon)
+        
+    def check_for_system_update(self):
+        if hasattr(self, 'update_thread') and self.update_thread and self.update_thread.isRunning(): return
+        self.update_thread = SystemUpdateCheckThread()
+        self.update_thread.update_detected.connect(self.on_system_update_detected)
+        self.update_thread.finished.connect(self.update_thread.deleteLater)
+        self.update_thread.start()
+
+    def on_system_update_detected(self, new_version):
+        if getattr(self, '_notified_update_version', None) == new_version: return
+        self._notified_update_version = new_version
+        self.add_notification("Settings", "System Update", "There is a new update available.", "⚙️")
+
+    def check_for_app_updates(self):
+        if hasattr(self, 'app_update_thread') and self.app_update_thread and self.app_update_thread.isRunning(): return
+        self.app_update_thread = AppStoreUpdateCheckThread()
+        self.app_update_thread.updates_detected.connect(self.on_app_updates_detected)
+        self.app_update_thread.finished.connect(self.app_update_thread.deleteLater)
+        self.app_update_thread.start()
+
+    def on_app_updates_detected(self, apps_list):
+        count = len(apps_list)
+        desc = f"{count} app{'s' if count > 1 else ''} need updates."
+        self.add_notification("App Store", "App Updates", desc, "📦")
+
+    @pyqtSlot(str)
+    def handle_voice_intent(self, intent):
+        if intent == "close_app" or intent == "home":
+            self.minimize_app()
+        elif intent.startswith("launch_"):
+            app = intent.replace("launch_", "").replace("_", " ").title()
+            self.launch_app(app)
 
     @pyqtSlot()
     def minimize_app(self):

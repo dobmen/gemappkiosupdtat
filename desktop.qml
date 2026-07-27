@@ -522,6 +522,107 @@ ApplicationWindow {
                         }
                     }
                 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 20
+                    
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 90
+                        radius: 30
+                        color: (backend && backend.dndEnabled) ? "#7B61FF" : "rgba(255,255,255,0.1)"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "🌙 DND"
+                            color: "white"
+                            font.family: boldFont.name
+                            font.pixelSize: 20
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.toggleDND()
+                        }
+                    }
+                    
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 90
+                        radius: 30
+                        color: (backend && backend.silentEnabled) ? "#E24A4A" : "rgba(255,255,255,0.1)"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "🔕 Silent"
+                            color: "white"
+                            font.family: boldFont.name
+                            font.pixelSize: 20
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.toggleSilent()
+                        }
+                    }
+                }
+                
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 180
+                    radius: 30
+                    color: "rgba(255,255,255,0.05)"
+                    
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 30
+                        spacing: 20
+                        
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "☀️"; font.pixelSize: 24; color: "white" }
+                            Slider {
+                                Layout.fillWidth: true
+                                from: 0; to: 100
+                                value: backend ? backend.brightness : 80
+                                onValueChanged: if (backend) backend.brightness = value
+                                background: Rectangle {
+                                    x: parent.leftPadding
+                                    y: parent.topPadding + parent.availableHeight / 2 - height / 2
+                                    implicitWidth: 200; implicitHeight: 16
+                                    width: parent.availableWidth; height: implicitHeight
+                                    radius: 8; color: "rgba(0,0,0,0.4)"
+                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "rgba(255,255,255,0.8)"; radius: 8 }
+                                }
+                                handle: Rectangle {
+                                    x: parent.leftPadding + parent.visualPosition * (parent.availableWidth - width)
+                                    y: parent.topPadding + parent.availableHeight / 2 - height / 2
+                                    implicitWidth: 32; implicitHeight: 32; radius: 16; color: "white"
+                                }
+                            }
+                        }
+                        
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text { text: "🔊"; font.pixelSize: 24; color: "white" }
+                            Slider {
+                                Layout.fillWidth: true
+                                from: 0; to: 100
+                                value: backend ? backend.volume : 50
+                                onValueChanged: if (backend) backend.volume = value
+                                background: Rectangle {
+                                    x: parent.leftPadding
+                                    y: parent.topPadding + parent.availableHeight / 2 - height / 2
+                                    implicitWidth: 200; implicitHeight: 16
+                                    width: parent.availableWidth; height: implicitHeight
+                                    radius: 8; color: "rgba(0,0,0,0.4)"
+                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "rgba(255,255,255,0.8)"; radius: 8 }
+                                }
+                                handle: Rectangle {
+                                    x: parent.leftPadding + parent.visualPosition * (parent.availableWidth - width)
+                                    y: parent.topPadding + parent.availableHeight / 2 - height / 2
+                                    implicitWidth: 32; implicitHeight: 32; radius: 16; color: "white"
+                                }
+                            }
+                        }
+                    }
+                }
                 
                 Item { Layout.fillHeight: true }
             }
@@ -582,6 +683,306 @@ ApplicationWindow {
     }
     
     // ==========================================
+    // 4. NOTIFICATION CENTER (Left Sliding Panel)
+    // ==========================================
+    Item {
+        id: notifsPanel
+        anchors.fill: parent
+        visible: nfOpacity > 0
+        property real nfOpacity: 0.0
+        
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+            opacity: notifsPanel.nfOpacity * 0.4
+            MouseArea {
+                anchors.fill: parent
+                onClicked: { nfAnim.to = 0.0; nfAnim.start() }
+                
+                property real startY: 0
+                onPressed: (mouse) => { startY = mouse.y }
+                onPositionChanged: (mouse) => {
+                    let dy = mouse.y - startY
+                    if (dy < 0) {
+                        notifsPanel.nfOpacity = 1.0 + (dy / nfContainer.height)
+                    }
+                }
+                onReleased: (mouse) => {
+                    if (notifsPanel.nfOpacity < 0.8) {
+                        nfAnim.to = 0.0; nfAnim.start()
+                    } else {
+                        nfAnim.to = 1.0; nfAnim.start()
+                    }
+                }
+            }
+        }
+        
+        Rectangle {
+            id: nfContainer
+            width: parent.width * 0.45
+            height: parent.height * 0.65
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.topMargin: 20
+            anchors.leftMargin: 20
+            radius: 40
+            color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
+            border.color: "#19FFFFFF"
+            border.width: 1
+            opacity: notifsPanel.nfOpacity
+            
+            ShaderEffectSource {
+                id: nfEffectSource
+                sourceItem: root.contentItem
+                sourceRect: Qt.rect(nfContainer.x, nfContainer.y - nfTranslate.y, nfContainer.width, nfContainer.height)
+                visible: false
+                live: true
+            }
+            
+            MultiEffect {
+                source: nfEffectSource
+                anchors.fill: parent
+                blurEnabled: true
+                blurMax: 80
+                blur: 1.0 
+                saturation: 0.2
+            }
+            
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 40
+                spacing: 20
+                
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: "Recent Alerts"
+                        color: "white"
+                        font.family: boldFont.name
+                        font.pixelSize: 32
+                        Layout.fillWidth: true
+                    }
+                    Rectangle {
+                        width: 120; height: 50
+                        radius: 25; color: "rgba(255,255,255,0.15)"
+                        Text { anchors.centerIn: parent; text: "Clear All"; color: "white"; font.pixelSize: 18; font.family: boldFont.name }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: if (backend) backend.clearNotifications()
+                        }
+                    }
+                }
+                
+                ListView {
+                    id: notifList
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    spacing: 15
+                    model: backend ? backend.notifications : []
+                    
+                    delegate: Rectangle {
+                        width: notifList.width
+                        height: 90
+                        radius: 20
+                        color: "#22222B"
+                        border.color: "#2F2F3B"
+                        border.width: 1
+                        
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 15
+                            spacing: 15
+                            
+                            Rectangle {
+                                width: 50; height: 50; radius: 25; color: "rgba(255,255,255,0.1)"
+                                Text { anchors.centerIn: parent; text: modelData.icon; font.pixelSize: 24 }
+                            }
+                            
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Text { text: modelData.title; color: "white"; font.family: boldFont.name; font.pixelSize: 18 }
+                                Text { text: modelData.desc; color: "#AAAAAA"; font.family: mainFont.name; font.pixelSize: 16; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            }
+                            
+                            Rectangle {
+                                width: 40; height: 40; radius: 20; color: "transparent"
+                                Text { anchors.centerIn: parent; text: "✕"; color: "#888888"; font.pixelSize: 20; font.family: boldFont.name }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: if (backend) backend.removeNotification(index)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            transform: Translate {
+                id: nfTranslate
+                y: -nfContainer.height * (1.0 - notifsPanel.nfOpacity)
+            }
+        }
+    }
+    
+    // Top left invisible swipe handle for Notification Center
+    MouseArea {
+        id: nfDragHandle
+        x: 0; y: 0
+        width: parent.width / 2
+        height: 150
+        
+        property real startY: 0
+        property real startOpacity: 0
+        property bool isDragging: false
+        
+        onPressed: (mouse) => {
+            startY = mouse.y
+            startOpacity = notifsPanel.nfOpacity
+            isDragging = true
+        }
+        
+        onPositionChanged: (mouse) => {
+            if (isDragging) {
+                let dy = mouse.y - startY
+                if (dy > 0) {
+                    let newOpacity = startOpacity + (dy / nfContainer.height)
+                    notifsPanel.nfOpacity = Math.max(0, Math.min(1, newOpacity))
+                }
+            }
+        }
+        
+        onReleased: {
+            isDragging = false
+            if (notifsPanel.nfOpacity > 0.3) {
+                nfAnim.to = 1.0; nfAnim.start()
+            } else {
+                nfAnim.to = 0.0; nfAnim.start()
+            }
+        }
+    }
+    
+    NumberAnimation {
+        id: nfAnim
+        target: notifsPanel
+        property: "nfOpacity"
+        duration: 350
+        easing.type: Easing.OutCubic
+    }
+
+    // ==========================================
+    // 5. TOAST NOTIFICATION OVERLAY
+    // ==========================================
+    Rectangle {
+        id: toastPopup
+        width: 420
+        height: 85
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: -120
+        radius: 42
+        color: "#22222B"
+        border.color: "#33333F"
+        border.width: 1
+        z: 900
+        
+        property string tApp: ""
+        property string tTitle: ""
+        property string tDesc: ""
+        property string tIcon: "🔔"
+        
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 15
+            spacing: 15
+            
+            Rectangle {
+                width: 50; height: 50; radius: 25; color: "rgba(255,255,255,0.1)"
+                Text { anchors.centerIn: parent; text: toastPopup.tIcon; font.pixelSize: 24 }
+            }
+            
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 2
+                Text { text: toastPopup.tTitle; color: "white"; font.family: boldFont.name; font.pixelSize: 18 }
+                Text { text: toastPopup.tDesc; color: "#AAAAAA"; font.family: mainFont.name; font.pixelSize: 16 }
+            }
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                if (toastPopup.tApp && backend) backend.launch_app(toastPopup.tApp)
+                toastAnimOut.start()
+            }
+        }
+        
+        NumberAnimation {
+            id: toastAnimIn
+            target: toastPopup
+            property: "y"
+            to: 25
+            duration: 450
+            easing.type: Easing.OutBack
+            onFinished: toastTimer.start()
+        }
+        
+        NumberAnimation {
+            id: toastAnimOut
+            target: toastPopup
+            property: "y"
+            to: -120
+            duration: 400
+            easing.type: Easing.InBack
+        }
+        
+        Timer {
+            id: toastTimer
+            interval: 4000
+            onTriggered: toastAnimOut.start()
+        }
+    }
+    
+    // ==========================================
+    // 6. VOICE ASSISTANT OVERLAY
+    // ==========================================
+    Rectangle {
+        id: voiceOverlay
+        anchors.fill: parent
+        color: "rgba(0, 0, 0, 0.8)"
+        z: 950
+        opacity: 0.0
+        visible: opacity > 0
+        
+        property string vText: "Listening..."
+        
+        Behavior on opacity { NumberAnimation { duration: 250 } }
+        
+        ColumnLayout {
+            anchors.centerIn: parent
+            spacing: 30
+            
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "🎙️"
+                font.pixelSize: 100
+                color: "white"
+            }
+            
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: voiceOverlay.vText
+                color: "white"
+                font.family: boldFont.name
+                font.pixelSize: 48
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                Layout.maximumWidth: root.width * 0.8
+            }
+        }
+    }
+    
+    // ==========================================
     // SYSTEM APP TRANSITION OVERLAY
     // ==========================================
     Rectangle {
@@ -604,6 +1005,25 @@ ApplicationWindow {
         }
         function onAppMinimized() {
             appTransitionOverlay.opacity = 0.0
+        }
+        function onShowToast(app, title, desc, icon) {
+            toastPopup.tApp = app
+            toastPopup.tTitle = title
+            toastPopup.tDesc = desc
+            toastPopup.tIcon = icon
+            toastAnimOut.stop()
+            toastTimer.stop()
+            toastAnimIn.start()
+        }
+        function onVoiceListening() {
+            voiceOverlay.vText = "Listening..."
+            voiceOverlay.opacity = 1.0
+        }
+        function onVoiceUpdate(text) {
+            voiceOverlay.vText = text
+        }
+        function onVoiceHide() {
+            voiceOverlay.opacity = 0.0
         }
     }
 }
