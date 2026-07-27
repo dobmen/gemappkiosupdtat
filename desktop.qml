@@ -113,7 +113,7 @@ ApplicationWindow {
         height: parent.height
         edge: Qt.BottomEdge
         dragMargin: 150 // Allow starting swipe from bottom 150px
-        interactive: controlCenter.ccOpacity === 0 && notificationCenter.ncOpacity === 0
+        interactive: controlCenter.ccOpacity === 0 && notifsPanel.nfOpacity === 0
         
         background: Rectangle {
             color: "#121215"

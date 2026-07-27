@@ -8,6 +8,7 @@ import urllib.request
 import subprocess
 import threading
 from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve, QThread
+from PyQt6.QtWidgets import QWidget
 
 class SystemUpdateCheckThread(QThread):
     update_detected = pyqtSignal(str)
@@ -432,11 +433,12 @@ class KioskBackend(QObject):
                         for attr_name in dir(mod):
                             if attr_name.endswith("Page") and attr_name not in ["AppStorePage", "LocalMusicPage", "GalleryPage"]:
                                 page_class = getattr(mod, attr_name)
-                                try:
-                                    page_instance = page_class(on_close=self.minimize_app)
-                                except TypeError:
-                                    page_instance = page_class()
-                                break
+                                if isinstance(page_class, type) and issubclass(page_class, QWidget):
+                                    try:
+                                        page_instance = page_class(on_close=self.minimize_app)
+                                    except TypeError:
+                                        page_instance = page_class()
+                                    break
                 except Exception as e:
                     print(f"Error launching dynamic app '{app_name}': {e}")
                     
