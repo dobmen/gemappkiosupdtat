@@ -93,81 +93,77 @@ ApplicationWindow {
     }
 
     // ==========================================
-    // 2. APP DRAWER (Sliding Panel from Bottom)
+    // 2. APP DRAWER (Native QML Drawer)
     // ==========================================
-    Item {
+    Drawer {
         id: appDrawer
         width: parent.width
         height: parent.height
-        y: parent.height - drawerOffset
+        edge: Qt.BottomEdge
+        dragMargin: 150 // Allow starting swipe from bottom 150px
         
-        property real drawerOffset: 0.0
-        
-        Rectangle {
-            anchors.fill: parent
+        background: Rectangle {
             color: "#121215"
+        }
+        
+        GridView {
+            id: appGrid
+            anchors.fill: parent
+            anchors.margins: 40
+            anchors.topMargin: 100
+            cellWidth: parent.width / 4
+            cellHeight: cellWidth * 1.2
+            model: backend ? backend.apps : []
+            clip: true
             
-            GridView {
-                id: appGrid
-                anchors.fill: parent
-                anchors.margins: 40
-                anchors.topMargin: 100
-                cellWidth: parent.width / 4
-                cellHeight: cellWidth * 1.2
-                model: backend ? backend.apps : []
-                clip: true
+            // Close the drawer if pulled down past the top!
+            onMovementEnded: {
+                if (atYBeginning && contentY < -150) {
+                    appDrawer.close()
+                }
+            }
+            
+            delegate: Item {
+                width: appGrid.cellWidth
+                height: appGrid.cellHeight
                 
-                // Close the drawer if pulled down past the top!
-                onMovementEnded: {
-                    if (atYBeginning && contentY < -150) {
-                        drawerAnim.to = 0.0
-                        drawerAnim.start()
+                Rectangle {
+                    id: appBg
+                    anchors.centerIn: parent
+                    width: 140
+                    height: 140
+                    color: tapArea.pressed ? "rgba(255,255,255,0.15)" : "transparent"
+                    radius: 70 
+                    
+                    Image {
+                        anchors.centerIn: parent
+                        width: 120
+                        height: 120
+                        source: modelData.icon
+                        fillMode: Image.PreserveAspectFit
                     }
                 }
                 
-                delegate: Item {
-                    width: appGrid.cellWidth
-                    height: appGrid.cellHeight
-                    
-                    Rectangle {
-                        id: appBg
-                        anchors.centerIn: parent
-                        width: 140
-                        height: 140
-                        color: tapArea.pressed ? "rgba(255,255,255,0.15)" : "transparent"
-                        radius: 70 // Perfect circle like old DynamicAppButton
-                        
-                        Image {
-                            anchors.centerIn: parent
-                            width: 120
-                            height: 120
-                            source: modelData.icon
-                            fillMode: Image.PreserveAspectFit
-                        }
-                    }
-                    
-                    Text {
-                        anchors.top: appBg.bottom
-                        anchors.topMargin: 10
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: modelData.name
-                        color: "white"
-                        font.family: boldFont.name
-                        font.pixelSize: 20
-                    }
-                    
-                    MouseArea {
-                        id: tapArea
-                        anchors.fill: parent
-                        onClicked: {
-                            if (backend) backend.launch_app(modelData.name)
-                        }
+                Text {
+                    anchors.top: appBg.bottom
+                    anchors.topMargin: 10
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: modelData.name
+                    color: "white"
+                    font.family: boldFont.name
+                    font.pixelSize: 20
+                }
+                
+                MouseArea {
+                    id: tapArea
+                    anchors.fill: parent
+                    onClicked: {
+                        if (backend) backend.launch_app(modelData.name)
                     }
                 }
             }
         }
         
-        // Add a "Swipe down to close" indicator at the top
         Text {
             anchors.top: parent.top
             anchors.topMargin: 40
@@ -177,53 +173,6 @@ ApplicationWindow {
             font.family: boldFont.name
             font.pixelSize: 24
         }
-    }
-
-    // Gesture Handle for App Drawer (Bottom edge - to open it)
-    MouseArea {
-        id: drawerHandle
-        width: parent.width
-        height: 150
-        // Ensure this handle only exists at the bottom when drawer is closed
-        y: parent.height - height
-        visible: appDrawer.drawerOffset < root.height * 0.1
-        
-        property real startY: 0
-        property real startOffset: 0
-        property bool isDragging: false
-        
-        onPressed: (mouse) => {
-            startY = mouse.y
-            startOffset = appDrawer.drawerOffset
-            isDragging = true
-        }
-        
-        onPositionChanged: (mouse) => {
-            if (isDragging) {
-                let dy = mouse.y - startY
-                let newOffset = startOffset - dy
-                appDrawer.drawerOffset = Math.max(0, Math.min(root.height, newOffset))
-            }
-        }
-        
-        onReleased: {
-            isDragging = false
-            if (appDrawer.drawerOffset > root.height * 0.25) {
-                drawerAnim.to = root.height
-                drawerAnim.start()
-            } else {
-                drawerAnim.to = 0.0
-                drawerAnim.start()
-            }
-        }
-    }
-
-    NumberAnimation {
-        id: drawerAnim
-        target: appDrawer
-        property: "drawerOffset"
-        duration: 350
-        easing.type: Easing.OutCubic
     }
 
 
