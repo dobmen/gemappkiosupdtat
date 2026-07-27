@@ -85,5 +85,6 @@ EOF
 </labwc_config>
 EOF
 
-    exec labwc
+    export LIBSEAT_BACKEND=seatd
+    exec dbus-run-session -- labwc
 fi

@@ -40,14 +40,15 @@ apt-get install -y -qq \
     libqt6webenginecore6 libqt6webenginewidgets6 \
     alsa-utils network-manager bluez \
     libnss3 git curl unzip wget openssh-server \
-    polkitd seatd
+    polkitd seatd dbus-x11
 
 echo "[3/8] Removing legacy LightDM & Openbox to ensure pure Wayland boot..."
 systemctl disable lightdm 2>/dev/null || true
 systemctl disable gdm3 2>/dev/null || true
 
 echo "[3.5/8] Granting hardware permissions to user..."
-usermod -a -G video,render,input $REAL_USER
+usermod -a -G _seatd,video,render,input $REAL_USER
+systemctl enable seatd
 
 echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
 if [ -d "$INSTALL_DIR/.git" ]; then
@@ -103,7 +104,8 @@ SERVICE_FILE="/etc/systemd/system/kiosk-wayland.service"
 cat <<EOF > "$SERVICE_FILE"
 [Unit]
 Description=Labwc Kiosk Wayland Session
-After=systemd-user-sessions.service network.target sound.target
+After=systemd-user-sessions.service network.target sound.target seatd.service
+Wants=seatd.service
 Conflicts=getty@tty1.service
 
 [Service]
