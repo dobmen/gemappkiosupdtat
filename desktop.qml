@@ -233,7 +233,7 @@ ApplicationWindow {
                             Layout.preferredWidth: 60
                             Layout.preferredHeight: 60
                             radius: 30
-                            color: tapKill.pressed ? "#E24A4A" : "rgba(226,74,74,0.15)"
+                            color: tapKill.pressed ? "#E24A4A" : "#26E24A4A"
                             Text {
                                 anchors.centerIn: parent
                                 text: "✕"
@@ -254,7 +254,7 @@ ApplicationWindow {
                     width: 200
                     height: 100
                     radius: 12
-                    color: tapCloseAll.pressed ? "#E24A4A" : "rgba(226,74,74,0.1)"
+                    color: tapCloseAll.pressed ? "#E24A4A" : "#19E24A4A"
                     border.color: "#E24A4A"
                     border.width: 1
                     visible: backend && backend.activeTasks.length > 1
@@ -312,7 +312,7 @@ ApplicationWindow {
                     property var colors: ["#E24A4A", "#5A8DEF", "#F39C12", "#27AE60", "#8E44AD", "#9B59B6"]
                     property string fallbackColor: colors[modelData.name.length % colors.length]
                     
-                    color: (appIcon.status === Image.Error || appIcon.status === Image.Null) ? fallbackColor : (tapArea.pressed ? "rgba(255,255,255,0.15)" : "transparent")
+                    color: (appIcon.status === Image.Error || appIcon.status === Image.Null) ? fallbackColor : (tapArea.pressed ? "#26FFFFFF" : "transparent")
                     
                     Text {
                         anchors.centerIn: parent
@@ -537,7 +537,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         height: 90
                         radius: 30
-                        color: (backend && backend.dndEnabled) ? "#7B61FF" : "rgba(255,255,255,0.1)"
+                        color: (backend && backend.dndEnabled) ? "#7B61FF" : "#19FFFFFF"
                         Text {
                             anchors.centerIn: parent
                             text: "🌙 DND"
@@ -555,7 +555,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         height: 90
                         radius: 30
-                        color: (backend && backend.silentEnabled) ? "#E24A4A" : "rgba(255,255,255,0.1)"
+                        color: (backend && backend.silentEnabled) ? "#E24A4A" : "#19FFFFFF"
                         Text {
                             anchors.centerIn: parent
                             text: "🔕 Silent"
@@ -574,7 +574,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     height: 180
                     radius: 30
-                    color: "rgba(255,255,255,0.05)"
+                    color: "#0CFFFFFF"
                     
                     ColumnLayout {
                         anchors.fill: parent
@@ -594,8 +594,8 @@ ApplicationWindow {
                                     y: parent.topPadding + parent.availableHeight / 2 - height / 2
                                     implicitWidth: 200; implicitHeight: 16
                                     width: parent.availableWidth; height: implicitHeight
-                                    radius: 8; color: "rgba(0,0,0,0.4)"
-                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "rgba(255,255,255,0.8)"; radius: 8 }
+                                    radius: 8; color: "#66000000"
+                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "#CCFFFFFF"; radius: 8 }
                                 }
                                 handle: Rectangle {
                                     x: parent.leftPadding + parent.visualPosition * (parent.availableWidth - width)
@@ -618,8 +618,8 @@ ApplicationWindow {
                                     y: parent.topPadding + parent.availableHeight / 2 - height / 2
                                     implicitWidth: 200; implicitHeight: 16
                                     width: parent.availableWidth; height: implicitHeight
-                                    radius: 8; color: "rgba(0,0,0,0.4)"
-                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "rgba(255,255,255,0.8)"; radius: 8 }
+                                    radius: 8; color: "#66000000"
+                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "#CCFFFFFF"; radius: 8 }
                                 }
                                 handle: Rectangle {
                                     x: parent.leftPadding + parent.visualPosition * (parent.availableWidth - width)
@@ -771,7 +771,7 @@ ApplicationWindow {
                     }
                     Rectangle {
                         width: 120; height: 50
-                        radius: 25; color: "rgba(255,255,255,0.15)"
+                        radius: 25; color: "#26FFFFFF"
                         Text { anchors.centerIn: parent; text: "Clear All"; color: "white"; font.pixelSize: 18; font.family: boldFont.name }
                         MouseArea {
                             anchors.fill: parent
@@ -802,7 +802,7 @@ ApplicationWindow {
                             spacing: 15
                             
                             Rectangle {
-                                width: 50; height: 50; radius: 25; color: "rgba(255,255,255,0.1)"
+                                width: 50; height: 50; radius: 25; color: "#19FFFFFF"
                                 Text { anchors.centerIn: parent; text: modelData.icon; font.pixelSize: 24 }
                             }
                             
@@ -904,7 +904,7 @@ ApplicationWindow {
             spacing: 15
             
             Rectangle {
-                width: 50; height: 50; radius: 25; color: "rgba(255,255,255,0.1)"
+                width: 50; height: 50; radius: 25; color: "#19FFFFFF"
                 Text { anchors.centerIn: parent; text: toastPopup.tIcon; font.pixelSize: 24 }
             }
             
@@ -956,7 +956,7 @@ ApplicationWindow {
     Rectangle {
         id: voiceOverlay
         anchors.fill: parent
-        color: "rgba(0, 0, 0, 0.8)"
+        color: "#CC000000"
         z: 950
         opacity: 0.0
         visible: opacity > 0
@@ -1011,7 +1011,7 @@ ApplicationWindow {
     Rectangle {
         id: clockSelector
         anchors.fill: parent
-        color: "rgba(10, 10, 15, 0.9)"
+        color: "#E50A0A0F"
         z: 980
         visible: false
         opacity: 0.0
