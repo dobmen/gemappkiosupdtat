@@ -1585,24 +1585,15 @@ class NestKiosk(QMainWindow):
             
             target_panel.move(target_panel.x(), new_y)
             progress = (new_y + CC_HEIGHT_MOD) / CC_HEIGHT_MOD
-            blur_val = int(20 * progress)
-            if blur_val > 0:
-                effect1 = self.main_carousel.graphicsEffect()
-                if not effect1:
-                    effect1 = QGraphicsBlurEffect(self.main_carousel)
-                    self.main_carousel.setGraphicsEffect(effect1)
-                effect1.setBlurRadius(blur_val)
-                
-                if hasattr(self, 'app_stack'):
-                    effect2 = self.app_stack.graphicsEffect()
-                    if not effect2:
-                        effect2 = QGraphicsBlurEffect(self.app_stack)
-                        self.app_stack.setGraphicsEffect(effect2)
-                    effect2.setBlurRadius(blur_val)
-            else:
-                self.main_carousel.setGraphicsEffect(None)
-                if hasattr(self, 'app_stack'): 
-                    self.app_stack.setGraphicsEffect(None)
+            
+            # USE DIM OVERLAY INSTEAD OF EXPENSIVE CPU BLUR
+            dim_val = int(200 * progress)
+            self.dim_overlay.setStyleSheet(f"background-color: rgba(0, 0, 0, {dim_val});")
+            
+            # Remove any lingering blur effects that kill performance
+            self.main_carousel.setGraphicsEffect(None)
+            if hasattr(self, 'app_stack'): 
+                self.app_stack.setGraphicsEffect(None)
         elif self.active_gesture == 'horizontal':
             current_page = self.home_pages[self.home_index]
             current_page.move(dx, 0)
