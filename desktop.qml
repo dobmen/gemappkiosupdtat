@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
+import QtMultimedia
 
 ApplicationWindow {
     id: root
@@ -33,12 +34,19 @@ ApplicationWindow {
                 anchors.fill: parent
                 color: "#0C0C0E"
                 
-                Text {
-                    anchors.centerIn: parent
-                    text: backend ? backend.currentTime : "12:00"
-                    color: "white"
-                    font.family: boldFont.name
-                    font.pixelSize: 220
+                Loader {
+                    id: clockLoader
+                    anchors.fill: parent
+                    source: backend ? (backend.activeClockface + ".qml") : "ClassicClock.qml"
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onPressAndHold: {
+                        clockSelector.visible = true
+                        clockSelectorAnim.to = 1.0
+                        clockSelectorAnim.start()
+                    }
                 }
                 
                 Text {
@@ -998,6 +1006,157 @@ ApplicationWindow {
         }
     }
     
+    // ==========================================
+    // 7. CLOCK SELECTOR OVERLAY
+    // ==========================================
+    Rectangle {
+        id: clockSelector
+        anchors.fill: parent
+        color: "rgba(10, 10, 15, 0.9)"
+        z: 980
+        visible: false
+        opacity: 0.0
+
+        property var faces: ["ClassicClock", "StackedClock", "AnalogClock"]
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 20
+
+            Text {
+                text: "Swipe to browse • Tap to apply"
+                color: "#AAAAAA"
+                font.family: boldFont.name
+                font.pixelSize: 24
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 40
+            }
+
+            ListView {
+                id: clockListView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                orientation: ListView.Horizontal
+                snapMode: ListView.SnapOneItem
+                highlightRangeMode: ListView.StrictlyEnforceRange
+                model: clockSelector.faces
+                spacing: 40
+                
+                delegate: Item {
+                    width: clockListView.width
+                    height: clockListView.height
+                    
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width * 0.8
+                        height: parent.height * 0.8
+                        color: "transparent"
+                        border.color: "#333340"
+                        border.width: 2
+                        radius: 30
+                        clip: true
+
+                        Loader {
+                            anchors.fill: parent
+                            anchors.margins: 20
+                            source: modelData + ".qml"
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                if (backend) backend.activeClockface = modelData
+                                clockSelectorAnim.to = 0.0
+                                clockSelectorAnim.start()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 160
+                height: 60
+                radius: 30
+                color: "#2C2C35"
+                Layout.alignment: Qt.AlignHCenter
+                Layout.bottomMargin: 60
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: "Cancel"
+                    color: "white"
+                    font.family: boldFont.name
+                    font.pixelSize: 20
+                }
+                
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        clockSelectorAnim.to = 0.0
+                        clockSelectorAnim.start()
+                    }
+                }
+            }
+        }
+
+        NumberAnimation {
+            id: clockSelectorAnim
+            target: clockSelector
+            property: "opacity"
+            duration: 300
+            easing.type: Easing.OutCubic
+            onFinished: if (clockSelector.opacity === 0.0) clockSelector.visible = false
+        }
+    }
+
+    // ==========================================
+    // 8. BOOT VIDEO PLAYER
+    // ==========================================
+    Rectangle {
+        id: bootVideoOverlay
+        anchors.fill: parent
+        color: "black"
+        z: 1000
+        visible: false
+        opacity: 0.0
+        
+        MediaPlayer {
+            id: bootPlayer
+            source: "file://" + Qt.application.dir + "/videos/update_boot.mp4"
+            audioOutput: AudioOutput {}
+            videoOutput: bootVideoOut
+            
+            onPlaybackStateChanged: {
+                if (playbackState === MediaPlayer.StoppedState) {
+                    bootFadeOut.start()
+                }
+            }
+            onErrorOccurred: {
+                bootFadeOut.start()
+            }
+        }
+        
+        VideoOutput {
+            id: bootVideoOut
+            anchors.fill: parent
+            fillMode: VideoOutput.PreserveAspectCrop
+        }
+        
+        NumberAnimation {
+            id: bootFadeOut
+            target: bootVideoOverlay
+            property: "opacity"
+            to: 0.0
+            duration: 800
+            easing.type: Easing.InOutQuad
+            onFinished: {
+                bootVideoOverlay.visible = false
+                bootPlayer.stop()
+            }
+        }
+    }
+
     Connections {
         target: backend
         function onAppOpened(appName) {
@@ -1024,6 +1183,11 @@ ApplicationWindow {
         }
         function onVoiceHide() {
             voiceOverlay.opacity = 0.0
+        }
+        function onPlayBootVideo() {
+            bootVideoOverlay.opacity = 1.0
+            bootVideoOverlay.visible = true
+            bootPlayer.play()
         }
     }
 }

@@ -71,6 +71,8 @@ class KioskBackend(QObject):
     appsChanged = pyqtSignal()
     activeTasksChanged = pyqtSignal()
     notificationsChanged = pyqtSignal()
+    activeClockfaceChanged = pyqtSignal()
+    playBootVideo = pyqtSignal()
     
     appOpened = pyqtSignal(str)
     appMinimized = pyqtSignal()
@@ -88,11 +90,17 @@ class KioskBackend(QObject):
         self._silent_enabled = self.get_system_setting("silent_mode", False)
         self._brightness = 80
         self._volume = 50
+        self._active_clockface = self.get_system_setting("clockface", "ClassicClock")
         self._apps = self.build_app_list()
         self._notifications = []
         
         self.running_apps = {}
         self._active_tasks = []
+        
+        if self.get_system_setting("just_updated", False) and os.path.exists("videos/update_boot.mp4"):
+            self.save_system_setting("just_updated", False)
+            QTimer.singleShot(500, self.playBootVideo.emit)
+
         
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_time)
@@ -215,6 +223,16 @@ class KioskBackend(QObject):
         
     @pyqtProperty(list, notify=notificationsChanged)
     def notifications(self): return self._notifications
+        
+    @pyqtProperty(str, notify=activeClockfaceChanged)
+    def activeClockface(self): return self._active_clockface
+        
+    @activeClockface.setter
+    def activeClockface(self, value):
+        if self._active_clockface != value:
+            self._active_clockface = value
+            self.save_system_setting("clockface", value)
+            self.activeClockfaceChanged.emit()
         
     @pyqtProperty(list, notify=activeTasksChanged)
     def activeTasks(self):
