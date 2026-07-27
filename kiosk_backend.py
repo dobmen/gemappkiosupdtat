@@ -3,7 +3,7 @@ import os
 import time
 import json
 import importlib
-from PyQt6.QtCore import QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve
 
 class KioskBackend(QObject):
     timeChanged = pyqtSignal()
@@ -138,7 +138,14 @@ class KioskBackend(QObject):
     def minimize_app(self):
         print("[QML Backend] Minimizing active app")
         for widget in self.running_apps.values():
-            widget.hide()
+            if widget.isVisible():
+                anim = QPropertyAnimation(widget, b"windowOpacity", widget)
+                anim.setDuration(300)
+                anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+                anim.setStartValue(1.0)
+                anim.setEndValue(0.0)
+                anim.finished.connect(widget.hide)
+                anim.start()
 
     @pyqtSlot(str)
     def kill_app(self, app_name):
@@ -203,9 +210,18 @@ class KioskBackend(QObject):
                 
         if page_instance is not None:
             self.running_apps[app_name] = page_instance
+            page_instance.setWindowOpacity(0.0)
             page_instance.showFullScreen()
             page_instance.raise_()
             page_instance.activateWindow()
+            
+            anim = QPropertyAnimation(page_instance, b"windowOpacity", page_instance)
+            anim.setDuration(350)
+            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            anim.setStartValue(0.0)
+            anim.setEndValue(1.0)
+            anim.start()
+            
             self._update_active_tasks()
 
     @pyqtSlot()

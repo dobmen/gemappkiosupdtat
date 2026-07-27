@@ -372,45 +372,32 @@ ApplicationWindow {
 
 
     // ==========================================
-    // 3. CONTROL CENTER (Sliding Panel from Top Right)
+    // 3. CONTROL CENTER (Native Drawer)
     // ==========================================
-    Item {
+    Drawer {
         id: controlCenter
-        anchors.fill: parent
-        visible: ccOpacity > 0
-        property real ccOpacity: 0.0
+        width: parent.width * 0.45 + 20
+        height: parent.height * 0.65 + 20
+        edge: Qt.TopEdge
+        dragMargin: 150
+        interactive: true
         
-        // Dim overlay when CC is open
-        Rectangle {
-            anchors.fill: parent
-            color: "black"
-            opacity: controlCenter.ccOpacity * 0.4
-            
-            MouseArea {
-                anchors.fill: parent
-                onClicked: {
-                    ccAnim.to = 0.0
-                    ccAnim.start()
-                }
-            }
-        }
+        background: Item {} // Transparent background to keep floating look
         
         Rectangle {
             id: ccPanel
-            width: parent.width * 0.45
-            height: parent.height * 0.65
-            anchors.top: parent.top
-            anchors.right: parent.right
+            anchors.fill: parent
             anchors.topMargin: 20
             anchors.rightMargin: 20
             radius: 40
-            color: "transparent"
-            opacity: controlCenter.ccOpacity
+            color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
+            border.color: "#19FFFFFF"
+            border.width: 1
             
             ShaderEffectSource {
                 id: effectSource
                 sourceItem: swipeView
-                sourceRect: Qt.rect(ccPanel.x, ccPanel.y - ccTranslate.y, ccPanel.width, ccPanel.height)
+                sourceRect: Qt.rect(parent.width - ccPanel.width, 0, ccPanel.width, ccPanel.height)
                 visible: false
             }
             
@@ -423,18 +410,11 @@ ApplicationWindow {
                 saturation: 0.2
             }
             
-            Rectangle {
-                anchors.fill: parent
-                radius: 40
-                color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
-                border.color: "#19FFFFFF"
-                border.width: 1
-            }
-            
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 40
                 spacing: 30
+                z: 10
                 
                 RowLayout {
                     Layout.fillWidth: true
@@ -471,7 +451,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         height: 90
                         radius: 30
-                        color: (backend && backend.networkEnabled) ? "#5A8DEF" : "#19FFFFFF"
+                        color: (backend && backend.networkEnabled) ? "#5A8DEF" : "rgba(255,255,255,0.1)"
                         Text {
                             anchors.centerIn: parent
                             text: "📶 Network"
@@ -489,7 +469,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         height: 90
                         radius: 30
-                        color: (backend && backend.bluetoothEnabled) ? "#5A8DEF" : "#19FFFFFF"
+                        color: (backend && backend.bluetoothEnabled) ? "#5A8DEF" : "rgba(255,255,255,0.1)"
                         Text {
                             anchors.centerIn: parent
                             text: "󰂯 Bluetooth"
@@ -506,58 +486,6 @@ ApplicationWindow {
                 
                 Item { Layout.fillHeight: true }
             }
-            
-            transform: Translate {
-                id: ccTranslate
-                y: -ccPanel.height * (1.0 - controlCenter.ccOpacity)
-            }
         }
-    }
-    
-    // Top right invisible swipe handle for Control Center
-    MouseArea {
-        id: ccDragHandle
-        x: parent.width / 2
-        width: parent.width / 2
-        height: 150
-        // Move handle down slightly so we can always push it back up!
-        y: controlCenter.ccOpacity * ccPanel.height - (controlCenter.ccOpacity > 0 ? height : 0)
-        
-        property real startY: 0
-        property real startOpacity: 0
-        property bool isDragging: false
-        
-        onPressed: (mouse) => {
-            startY = mouse.y
-            startOpacity = controlCenter.ccOpacity
-            isDragging = true
-        }
-        
-        onPositionChanged: (mouse) => {
-            if (isDragging) {
-                let dy = mouse.y - startY
-                let newOpacity = startOpacity + (dy / ccPanel.height)
-                controlCenter.ccOpacity = Math.max(0, Math.min(1, newOpacity))
-            }
-        }
-        
-        onReleased: {
-            isDragging = false
-            if (controlCenter.ccOpacity > 0.3) {
-                ccAnim.to = 1.0
-                ccAnim.start()
-            } else {
-                ccAnim.to = 0.0
-                ccAnim.start()
-            }
-        }
-    }
-    
-    NumberAnimation {
-        id: ccAnim
-        target: controlCenter
-        property: "ccOpacity"
-        duration: 350
-        easing.type: Easing.OutCubic
     }
 }
