@@ -113,6 +113,7 @@ ApplicationWindow {
         height: parent.height
         edge: Qt.BottomEdge
         dragMargin: 150 // Allow starting swipe from bottom 150px
+        interactive: controlCenter.ccOpacity === 0 && notificationCenter.ncOpacity === 0
         
         background: Rectangle {
             color: "#121215"
@@ -438,26 +439,10 @@ ApplicationWindow {
             color: "transparent"
             opacity: controlCenter.ccOpacity
             
-            ShaderEffectSource {
-                id: effectSource
-                sourceItem: swipeView
-                sourceRect: Qt.rect(ccPanel.x, ccPanel.y - ccTranslate.y, ccPanel.width, ccPanel.height)
-                visible: false
-            }
-            
-            MultiEffect {
-                source: effectSource
-                anchors.fill: parent
-                blurEnabled: true
-                blurMax: 32
-                blur: 1.0 
-                saturation: 0.2
-            }
-            
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
+                color: "#D9111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
             }
@@ -588,6 +573,7 @@ ApplicationWindow {
                         
                         RowLayout {
                             Layout.fillWidth: true
+                            spacing: 15
                             Text { text: "☀️"; font.pixelSize: 24; color: "white" }
                             Slider {
                                 Layout.fillWidth: true
@@ -597,21 +583,17 @@ ApplicationWindow {
                                 background: Rectangle {
                                     x: parent.leftPadding
                                     y: parent.topPadding + parent.availableHeight / 2 - height / 2
-                                    implicitWidth: 200; implicitHeight: 16
-                                    width: parent.availableWidth; height: implicitHeight
-                                    radius: 8; color: "#66000000"
-                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "#CCFFFFFF"; radius: 8 }
+                                    width: parent.availableWidth; height: 40
+                                    radius: 20; color: "#33FFFFFF"
+                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "white"; radius: 20 }
                                 }
-                                handle: Rectangle {
-                                    x: parent.leftPadding + parent.visualPosition * (parent.availableWidth - width)
-                                    y: parent.topPadding + parent.availableHeight / 2 - height / 2
-                                    implicitWidth: 32; implicitHeight: 32; radius: 16; color: "white"
-                                }
+                                handle: Item {}
                             }
                         }
                         
                         RowLayout {
                             Layout.fillWidth: true
+                            spacing: 15
                             Text { text: "🔊"; font.pixelSize: 24; color: "white" }
                             Slider {
                                 Layout.fillWidth: true
@@ -621,16 +603,11 @@ ApplicationWindow {
                                 background: Rectangle {
                                     x: parent.leftPadding
                                     y: parent.topPadding + parent.availableHeight / 2 - height / 2
-                                    implicitWidth: 200; implicitHeight: 16
-                                    width: parent.availableWidth; height: implicitHeight
-                                    radius: 8; color: "#66000000"
-                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "#CCFFFFFF"; radius: 8 }
+                                    width: parent.availableWidth; height: 40
+                                    radius: 20; color: "#33FFFFFF"
+                                    Rectangle { width: parent.visualPosition * parent.width; height: parent.height; color: "white"; radius: 20 }
                                 }
-                                handle: Rectangle {
-                                    x: parent.leftPadding + parent.visualPosition * (parent.availableWidth - width)
-                                    y: parent.topPadding + parent.availableHeight / 2 - height / 2
-                                    implicitWidth: 32; implicitHeight: 32; radius: 16; color: "white"
-                                }
+                                handle: Item {}
                             }
                         }
                     }
@@ -736,28 +713,17 @@ ApplicationWindow {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.topMargin: 20
-            anchors.leftMargin: 20
-            radius: 40
-            color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
-            border.color: "#19FFFFFF"
-            border.width: 1
-            opacity: notifsPanel.nfOpacity
+            anchors.fill: parent
+            anchors.margins: 20
+            visible: notifsPanel.nfOpacity > 0
             
-            ShaderEffectSource {
-                id: nfEffectSource
-                sourceItem: root.contentItem
-                sourceRect: Qt.rect(nfContainer.x, nfContainer.y - nfTranslate.y, nfContainer.width, nfContainer.height)
-                visible: false
-                live: true
-            }
-            
-            MultiEffect {
-                source: nfEffectSource
+            Rectangle {
                 anchors.fill: parent
-                blurEnabled: true
-                blurMax: 32
-                blur: 1.0 
-                saturation: 0.2
+                radius: 40
+                color: "#D9111118"
+                border.color: "#19FFFFFF"
+                border.width: 1
+                opacity: notifsPanel.nfOpacity
             }
             
             ColumnLayout {

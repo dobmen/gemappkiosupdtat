@@ -3,6 +3,7 @@ import os
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import QObject, QEvent
 from PyQt6.QtQml import QQmlApplicationEngine
+from PyQt6.QtWebEngineWidgets import QWebEngineView  # Import early to share OpenGL contexts
 from kiosk_backend import KioskBackend
 
 print("[DEBUG] main.py: Starting execution in QML Mode")
