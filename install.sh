@@ -59,14 +59,14 @@ ACTION=="add|change", SUBSYSTEM=="input", ATTRS{name}=="Wacom HID 4808 Pen", ENV
 EOF
 udevadm control --reload-rules && udevadm trigger
 
-echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
+echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (beta branch)..."
 if [ -d "$INSTALL_DIR/.git" ]; then
     sudo -u $REAL_USER git -C "$INSTALL_DIR" fetch origin
-    sudo -u $REAL_USER git -C "$INSTALL_DIR" reset --hard origin/main
-    sudo -u $REAL_USER git -C "$INSTALL_DIR" checkout -B main origin/main
+    sudo -u $REAL_USER git -C "$INSTALL_DIR" reset --hard origin/beta
+    sudo -u $REAL_USER git -C "$INSTALL_DIR" checkout -B beta origin/beta
 else
     rm -rf "$INSTALL_DIR"
-    sudo -u $REAL_USER git clone -b main "$GITHUB_REPO_URL" "$INSTALL_DIR"
+    sudo -u $REAL_USER git clone -b beta "$GITHUB_REPO_URL" "$INSTALL_DIR"
 fi
 cd "$INSTALL_DIR"
 
