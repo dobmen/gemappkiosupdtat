@@ -163,7 +163,6 @@ ApplicationWindow {
     // Gesture Handle for App Drawer (Bottom edge)
     MouseArea {
         id: drawerHandle
-        anchors.bottom: parent.bottom
         width: parent.width
         height: 150
         // Ensure this handle moves up with the drawer so we can drag it back down!
@@ -271,7 +270,7 @@ ApplicationWindow {
             ShaderEffectSource {
                 id: effectSource
                 sourceItem: swipeView
-                sourceRect: Qt.rect(ccPanel.x, ccPanel.y - ccPanel.transform[0].y, ccPanel.width, ccPanel.height)
+                sourceRect: Qt.rect(ccPanel.x, ccPanel.y - ccTranslate.y, ccPanel.width, ccPanel.height)
                 visible: false
             }
             
@@ -369,6 +368,7 @@ ApplicationWindow {
             }
             
             transform: Translate {
+                id: ccTranslate
                 y: -ccPanel.height * (1.0 - controlCenter.ccOpacity)
             }
         }
@@ -377,8 +377,7 @@ ApplicationWindow {
     // Top right invisible swipe handle for Control Center
     MouseArea {
         id: ccDragHandle
-        anchors.top: parent.top
-        anchors.right: parent.right
+        x: parent.width / 2
         width: parent.width / 2
         height: 150
         // Move handle down slightly so we can always push it back up!
