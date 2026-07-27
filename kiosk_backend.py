@@ -171,7 +171,7 @@ class KioskBackend(QObject):
                     downloaded_apps.append({"name": clean_name, "icon": icon_path})
 
         system_apps = [
-            {"name": "Settings", "icon": "icons/settings.svg"}
+            {"name": "Settings", "icon": "icons/settings.png"}
         ]
 
         seen = set()
