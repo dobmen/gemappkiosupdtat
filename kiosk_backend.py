@@ -3,7 +3,7 @@ import os
 import time
 import json
 import importlib
-from PyQt6.QtCore import QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve
 
 class KioskBackend(QObject):
     timeChanged = pyqtSignal()
@@ -210,13 +210,17 @@ class KioskBackend(QObject):
                 
         if page_instance is not None:
             self.running_apps[app_name] = page_instance
+            
+            # Enable Wayland translucent buffers so opacity animations work
+            page_instance.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            
             page_instance.setWindowOpacity(0.0)
             page_instance.showFullScreen()
             page_instance.raise_()
             page_instance.activateWindow()
             
             page_instance._fade_anim = QPropertyAnimation(page_instance, b"windowOpacity")
-            page_instance._fade_anim.setDuration(350)
+            page_instance._fade_anim.setDuration(300)
             page_instance._fade_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
             page_instance._fade_anim.setStartValue(0.0)
             page_instance._fade_anim.setEndValue(1.0)

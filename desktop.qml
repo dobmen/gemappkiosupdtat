@@ -428,9 +428,10 @@ ApplicationWindow {
             
             ShaderEffectSource {
                 id: effectSource
-                sourceItem: swipeView
+                sourceItem: root.contentItem
                 sourceRect: Qt.rect(ccPanel.x, ccPanel.y - ccTranslate.y, ccPanel.width, ccPanel.height)
                 visible: false
+                live: true
             }
             
             MultiEffect {
