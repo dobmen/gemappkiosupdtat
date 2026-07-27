@@ -85,6 +85,9 @@ EOF
 </labwc_config>
 EOF
 
+    # Force DRM (hardware) backend and ensure it doesn't try to nest inside a ghost X11 session
+    unset DISPLAY
+    export WLR_BACKENDS=drm,libinput
     export LIBSEAT_BACKEND=seatd
     exec dbus-run-session -- labwc
 fi
