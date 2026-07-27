@@ -8,6 +8,13 @@ Item {
     property real hours: new Date().getHours()
     property real minutes: new Date().getMinutes()
     property real seconds: new Date().getSeconds()
+    
+    property var settings: backend ? JSON.parse(backend.clockSettingsJson || "{}") : {}
+    property var clockConfig: settings["AnalogClock"] || {}
+    property string theme: clockConfig.theme ? clockConfig.theme : "dark"
+    property color bg: theme === "dark" ? "#121215" : "#EEEEEE"
+    property color fg: theme === "dark" ? "white" : "black"
+    property color accent: backend ? backend.clockAccentColor : "#3498db"
 
     Timer {
         interval: 1000
@@ -26,12 +33,7 @@ Item {
         anchors.fill: parent
         color: bg
         
-        property var settings: backend ? JSON.parse(backend.clockSettingsJson || "{}") : {}
-        property var clockConfig: settings["AnalogClock"] || {}
-        property string theme: clockConfig.theme ? clockConfig.theme : "dark"
-        property color bg: theme === "dark" ? "#121215" : "#EEEEEE"
-        property color fg: theme === "dark" ? "white" : "black"
-        property color accent: backend ? backend.clockAccentColor : "#3498db"
+        color: analogRoot.bg
 
         Item {
             anchors.centerIn: parent

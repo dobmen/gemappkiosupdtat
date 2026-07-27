@@ -407,8 +407,6 @@ class KioskBackend(QObject):
             
             def on_finished():
                 widget.hide()
-                # reset for next launch
-                widget.setWindowOpacity(1.0)
             
             self._min_anim_group.finished.connect(on_finished)
             self._min_anim_group.start()
@@ -501,7 +499,6 @@ class KioskBackend(QObject):
         
         if target_rect:
             widget.setGeometry(target_rect)
-            widget.setWindowOpacity(0.0)
             widget.show()
             widget.raise_()
             widget.activateWindow()

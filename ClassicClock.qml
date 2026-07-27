@@ -33,8 +33,8 @@ Item {
             anchors.fill: parent
             visible: bgType === "gradient"
             gradient: Gradient {
-                GradientStop { position: 0.0; color: bgType === "gradient" ? bgValue : "transparent" }
-                GradientStop { position: 1.0; color: bgType === "gradient" ? bgValue2 : "transparent" }
+                GradientStop { position: 0.0; color: (bgType === "gradient" ? bgValue : "transparent") }
+                GradientStop { position: 1.0; color: (bgType === "gradient" ? bgValue2 : "transparent") }
             }
         }
         
