@@ -287,7 +287,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 radius: 40
                 color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
-                border.color: "rgba(255,255,255,0.1)"
+                border.color: "#19FFFFFF"
                 border.width: 1
             }
             
