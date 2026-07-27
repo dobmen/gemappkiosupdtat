@@ -36,6 +36,7 @@ apt-get install -y -qq \
     libgl1 libglx-mesa0 libgbm1 libdrm2 \
     labwc wlr-randr wayland-protocols \
     python3-pyqt6 python3-pyqt6.qtwebengine \
+    qt6-wayland \
     libqt6webenginecore6 libqt6webenginewidgets6 \
     alsa-utils network-manager bluez \
     libnss3 git curl unzip wget
@@ -103,6 +104,7 @@ Conflicts=getty@tty1.service
 
 [Service]
 User=$REAL_USER
+PAMName=login
 WorkingDirectory=$INSTALL_DIR
 StandardInput=tty
 StandardOutput=journal

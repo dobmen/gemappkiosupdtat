@@ -6,6 +6,10 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
+# Enable logging for debugging Wayland boot issues
+exec > >(tee -a /tmp/kiosk_boot.log) 2>&1
+set -x
+
 export QT_QPA_PLATFORM=wayland
 export QT_AUTO_SCREEN_SCALE_FACTOR=1
 export PYGAME_HIDE_SUPPORT_PROMPT=1
