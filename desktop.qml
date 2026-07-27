@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 ApplicationWindow {
     id: root
@@ -732,10 +733,27 @@ ApplicationWindow {
             anchors.topMargin: 20
             anchors.leftMargin: 20
             radius: 40
-            color: Qt.rgba(0.1, 0.1, 0.1, 0.95)
-            border.color: "#33FFFFFF"
+            color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
+            border.color: "#19FFFFFF"
             border.width: 1
             opacity: notifsPanel.nfOpacity
+            
+            ShaderEffectSource {
+                id: nfEffectSource
+                sourceItem: root.contentItem
+                sourceRect: Qt.rect(nfContainer.x, nfContainer.y - nfTranslate.y, nfContainer.width, nfContainer.height)
+                visible: false
+                live: true
+            }
+            
+            MultiEffect {
+                source: nfEffectSource
+                anchors.fill: parent
+                blurEnabled: true
+                blurMax: 80
+                blur: 1.0 
+                saturation: 0.2
+            }
             
             ColumnLayout {
                 anchors.fill: parent
