@@ -109,10 +109,10 @@ ApplicationWindow {
         GridView {
             id: appGrid
             anchors.fill: parent
-            anchors.margins: 60
+            anchors.margins: 40
             anchors.topMargin: 100
-            cellWidth: parent.width / 5
-            cellHeight: cellWidth * 1.2
+            cellWidth: width / 4
+            cellHeight: 260
             model: backend ? backend.apps : []
             clip: true
             
@@ -129,7 +129,9 @@ ApplicationWindow {
                 
                 Rectangle {
                     id: appBg
-                    anchors.centerIn: parent
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 20
                     width: 160
                     height: 160
                     radius: 80 
@@ -148,14 +150,35 @@ ApplicationWindow {
                         visible: (appIcon.status === Image.Error || appIcon.status === Image.Null)
                     }
                     
+                    // Mask source for MultiEffect
+                    Rectangle {
+                        id: maskRect
+                        anchors.fill: parent
+                        radius: 80
+                        visible: false
+                    }
+                    
+                    ShaderEffectSource {
+                        id: maskSource
+                        sourceItem: maskRect
+                        visible: false
+                    }
+                    
                     Image {
                         id: appIcon
-                        anchors.centerIn: parent
-                        width: 160
-                        height: 160
+                        anchors.fill: parent
                         source: modelData.icon
-                        fillMode: Image.PreserveAspectFit
-                        visible: (status === Image.Ready)
+                        fillMode: Image.PreserveAspectCrop
+                        visible: false
+                    }
+                    
+                    // True GPU circular clipping mask for square icons!
+                    MultiEffect {
+                        source: appIcon
+                        anchors.fill: parent
+                        maskEnabled: true
+                        maskSource: maskSource
+                        visible: (appIcon.status === Image.Ready)
                     }
                 }
                 
@@ -166,7 +189,8 @@ ApplicationWindow {
                     text: modelData.name
                     color: "white"
                     font.family: boldFont.name
-                    font.pixelSize: 20
+                    font.pixelSize: 26
+                    font.weight: Font.Bold
                 }
                 
                 MouseArea {
