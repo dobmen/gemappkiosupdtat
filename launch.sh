@@ -25,13 +25,16 @@ if [ "$XDG_SESSION_TYPE" == "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
     
     # Try reading resolution from wlr-randr
     if command -v wlr-randr &> /dev/null; then
-        RES=$(wlr-randr | grep "current" | awk '{print $1}')
-        OUTPUT=$(wlr-randr | grep -m 1 "^[a-zA-Z0-9-]" | awk '{print $1}')
+        # Get the display output name (e.g. DSI-1, HDMI-A-1)
+        OUTPUT=$(wlr-randr | grep -m 1 '^[a-zA-Z0-9-]' | awk '{print $1}')
+        # Get the current resolution
+        RES=$(wlr-randr | grep current | awk '{print $1}')
         
         # Classify the connected display hardware
         if [[ "$RES" == *"1200x1920"* ]]; then
-            echo "[Hardware Detect] ⟳ Portrait Display Detected ($RES) on $OUTPUT. Rotating to Landscape..."
-            wlr-randr --output $OUTPUT --rotate right
+            export KIOSK_DISPLAY_MODE=1200x1920
+            echo "[Hardware Detect] Detected 1200x1920 display ($OUTPUT) - Applying 270 degree rotation."
+            wlr-randr --output "$OUTPUT" --transform 270
             export KIOSK_DISPLAY_MODE="WIDESCREEN_1200P"
         elif [[ "$RES" == *"1920x1200"* ]] || [[ "$RES" == *"1920x1080"* ]]; then
             export KIOSK_DISPLAY_MODE="WIDESCREEN_1200P"
