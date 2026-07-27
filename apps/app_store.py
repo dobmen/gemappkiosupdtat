@@ -523,6 +523,7 @@ class AppDetailsSection(QWidget):
 class AppStorePage(QWidget):
     def __init__(self, on_install_success=None):
         super().__init__()
+        self.setStyleSheet("background-color: #0C0C0E;")
         self.on_install_success = on_install_success
         self.full_catalog_cache = []
         self.scale = get_scale_factor()

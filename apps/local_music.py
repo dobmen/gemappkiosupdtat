@@ -11,6 +11,7 @@ class LocalMusicPage(QWidget):
     """Native Module: Local MP3/Audio Player Interface."""
     def __init__(self, on_close=None):
         super().__init__()
+        self.setStyleSheet("background-color: #0C0C0E;")
         self.on_close = on_close
         scale = get_scale_factor()
         

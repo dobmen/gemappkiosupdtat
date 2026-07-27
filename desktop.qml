@@ -31,7 +31,10 @@ ApplicationWindow {
             id: homePage
             Rectangle {
                 anchors.fill: parent
-                color: "#0C0C0E"
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#1A1A24" }
+                    GradientStop { position: 1.0; color: "#0C0C0E" }
+                }
                 
                 Loader {
                     id: clockLoader
@@ -42,7 +45,6 @@ ApplicationWindow {
                 MouseArea {
                     anchors.fill: parent
                     onPressAndHold: {
-                        clockSelector.visible = true
                         clockSelectorAnim.to = 1.0
                         clockSelectorAnim.start()
                     }
@@ -65,7 +67,10 @@ ApplicationWindow {
             id: mediaPage
             Rectangle {
                 anchors.fill: parent
-                color: "#0C0C0E"
+                gradient: Gradient {
+                    GradientStop { position: 0.0; color: "#1A1A24" }
+                    GradientStop { position: 1.0; color: "#0C0C0E" }
+                }
                 
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -444,7 +449,7 @@ ApplicationWindow {
                 source: effectSource
                 anchors.fill: parent
                 blurEnabled: true
-                blurMax: 80
+                blurMax: 32
                 blur: 1.0 
                 saturation: 0.2
             }
@@ -750,7 +755,7 @@ ApplicationWindow {
                 source: nfEffectSource
                 anchors.fill: parent
                 blurEnabled: true
-                blurMax: 80
+                blurMax: 32
                 blur: 1.0 
                 saturation: 0.2
             }
@@ -1011,10 +1016,32 @@ ApplicationWindow {
     Rectangle {
         id: clockSelector
         anchors.fill: parent
-        color: "#E50A0A0F"
+        color: "transparent"
         z: 980
-        visible: false
+        visible: opacity > 0
         opacity: 0.0
+        
+        ShaderEffectSource {
+            id: clockEffectSource
+            sourceItem: swipeView
+            sourceRect: Qt.rect(0, 0, clockSelector.width, clockSelector.height)
+            visible: false
+            live: false // Only capture once when opening
+        }
+        
+        MultiEffect {
+            source: clockEffectSource
+            anchors.fill: parent
+            blurEnabled: true
+            blurMax: 32
+            blur: 1.0
+            saturation: 0.2
+        }
+        
+        Rectangle {
+            anchors.fill: parent
+            color: "#E60C0C0E"
+        }
 
         property var faces: ["ClassicClock", "StackedClock", "AnalogClock"]
 
@@ -1105,7 +1132,7 @@ ApplicationWindow {
             property: "opacity"
             duration: 300
             easing.type: Easing.OutCubic
-            onFinished: if (clockSelector.opacity === 0.0) clockSelector.visible = false
+            onStarted: if (clockSelectorAnim.to === 1.0) clockEffectSource.scheduleUpdate()
         }
     }
 

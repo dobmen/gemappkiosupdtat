@@ -251,6 +251,12 @@ class KioskBackend(QObject):
         self._active_tasks = tasks
         self.activeTasksChanged.emit()
 
+    @pyqtSlot()
+    def reloadApps(self):
+        print("[QML Backend] Reloading apps list...")
+        self._apps = self.build_app_list()
+        self.appsChanged.emit()
+
     def update_time(self):
         new_time = time.strftime("%H:%M")
         if new_time != self._current_time:
@@ -363,56 +369,54 @@ class KioskBackend(QObject):
             widget.activateWindow()
             return
             
-        page_instance = None
+        # Emit QML event instantly to start the 300ms fade-to-black animation unblocked
+        self.appOpened.emit(app_name)
         
-        if app_name == "Local Music":
-            try:
-                from apps.local_music import LocalMusicPage
-                page_instance = LocalMusicPage()
-            except ImportError: pass
-        elif app_name == "App Store":
-            try:
-                from apps.app_store import AppStorePage
-                page_instance = AppStorePage()
-            except ImportError: pass
-        elif app_name == "Gallery":
-            try:
-                from apps.gallery import GalleryPage
-                page_instance = GalleryPage(on_close=self.minimize_app)
-            except ImportError: pass
-        else:
-            try:
-                module_name = app_name.lower().replace(" ", "_")
-                if os.path.exists(os.path.join("apps", f"{module_name}.py")):
-                    mod = importlib.import_module(f"apps.{module_name}")
-                    importlib.reload(mod)
+        # Completely delay the heavy Python import and window initialization by 350ms
+        # so it doesn't freeze the QML rendering engine during the fade out!
+        def do_launch():
+            page_instance = None
+            if app_name == "Local Music":
+                try:
+                    from apps.local_music import LocalMusicPage
+                    page_instance = LocalMusicPage()
+                except ImportError: pass
+            elif app_name == "App Store":
+                try:
+                    from apps.app_store import AppStorePage
+                    page_instance = AppStorePage(on_install_success=self.reloadApps)
+                except ImportError: pass
+            elif app_name == "Gallery":
+                try:
+                    from apps.gallery import GalleryPage
+                    page_instance = GalleryPage(on_close=self.minimize_app)
+                except ImportError: pass
+            else:
+                try:
+                    module_name = app_name.lower().replace(" ", "_")
+                    if os.path.exists(os.path.join("apps", f"{module_name}.py")):
+                        mod = importlib.import_module(f"apps.{module_name}")
+                        importlib.reload(mod)
+                        
+                        for attr_name in dir(mod):
+                            if attr_name.endswith("Page") and attr_name not in ["AppStorePage", "LocalMusicPage", "GalleryPage"]:
+                                page_class = getattr(mod, attr_name)
+                                try:
+                                    page_instance = page_class(on_close=self.minimize_app)
+                                except TypeError:
+                                    page_instance = page_class()
+                                break
+                except Exception as e:
+                    print(f"Error launching dynamic app '{app_name}': {e}")
                     
-                    for attr_name in dir(mod):
-                        if attr_name.endswith("Page") and attr_name not in ["AppStorePage", "LocalMusicPage", "GalleryPage"]:
-                            page_class = getattr(mod, attr_name)
-                            try:
-                                page_instance = page_class(on_close=self.minimize_app)
-                            except TypeError:
-                                page_instance = page_class()
-                            break
-            except Exception as e:
-                print(f"Error launching dynamic app '{app_name}': {e}")
-                
-        if page_instance is not None:
-            self.running_apps[app_name] = page_instance
-            
-            # Start QML fade-out animation instantly
-            self.appOpened.emit(app_name)
-            
-            def do_show():
+            if page_instance is not None:
+                self.running_apps[app_name] = page_instance
                 page_instance.showFullScreen()
                 page_instance.raise_()
                 page_instance.activateWindow()
-            
-            # Delay Wayland window pop-in by 350ms to allow QML fade-out
-            QTimer.singleShot(350, do_show)
-            
-            self._update_active_tasks()
+                self._update_active_tasks()
+                
+        QTimer.singleShot(350, do_launch)
 
     @pyqtSlot()
     def shutdown(self):
