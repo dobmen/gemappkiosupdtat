@@ -442,10 +442,19 @@ ApplicationWindow {
             color: "transparent"
             opacity: controlCenter.ccOpacity
             
+            // Pure QML Blur Trick
+            ShaderEffectSource {
+                anchors.fill: parent
+                sourceItem: swipeView
+                sourceRect: Qt.rect(ccPanel.x, ccPanel.y, ccPanel.width, ccPanel.height)
+                textureSize: Qt.size(ccPanel.width / 32, ccPanel.height / 32)
+                mipmap: true
+            }
+            
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#E6111118"
+                color: "#AA111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
             }
@@ -719,10 +728,20 @@ ApplicationWindow {
             anchors.leftMargin: 20
             visible: notifsPanel.nfOpacity > 0
             
+            // Pure QML Blur Trick
+            ShaderEffectSource {
+                anchors.fill: parent
+                sourceItem: swipeView
+                sourceRect: Qt.rect(nfContainer.x, nfContainer.y, nfContainer.width, nfContainer.height)
+                textureSize: Qt.size(nfContainer.width / 32, nfContainer.height / 32)
+                mipmap: true
+                opacity: notifsPanel.nfOpacity
+            }
+            
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#E6111118"
+                color: "#AA111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
                 opacity: notifsPanel.nfOpacity
