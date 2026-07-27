@@ -210,24 +210,26 @@ class KioskBackend(QObject):
         
     @brightness.setter
     def brightness(self, value):
-        self._brightness = value
-        self.brightnessChanged.emit()
-        try:
-            subprocess.Popen(["brightnessctl", "set", f"{value}%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception as e:
-            print(f"[Hardware] Brightness error: {e}")
+        if self._brightness != value:
+            self._brightness = value
+            self.brightnessChanged.emit()
+            try:
+                subprocess.Popen(["brightnessctl", "set", f"{value}%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                print(f"[Hardware] Brightness error: {e}")
 
     @pyqtProperty(int, notify=volumeChanged)
     def volume(self): return self._volume
         
     @volume.setter
     def volume(self, value):
-        self._volume = value
-        self.volumeChanged.emit()
-        try:
-            subprocess.Popen(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{value}%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception as e:
-            print(f"[Hardware] Volume error: {e}")
+        if self._volume != value:
+            self._volume = value
+            self.volumeChanged.emit()
+            try:
+                subprocess.Popen(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{value}%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception as e:
+                print(f"[Hardware] Volume error: {e}")
         
     @pyqtProperty(list, notify=notificationsChanged)
     def notifications(self): return self._notifications
