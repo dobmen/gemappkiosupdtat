@@ -35,7 +35,8 @@ apt-get install -y -qq \
     libasound2-dev portaudio19-dev libjack-jackd2-dev \
     libgl1 libglx-mesa0 libgbm1 libdrm2 \
     labwc wlr-randr wayland-protocols \
-    python3-pyqt6 python3-pyqt6.qtwebengine \
+    python3-pyqt6 python3-pyqt6.qtwebengine python3-pyqt6.qtquick \
+    qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-templates2 qml6-module-qtquick-effects \
     qt6-wayland \
     libqt6webenginecore6 libqt6webenginewidgets6 \
     alsa-utils network-manager bluez \
