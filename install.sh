@@ -39,11 +39,15 @@ apt-get install -y -qq \
     qt6-wayland \
     libqt6webenginecore6 libqt6webenginewidgets6 \
     alsa-utils network-manager bluez \
-    libnss3 git curl unzip wget openssh-server
+    libnss3 git curl unzip wget openssh-server \
+    polkitd seatd
 
 echo "[3/8] Removing legacy LightDM & Openbox to ensure pure Wayland boot..."
 systemctl disable lightdm 2>/dev/null || true
 systemctl disable gdm3 2>/dev/null || true
+
+echo "[3.5/8] Granting hardware permissions to user..."
+usermod -a -G video,render,input $REAL_USER
 
 echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
 if [ -d "$INSTALL_DIR/.git" ]; then
