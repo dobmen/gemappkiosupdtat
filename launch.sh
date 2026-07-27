@@ -88,9 +88,11 @@ EOF
   <libinput>
     <device name="Wacom HID 4808 Finger">
       <mapToOutput>$OUTPUT</mapToOutput>
+      <calibrationMatrix>-1 0 1 0 1 0</calibrationMatrix>
     </device>
     <device name="Wacom HID 4808 Pen">
       <mapToOutput>$OUTPUT</mapToOutput>
+      <calibrationMatrix>-1 0 1 0 1 0</calibrationMatrix>
     </device>
   </libinput>
 </labwc_config>
