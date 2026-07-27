@@ -212,6 +212,10 @@ class KioskBackend(QObject):
     def brightness(self, value):
         self._brightness = value
         self.brightnessChanged.emit()
+        try:
+            subprocess.Popen(["brightnessctl", "set", f"{value}%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[Hardware] Brightness error: {e}")
 
     @pyqtProperty(int, notify=volumeChanged)
     def volume(self): return self._volume
@@ -220,6 +224,10 @@ class KioskBackend(QObject):
     def volume(self, value):
         self._volume = value
         self.volumeChanged.emit()
+        try:
+            subprocess.Popen(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{value}%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[Hardware] Volume error: {e}")
         
     @pyqtProperty(list, notify=notificationsChanged)
     def notifications(self): return self._notifications
@@ -268,12 +276,22 @@ class KioskBackend(QObject):
         self._network_enabled = not self._network_enabled
         self.save_system_setting("network_enabled", self._network_enabled)
         self.networkChanged.emit()
+        try:
+            cmd = "on" if self._network_enabled else "off"
+            subprocess.Popen(["nmcli", "radio", "wifi", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[Hardware] Network error: {e}")
         
     @pyqtSlot()
     def toggleBluetooth(self):
         self._bluetooth_enabled = not self._bluetooth_enabled
         self.save_system_setting("bluetooth_enabled", self._bluetooth_enabled)
         self.bluetoothChanged.emit()
+        try:
+            cmd = "unblock" if self._bluetooth_enabled else "block"
+            subprocess.Popen(["rfkill", cmd, "bluetooth"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"[Hardware] Bluetooth error: {e}")
 
     @pyqtSlot()
     def toggleDND(self):
