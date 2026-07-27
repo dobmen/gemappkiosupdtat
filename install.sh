@@ -47,7 +47,7 @@ systemctl disable lightdm 2>/dev/null || true
 systemctl disable gdm3 2>/dev/null || true
 
 echo "[3.5/8] Granting hardware permissions to user..."
-usermod -a -G _seatd,video,render,input $REAL_USER
+usermod -a -G seat,video,render,input $REAL_USER
 systemctl enable seatd
 
 echo "[4/8] Pulling fresh Kiosk OS directly from GitHub (main branch)..."
