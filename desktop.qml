@@ -9,6 +9,8 @@ ApplicationWindow {
     width: 1200
     height: 1920
     title: "Kiosk OS"
+    visibility: Window.FullScreen
+    flags: Qt.FramelessWindowHint
     
     color: "#0C0C0E"
     
@@ -18,9 +20,37 @@ ApplicationWindow {
     SwipeView {
         id: swipeView
         anchors.fill: parent
-        currentIndex: 1 
+        orientation: Qt.Vertical
+        currentIndex: 0 
         
-        // Page 0: App Drawer
+        // Page 0: Clock / Home
+        Item {
+            id: homePage
+            Rectangle {
+                anchors.fill: parent
+                color: "transparent"
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: backend ? backend.currentTime : "12:00"
+                    color: "white"
+                    font.family: boldFont.name
+                    font.pixelSize: 220
+                }
+                
+                Text {
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 80
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "▲ Swipe up for apps"
+                    color: "#555555"
+                    font.family: boldFont.name
+                    font.pixelSize: 24
+                }
+            }
+        }
+
+        // Page 1: App Drawer
         Item {
             id: appDrawerPage
             Rectangle {
@@ -78,61 +108,6 @@ ApplicationWindow {
                     }
                 }
             }
-        }
-        
-        // Page 1: Clock / Home
-        Item {
-            id: homePage
-            Rectangle {
-                anchors.fill: parent
-                color: "transparent"
-                
-                Text {
-                    anchors.centerIn: parent
-                    text: backend ? backend.currentTime : "12:00"
-                    color: "white"
-                    font.family: boldFont.name
-                    font.pixelSize: 220
-                }
-                
-                Text {
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 80
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "▲ Swipe right for apps"
-                    color: "#555555"
-                    font.family: boldFont.name
-                    font.pixelSize: 24
-                }
-            }
-        }
-        
-        // Page 2: Media
-        Item {
-            id: mediaPage
-            Rectangle {
-                anchors.fill: parent
-                color: "#181825"
-                
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 20
-                    
-                    Text {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "Now Playing"
-                        color: "white"
-                        font.family: boldFont.name
-                        font.pixelSize: 48
-                    }
-                    Text {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "No active stream • Swipe up to launch Spotify"
-                        color: "#AAAAAA"
-                        font.family: mainFont.name
-                        font.pixelSize: 24
-                    }
-                }
             }
         }
     }
@@ -176,16 +151,31 @@ ApplicationWindow {
             anchors.topMargin: 20
             anchors.rightMargin: 20
             radius: 40
-            color: Qt.rgba(0.1, 0.1, 0.1, 0.6)
+            color: "transparent"
             opacity: controlCenter.ccOpacity
             
-            // True GPU Hardware Blur
-            layer.enabled: true
-            layer.effect: MultiEffect {
+            ShaderEffectSource {
+                id: effectSource
+                sourceItem: swipeView
+                sourceRect: Qt.rect(ccPanel.x, ccPanel.y - ccPanel.transform[0].y, ccPanel.width, ccPanel.height)
+                visible: false
+            }
+            
+            MultiEffect {
+                source: effectSource
+                anchors.fill: parent
                 blurEnabled: true
                 blurMax: 80
                 blur: 1.0 
                 saturation: 0.2
+            }
+            
+            Rectangle {
+                anchors.fill: parent
+                radius: 40
+                color: Qt.rgba(0.1, 0.1, 0.1, 0.5)
+                border.color: "rgba(255,255,255,0.1)"
+                border.width: 1
             }
             
             ColumnLayout {
@@ -294,7 +284,7 @@ ApplicationWindow {
         onPositionChanged: (mouse) => {
             if (isDragging) {
                 let dy = mouse.y - startY
-                let progress = Math.max(0, Math.min(1, dy / (parent.height * 0.4)))
+                let progress = Math.max(0, Math.min(1, dy / ccPanel.height))
                 controlCenter.ccOpacity = progress
             }
         }
