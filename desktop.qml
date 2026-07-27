@@ -46,7 +46,7 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             width: parent.width * 0.8
                             height: parent.width * 0.8
-                            color: tapArea.pressed ? "rgba(255,255,255,0.1)" : "transparent"
+                            color: tapArea.pressed ? "#19FFFFFF" : "transparent"
                             radius: 30
                             
                             Image {
@@ -207,7 +207,7 @@ ApplicationWindow {
                         width: 50
                         height: 50
                         radius: 25
-                        color: "rgba(255, 50, 50, 0.8)"
+                        color: "#CCFF3232"
                         Text {
                             anchors.centerIn: parent
                             text: "⏻"
@@ -231,7 +231,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         height: 90
                         radius: 30
-                        color: (backend && backend.networkEnabled) ? "#5A8DEF" : "rgba(255,255,255,0.1)"
+                        color: (backend && backend.networkEnabled) ? "#5A8DEF" : "#19FFFFFF"
                         Text {
                             anchors.centerIn: parent
                             text: "📶 Network"
@@ -250,7 +250,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         height: 90
                         radius: 30
-                        color: (backend && backend.bluetoothEnabled) ? "#5A8DEF" : "rgba(255,255,255,0.1)"
+                        color: (backend && backend.bluetoothEnabled) ? "#5A8DEF" : "#19FFFFFF"
                         Text {
                             anchors.centerIn: parent
                             text: "󰂯 Bluetooth"

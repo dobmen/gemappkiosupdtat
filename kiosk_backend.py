@@ -2,7 +2,7 @@ import sys
 import os
 import time
 import json
-from PyQt6.QtCore import QObject, pyqtProperty, pyqtSlot, QTimer, QVariant, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal
 
 class KioskBackend(QObject):
     timeChanged = pyqtSignal()
@@ -82,7 +82,7 @@ class KioskBackend(QObject):
     def currentTime(self):
         return self._current_time
         
-    @pyqtProperty(QVariant, notify=appsChanged)
+    @pyqtProperty(list, notify=appsChanged)
     def apps(self):
         return self._apps
         

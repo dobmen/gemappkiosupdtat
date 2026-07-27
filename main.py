@@ -8,7 +8,7 @@ print("[DEBUG] main.py: Starting execution in QML Mode")
 
 def main():
     # Enforce Wayland natively for QML hardware acceleration
-    os.environ["QT_QPA_PLATFORM"] = "wayland"
+    # os.environ["QT_QPA_PLATFORM"] = "wayland"
     
     app = QGuiApplication(sys.argv)
     engine = QQmlApplicationEngine()
