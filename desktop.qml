@@ -376,7 +376,10 @@ ApplicationWindow {
                     id: tapArea
                     anchors.fill: parent
                     onClicked: {
-                        if (backend) backend.launch_app(modelData.name)
+                        if (backend) {
+                            let pt = appIcon.mapToItem(null, 0, 0) // root/global coords
+                            backend.launchAppFromIcon(modelData.name, pt.x, pt.y, appIcon.width, appIcon.height)
+                        }
                     }
                 }
             }
@@ -1012,38 +1015,47 @@ ApplicationWindow {
                 model: clockSelector.faces
                 spacing: 40
                 
-                scale: 0.8 + (clockSelector.opacity * 0.2)
+                scale: 1.0 + (1.0 - clockSelector.opacity) * 0.25
                 opacity: clockSelector.opacity
                 
                 delegate: Item {
                     width: clockListView.width
                     height: clockListView.height
                     
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: parent.width * 0.8
-                        height: parent.height * 0.8
-                        color: "transparent"
-                        border.color: "#333340"
-                        border.width: 2
-                        radius: 30
-                        clip: true
-
-                        Loader {
-                            anchors.fill: parent
-                            anchors.margins: 20
-                            source: modelData + ".qml"
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: {
-                                if (backend) backend.activeClockface = modelData
-                                clockSelectorAnim.to = 0.0
-                                clockSelectorAnim.start()
+                        // The preview container (80% of list view)
+                        Item {
+                            anchors.centerIn: parent
+                            width: parent.width * 0.8
+                            height: parent.height * 0.8
+                            
+                            // The actual clock loaded at full screen size and visually scaled down!
+                            Loader {
+                                anchors.centerIn: parent
+                                width: root.width
+                                height: root.height
+                                scale: parent.width / root.width
+                                source: modelData + ".qml"
+                            }
+                            
+                            // A border overlay for the preview bounds
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "transparent"
+                                border.color: "#333340"
+                                border.width: Math.max(2, 2 / (parent.width / root.width)) // Adjust border for scale
+                                radius: 30 / (parent.width / root.width) // Adjust radius for scale
+                                z: 10
+                            }
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    if (backend) backend.activeClockface = modelData
+                                    clockSelectorAnim.to = 0.0
+                                    clockSelectorAnim.start()
+                                }
                             }
                         }
-                    }
                 }
             }
 
@@ -1081,39 +1093,15 @@ ApplicationWindow {
                 }
             }
             
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.bottomMargin: 60
-                spacing: 20
-                visible: clockSelector.showCustomizer
-                
-                Repeater {
-                    model: ["#FFFFFF", "#E24A4A", "#5A8DEF", "#7B61FF", "#4AE28A", "#F2C94C"]
-                    delegate: Rectangle {
-                        width: 60
-                        height: 60
-                        radius: 30
-                        color: modelData
-                        border.color: "white"
-                        border.width: (backend && backend.clockAccentColor === modelData) ? 4 : 0
-                        
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: if (backend) backend.clockAccentColor = modelData
-                        }
-                    }
-                }
-                
-                Rectangle {
-                    width: 60
-                    height: 60
-                    radius: 30
-                    color: "#2C2C35"
-                    Text { anchors.centerIn: parent; text: "✕"; color: "white"; font.pixelSize: 24 }
-                    MouseArea { 
-                        anchors.fill: parent
-                        onClicked: clockSelector.showCustomizer = false 
-                    }
+            Loader {
+                anchors.fill: parent
+                active: clockSelector.showCustomizer
+                source: "ClockCustomizer.qml"
+                onLoaded: {
+                    item.activeClock = clockSelector.faces[clockListView.currentIndex]
+                    item.close.connect(function() {
+                        clockSelector.showCustomizer = false
+                    })
                 }
             }
         }

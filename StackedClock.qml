@@ -21,9 +21,27 @@ Item {
         }
     }
 
+    property var settings: backend ? JSON.parse(backend.clockSettingsJson || "{}") : {}
+    property var clockConfig: settings["StackedClock"] || {}
+    property string bgType: clockConfig["bgType"] || "solid"
+    property string bgValue: clockConfig["bgValue"] || (backend ? backend.clockAccentColor : "#FF2A55")
+    property string bgValue2: clockConfig["bgValue2"] || "#000000"
+
     Rectangle {
         anchors.fill: parent
-        color: "transparent"
+        color: bgType === "solid" ? bgValue : "black"
+        
+        gradient: bgType === "gradient" ? Gradient {
+            GradientStop { position: 0.0; color: bgValue }
+            GradientStop { position: 1.0; color: bgValue2 }
+        } : null
+        
+        Image {
+            anchors.fill: parent
+            source: bgType === "photo" ? "file:///" + bgValue : ""
+            visible: bgType === "photo"
+            fillMode: Image.PreserveAspectCrop
+        }
 
         ColumnLayout {
             anchors.centerIn: parent

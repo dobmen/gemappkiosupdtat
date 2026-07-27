@@ -7,7 +7,7 @@ import ssl
 import urllib.request
 import subprocess
 import threading
-from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve, QThread
+from PyQt6.QtCore import Qt, QObject, pyqtProperty, pyqtSlot, QTimer, pyqtSignal, QPropertyAnimation, QEasingCurve, QThread, QParallelAnimationGroup, QRect
 from PyQt6.QtWidgets import QWidget
 
 class SystemUpdateCheckThread(QThread):
@@ -92,7 +92,8 @@ class KioskBackend(QObject):
         self._brightness = 80
         self._volume = 50
         self._active_clockface = self.get_system_setting("clockface", "ClassicClock")
-        self._clock_accent_color = self.get_system_setting("clock_accent", "#FFFFFF")
+        self._clock_accent_color = self.get_system_setting("clock_accent", "#3498db")
+        self._clock_settings = self.get_system_setting("clock_settings", {})
         self._apps = self.build_app_list()
         self._notifications = []
         
@@ -255,6 +256,20 @@ class KioskBackend(QObject):
             self._clock_accent_color = color
             self.save_system_setting("clock_accent", color)
             self.activeClockfaceChanged.emit()
+            
+    clockSettingsChanged = pyqtSignal()
+    
+    @pyqtProperty(str, notify=clockSettingsChanged)
+    def clockSettingsJson(self):
+        return json.dumps(self._clock_settings)
+        
+    @pyqtSlot(str, str, str)
+    def setClockSetting(self, clockName, key, value):
+        if clockName not in self._clock_settings:
+            self._clock_settings[clockName] = {}
+        self._clock_settings[clockName][key] = value
+        self.save_system_setting("clock_settings", self._clock_settings)
+        self.clockSettingsChanged.emit()
         
     @pyqtProperty(list, notify=activeTasksChanged)
     def activeTasks(self):
@@ -370,10 +385,41 @@ class KioskBackend(QObject):
     @pyqtSlot()
     def minimize_app(self):
         print("[QML Backend] Minimizing active app")
-        self.appMinimized.emit()
-        for widget in self.running_apps.values():
-            if widget.isVisible():
+        if self.current_app_widget:
+            widget = self.current_app_widget
+            screen_rect = widget.geometry()
+            
+            # Animate morphing back to icon, or slide down if unknown
+            target_rect = getattr(self, '_last_icon_rect', None)
+            if not target_rect:
+                target_rect = QRect(int(screen_rect.x() + screen_rect.width()/2), int(screen_rect.bottom()), 0, 0)
+            
+            self._min_anim_group = QParallelAnimationGroup()
+            
+            geom_anim = QPropertyAnimation(widget, b"geometry")
+            geom_anim.setDuration(300)
+            geom_anim.setStartValue(screen_rect)
+            geom_anim.setEndValue(target_rect)
+            geom_anim.setEasingCurve(QEasingCurve.Type.InCubic)
+            
+            op_anim = QPropertyAnimation(widget, b"windowOpacity")
+            op_anim.setDuration(300)
+            op_anim.setStartValue(widget.windowOpacity())
+            op_anim.setEndValue(0.0)
+            op_anim.setEasingCurve(QEasingCurve.Type.InCubic)
+            
+            self._min_anim_group.addAnimation(geom_anim)
+            self._min_anim_group.addAnimation(op_anim)
+            
+            def on_finished():
                 widget.hide()
+                # reset for next launch
+                widget.setWindowOpacity(1.0)
+            
+            self._min_anim_group.finished.connect(on_finished)
+            self._min_anim_group.start()
+            
+            self.current_app_widget = None
 
     @pyqtSlot(str)
     def kill_app(self, app_name):
@@ -391,14 +437,17 @@ class KioskBackend(QObject):
         self.running_apps.clear()
         self._update_active_tasks()
 
+    @pyqtSlot(str, float, float, float, float)
+    def launchAppFromIcon(self, app_name, ix, iy, iw, ih):
+        self._last_icon_rect = QRect(int(ix), int(iy), int(iw), int(ih))
+        self.launch_app(app_name)
+
     @pyqtSlot(str)
     def launch_app(self, app_name):
         print(f"[QML Backend] Launching app: {app_name}")
         if app_name in self.running_apps:
             widget = self.running_apps[app_name]
-            widget.showFullScreen()
-            widget.raise_()
-            widget.activateWindow()
+            self._morph_app(widget)
             return
             
         # Emit QML event instantly to start the 300ms fade-to-black animation unblocked
@@ -444,12 +493,47 @@ class KioskBackend(QObject):
                     
             if page_instance is not None:
                 self.running_apps[app_name] = page_instance
-                page_instance.showFullScreen()
-                page_instance.raise_()
-                page_instance.activateWindow()
                 self._update_active_tasks()
+                self._morph_app(page_instance)
                 
         QTimer.singleShot(350, do_launch)
+        
+    def _morph_app(self, widget):
+        self.current_app_widget = widget
+        target_rect = getattr(self, '_last_icon_rect', None)
+        
+        from PyQt6.QtGui import QGuiApplication
+        screen_rect = QGuiApplication.primaryScreen().geometry()
+        
+        if target_rect:
+            widget.setGeometry(target_rect)
+            widget.setWindowOpacity(0.0)
+            widget.show()
+            widget.raise_()
+            widget.activateWindow()
+            
+            self._launch_anim_group = QParallelAnimationGroup()
+            geom_anim = QPropertyAnimation(widget, b"geometry")
+            geom_anim.setDuration(400)
+            geom_anim.setStartValue(target_rect)
+            geom_anim.setEndValue(screen_rect)
+            geom_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            
+            op_anim = QPropertyAnimation(widget, b"windowOpacity")
+            op_anim.setDuration(400)
+            op_anim.setStartValue(0.0)
+            op_anim.setEndValue(1.0)
+            op_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+            
+            self._launch_anim_group.addAnimation(geom_anim)
+            self._launch_anim_group.addAnimation(op_anim)
+            
+            self._launch_anim_group.finished.connect(widget.showFullScreen)
+            self._launch_anim_group.start()
+        else:
+            widget.showFullScreen()
+            widget.raise_()
+            widget.activateWindow()
 
     @pyqtSlot()
     def shutdown(self):

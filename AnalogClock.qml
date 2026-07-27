@@ -36,7 +36,7 @@ Item {
                 anchors.fill: parent
                 radius: width / 2
                 color: "transparent"
-                border.color: "#333333"
+                border.color: fg
                 border.width: 10
             }
 
@@ -46,7 +46,7 @@ Item {
                 Rectangle {
                     width: 6
                     height: 25
-                    color: "white"
+                    color: fg
                     x: parent.width / 2 - width / 2
                     y: 10
                     transformOrigin: Item.Bottom
@@ -62,7 +62,7 @@ Item {
             Rectangle {
                 width: 12
                 height: 110
-                color: "white"
+                color: fg
                 radius: 6
                 x: parent.width / 2 - width / 2
                 y: parent.height / 2 - height + 10
@@ -75,7 +75,7 @@ Item {
             Rectangle {
                 width: 8
                 height: 160
-                color: backend ? backend.clockAccentColor : "#5A8DEF"
+                color: accent
                 radius: 4
                 x: parent.width / 2 - width / 2
                 y: parent.height / 2 - height + 10
@@ -102,7 +102,7 @@ Item {
                 width: 24
                 height: 24
                 radius: 12
-                color: "white"
+                color: fg
                 anchors.centerIn: parent
             }
         }
