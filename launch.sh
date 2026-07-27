@@ -86,7 +86,10 @@ EOF
     <borderWidth>0</borderWidth>
   </theme>
   <libinput>
-    <device category="touch">
+    <device name="Wacom HID 4808 Finger">
+      <mapToOutput>$OUTPUT</mapToOutput>
+    </device>
+    <device name="Wacom HID 4808 Pen">
       <mapToOutput>$OUTPUT</mapToOutput>
     </device>
   </libinput>
