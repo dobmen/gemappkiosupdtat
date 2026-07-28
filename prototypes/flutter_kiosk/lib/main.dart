@@ -173,8 +173,9 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     border: Border.all(color: Colors.white.withOpacity(0.1)),
                     borderRadius: BorderRadius.circular(40),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -200,6 +201,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
                       _buildSliderCard("🔊 Volume", 0.5),
                     ],
                   ),
+                 ),
                 ),
               ),
             ),
@@ -224,8 +226,9 @@ class _DesktopScreenState extends State<DesktopScreen> {
                     border: Border.all(color: Colors.white.withOpacity(0.1)),
                     borderRadius: BorderRadius.circular(40),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -243,6 +246,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
                       _buildNotifCard("🎵 Spotify", "New Weekly Discovery playlist is ready!"),
                     ],
                   ),
+                 ),
                 ),
               ),
             ),
