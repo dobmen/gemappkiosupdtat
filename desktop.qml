@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 
 ApplicationWindow {
@@ -375,16 +376,15 @@ ApplicationWindow {
     // 3. CONTROL CENTER (Sliding Panel from Top Right)
     // ==========================================
     
-    // --- GLOBAL FULLSCREEN MULTIPASS BLUR ---
+    // --- TRUE GAUSSIAN FULLSCREEN BLUR ---
     property real overlayOpacity: Math.max(controlCenter.ccOpacity, notifsPanel.nfOpacity)
     
-    ShaderEffectSource { id: globalBlur1; sourceItem: swipeView; textureSize: Qt.size(swipeView.width / 2, swipeView.height / 2); mipmap: true; visible: false }
-    ShaderEffectSource { id: globalBlur2; sourceItem: globalBlur1; textureSize: Qt.size(swipeView.width / 4, swipeView.height / 4); mipmap: true; visible: false }
-    ShaderEffectSource { id: globalBlur3; sourceItem: globalBlur2; textureSize: Qt.size(swipeView.width / 8, swipeView.height / 8); mipmap: true; visible: false }
-    ShaderEffectSource { id: globalBlur4; sourceItem: globalBlur3; textureSize: Qt.size(swipeView.width / 16, swipeView.height / 16); mipmap: true; visible: false }
-    ShaderEffectSource {
+    MultiEffect {
+        source: swipeView
         anchors.fill: parent
-        sourceItem: globalBlur4
+        blurEnabled: true
+        blurMax: 64
+        blur: 1.0
         opacity: overlayOpacity
         visible: overlayOpacity > 0
         z: 1
