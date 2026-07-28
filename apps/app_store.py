@@ -526,6 +526,7 @@ class AppStorePage(QWidget):
         self.setStyleSheet("background-color: #0C0C0E;")
         self.on_install_success = on_install_success
         self.full_catalog_cache = []
+        self._active_threads = set()
         self.scale = get_scale_factor()
         
         layout = QVBoxLayout(self)
@@ -806,10 +807,17 @@ class AppStorePage(QWidget):
         lbl_loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.list_layout.addWidget(lbl_loading)
 
-        self.fetcher = FetchManifestThread()
-        self.fetcher.on_success.connect(self.cache_and_populate)
-        self.fetcher.on_error.connect(self.show_error)
-        self.fetcher.start()
+        fetcher = FetchManifestThread()
+        self._active_threads.add(fetcher)
+        
+        def cleanup(apps=None, err=None, t=fetcher):
+            self._active_threads.discard(t)
+            
+        fetcher.on_success.connect(self.cache_and_populate)
+        fetcher.on_success.connect(cleanup)
+        fetcher.on_error.connect(self.show_error)
+        fetcher.on_error.connect(cleanup)
+        fetcher.start()
 
     def cache_and_populate(self, apps_list):
         self.full_catalog_cache = apps_list
@@ -881,11 +889,18 @@ class AppStorePage(QWidget):
         self.progress_bar.setValue(0)
         self.progress_bar.show()
 
-        self.downloader = DownloadAppThread(app_data)
-        self.downloader.on_progress.connect(self.progress_bar.setValue)
-        self.downloader.on_finished.connect(lambda name: self.on_install_complete(app_data, card_reference))
-        self.downloader.on_error.connect(self.on_install_error)
-        self.downloader.start()
+        downloader = DownloadAppThread(app_data)
+        self._active_threads.add(downloader)
+        
+        def cleanup(name=None, err=None, t=downloader):
+            self._active_threads.discard(t)
+            
+        downloader.on_progress.connect(self.progress_bar.setValue)
+        downloader.on_finished.connect(lambda name: self.on_install_complete(app_data, card_reference))
+        downloader.on_finished.connect(cleanup)
+        downloader.on_error.connect(self.on_install_error)
+        downloader.on_error.connect(cleanup)
+        downloader.start()
 
     def on_install_complete(self, app_data, card):
         self.progress_bar.hide()
