@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Web Kiosk OS Prototype</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Google Fonts for premium typography -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -15,42 +14,77 @@
     <!-- Main OS Container -->
     <div class="kiosk-container">
         
-        <!-- Top Status Bar -->
-        <header class="status-bar">
+        <!-- Center Clock Widget -->
+        <main class="desktop">
+            <div class="clock-widget">
+                <h1 id="time">12:00</h1>
+                <p id="date">Monday, January 1</p>
+            </div>
+            
+            <div style="flex: 1;"></div>
+
+            <!-- App Dock (Matches the QML bottom dock) -->
+            <div class="dock glass-panel">
+                <div class="app-icon" style="background: #1DB954;">🎵</div>
+                <div class="app-icon" style="background: #FF0000;">▶️</div>
+                <div class="app-icon" style="background: #2D9CDB;">🌤️</div>
+                <div class="app-icon" style="background: #F2994A;">⚙️</div>
+                <div class="app-icon" style="background: #8E44AD;">📸</div>
+            </div>
+        </main>
+        
+        <!-- Top Status Bar (Interactive to pull down Control Center) -->
+        <header class="status-bar" id="status-bar">
             <div class="status-left">
                 <span class="icon">🌤️</span> 72° Sunny
             </div>
-            <div class="status-right">
+            <div class="status-center">
+                <div class="pill-indicator"></div>
+            </div>
+            <div class="status-right" id="notifications-trigger">
+                <span class="icon">🔔 3</span>
                 <span class="icon">📶</span>
                 <span class="icon">🔋 100%</span>
             </div>
         </header>
 
-        <!-- Center Clock Widget -->
-        <main class="desktop">
-            <div class="clock-widget glass-panel">
-                <h1 id="time">12:00</h1>
-                <p id="date">Monday, January 1</p>
+        <!-- CONTROL CENTER (Top Dropdown) -->
+        <div id="control-center" class="control-center glass-overlay">
+            <div class="cc-header">
+                <h2>Control Center</h2>
+                <button class="icon-btn" onclick="toggleControlCenter()">✕</button>
             </div>
+            <div class="cc-grid">
+                <div class="cc-card cc-wifi active"><span class="icon">📶</span> Wi-Fi<br><small>Connected</small></div>
+                <div class="cc-card cc-bluetooth"><span class="icon">ᛒ</span> Bluetooth<br><small>On</small></div>
+                <div class="cc-card cc-slider-card" style="grid-column: span 2;">
+                    <span>🔆 Brightness</span>
+                    <input type="range" min="0" max="100" value="80" class="slider">
+                </div>
+                <div class="cc-card cc-slider-card" style="grid-column: span 2;">
+                    <span>🔊 Volume</span>
+                    <input type="range" min="0" max="100" value="50" class="slider">
+                </div>
+            </div>
+        </div>
 
-            <!-- App Dock -->
-            <div class="dock glass-panel">
-                <div class="app-icon" style="background: linear-gradient(135deg, #1DB954, #128039);">🎵</div>
-                <div class="app-icon" style="background: linear-gradient(135deg, #FF0000, #990000);">▶️</div>
-                <div class="app-icon" style="background: linear-gradient(135deg, #2D9CDB, #1F6B99);">🌤️</div>
-                <div class="app-icon" style="background: linear-gradient(135deg, #F2994A, #F2C94C);">⚙️</div>
+        <!-- NOTIFICATION CENTER (Right Sidebar) -->
+        <div id="notification-center" class="notification-center glass-overlay">
+            <div class="nc-header">
+                <h2>Notifications</h2>
+                <button class="icon-btn" onclick="toggleNotifications()">✕</button>
             </div>
-        </main>
-        
-        <!-- App Overlay (Hidden by default) -->
-        <div id="app-overlay" class="app-overlay">
-            <div class="app-header">
-                <button id="close-btn" class="close-btn">✕ Close</button>
-                <h2 id="app-title">App Name</h2>
+            <div class="notification-card">
+                <h3>💬 Messages</h3>
+                <p>New message from John</p>
             </div>
-            <div class="app-content glass-panel" style="margin: 20px; height: calc(100% - 120px);">
-                <!-- App content goes here -->
-                <p style="color: white; text-align: center; margin-top: 100px; font-size: 24px;">Fluid 60fps Web UI!</p>
+            <div class="notification-card">
+                <h3>🌤️ Weather Alert</h3>
+                <p>Rain starting in 20 minutes.</p>
+            </div>
+            <div class="notification-card">
+                <h3>🎵 Spotify</h3>
+                <p>New Weekly Discovery playlist is ready!</p>
             </div>
         </div>
 
@@ -66,20 +100,27 @@
         setInterval(updateTime, 1000);
         updateTime();
 
-        // App Launch Animation
-        const icons = document.querySelectorAll('.app-icon');
-        const overlay = document.getElementById('app-overlay');
-        const closeBtn = document.getElementById('close-btn');
+        // Toggles
+        const controlCenter = document.getElementById('control-center');
+        const statusBar = document.getElementById('status-bar');
+        
+        function toggleControlCenter() {
+            controlCenter.classList.toggle('active');
+            if(notificationCenter.classList.contains('active')) notificationCenter.classList.remove('active');
+        }
+        
+        statusBar.addEventListener('click', toggleControlCenter);
 
-        icons.forEach(icon => {
-            icon.addEventListener('click', () => {
-                overlay.classList.add('active');
-            });
-        });
-
-        closeBtn.addEventListener('click', () => {
-            overlay.classList.remove('active');
-        });
+        const notificationCenter = document.getElementById('notification-center');
+        const notifTrigger = document.getElementById('notifications-trigger');
+        
+        function toggleNotifications(e) {
+            if (e) e.stopPropagation();
+            notificationCenter.classList.toggle('active');
+            if(controlCenter.classList.contains('active')) controlCenter.classList.remove('active');
+        }
+        
+        notifTrigger.addEventListener('click', toggleNotifications);
     </script>
 </body>
 </html>
