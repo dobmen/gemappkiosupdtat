@@ -991,8 +991,10 @@ ApplicationWindow {
         property bool showCustomizer: false
 
         ColumnLayout {
+            id: clockSelectorLayout
             anchors.fill: parent
             spacing: 20
+            visible: !clockSelector.showCustomizer
 
             Text {
                 text: "Swipe to browse • Tap to apply"
@@ -1001,14 +1003,12 @@ ApplicationWindow {
                 font.pixelSize: 24
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 40
-                visible: !clockSelector.showCustomizer
             }
 
             ListView {
                 id: clockListView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: !clockSelector.showCustomizer
                 orientation: ListView.Horizontal
                 snapMode: ListView.SnapOneItem
                 highlightRangeMode: ListView.StrictlyEnforceRange
@@ -1047,8 +1047,8 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 color: "transparent"
                                 border.color: "#333340"
-                                border.width: Math.max(2, 2 / (parent.width / root.width)) // Adjust border for scale
-                                radius: 30 / (parent.width / root.width) // Adjust radius for scale
+                                border.width: 2
+                                radius: 30
                                 z: 10
                             }
                             
@@ -1068,7 +1068,6 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.bottomMargin: 60
                 spacing: 30
-                visible: !clockSelector.showCustomizer
                 
                 Rectangle {
                     width: 160
@@ -1096,20 +1095,18 @@ ApplicationWindow {
                         onClicked: clockSelector.showCustomizer = true 
                     }
                 }
-            }
-            
-            Loader {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                visible: clockSelector.showCustomizer
-                active: clockSelector.showCustomizer
-                source: "ClockCustomizer.qml"
-                onLoaded: {
-                    item.activeClock = clockSelector.faces[clockListView.currentIndex]
-                    item.close.connect(function() {
-                        clockSelector.showCustomizer = false
-                    })
-                }
+        }
+        
+        Loader {
+            anchors.fill: parent
+            visible: clockSelector.showCustomizer
+            active: clockSelector.showCustomizer
+            source: "ClockCustomizer.qml"
+            onLoaded: {
+                item.activeClock = clockSelector.faces[clockListView.currentIndex]
+                item.close.connect(function() {
+                    clockSelector.showCustomizer = false
+                })
             }
         }
 
