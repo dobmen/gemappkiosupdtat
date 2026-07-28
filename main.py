@@ -1,5 +1,15 @@
 import sys
 import os
+
+# Inject Ubuntu system QML paths so pip PyQt6 can find apt-installed graphical effects (FastBlur)
+system_qml_paths = [
+    "/usr/lib/aarch64-linux-gnu/qt6/qml",
+    "/usr/lib/x86_64-linux-gnu/qt6/qml",
+    "/usr/lib/qt6/qml"
+]
+existing_qml = os.environ.get("QML2_IMPORT_PATH", "")
+os.environ["QML2_IMPORT_PATH"] = ":".join(system_qml_paths) + (":" + existing_qml if existing_qml else "")
+
 from PyQt6.QtWidgets import QApplication, QWidget
 from PyQt6.QtCore import QObject, QEvent, Qt
 from PyQt6.QtGui import QPainter, QColor, QPen
