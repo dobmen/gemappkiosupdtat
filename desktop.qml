@@ -336,6 +336,7 @@ ApplicationWindow {
                         fillMode: Image.PreserveAspectCrop
                         visible: (appIcon.status === Image.Ready)
                     }
+                }
                 
                 Text {
                     anchors.top: appBg.bottom
