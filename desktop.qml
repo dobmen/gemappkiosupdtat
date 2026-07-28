@@ -1001,12 +1001,14 @@ ApplicationWindow {
                 font.pixelSize: 24
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: 40
+                visible: !clockSelector.showCustomizer
             }
 
             ListView {
                 id: clockListView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                visible: !clockSelector.showCustomizer
                 orientation: ListView.Horizontal
                 snapMode: ListView.SnapOneItem
                 highlightRangeMode: ListView.StrictlyEnforceRange
@@ -1094,6 +1096,7 @@ ApplicationWindow {
             Loader {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                visible: clockSelector.showCustomizer
                 active: clockSelector.showCustomizer
                 source: "ClockCustomizer.qml"
                 onLoaded: {
