@@ -132,6 +132,10 @@ class KioskBackend(QObject):
         except Exception as e:
             print("Could not start Voice Assistant:", e)
 
+    @pyqtSlot(result=str)
+    def getAppPath(self):
+        return os.path.dirname(os.path.abspath(__file__))
+
     def get_system_setting(self, key, default):
         try:
             if os.path.exists("os_version.json"):

@@ -318,7 +318,7 @@ ApplicationWindow {
                     property var colors: ["#E24A4A", "#5A8DEF", "#F39C12", "#27AE60", "#8E44AD", "#9B59B6"]
                     property string fallbackColor: colors[modelData.name.length % colors.length]
                     
-                    color: (appIcon.status === Image.Error || appIcon.status === Image.Null) ? fallbackColor : (tapArea.pressed ? "#26FFFFFF" : "transparent")
+                    color: (!modelData.icon) ? fallbackColor : (tapArea.pressed ? "#26FFFFFF" : "transparent")
                     
                     Text {
                         anchors.centerIn: parent
@@ -326,7 +326,7 @@ ApplicationWindow {
                         color: "white"
                         font.family: boldFont.name
                         font.pixelSize: 50
-                        visible: (appIcon.status === Image.Error || appIcon.status === Image.Null)
+                        visible: !modelData.icon
                     }
                     
                     Canvas {
@@ -338,17 +338,10 @@ ApplicationWindow {
                             ctx.beginPath();
                             ctx.arc(width/2, height/2, width/2, 0, 2 * Math.PI);
                             ctx.clip();
-                            ctx.drawImage(appIcon, 0, 0, width, height);
+                            ctx.drawImage(modelData.icon, 0, 0, width, height);
                         }
-                    }
-                    
-                    Image {
-                        id: appIcon
-                        anchors.fill: parent
-                        source: modelData.icon
-                        fillMode: Image.PreserveAspectCrop
-                        visible: false
-                        onStatusChanged: if (status === Image.Ready) iconCanvas.requestPaint()
+                        Component.onCompleted: loadImage(modelData.icon)
+                        onImageLoaded: requestPaint()
                     }
                 }
                 
@@ -433,19 +426,10 @@ ApplicationWindow {
             color: "transparent"
             opacity: controlCenter.ccOpacity
             
-            // Pure QML Blur Trick
-            ShaderEffectSource {
-                anchors.fill: parent
-                sourceItem: swipeView
-                sourceRect: Qt.rect(ccPanel.x, ccPanel.y, ccPanel.width, ccPanel.height)
-                textureSize: Qt.size(ccPanel.width / 6, ccPanel.height / 6)
-                mipmap: true
-            }
-            
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#CC111118"
+                color: "#E6111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
             }
@@ -719,20 +703,10 @@ ApplicationWindow {
             anchors.leftMargin: 20
             visible: notifsPanel.nfOpacity > 0
             
-            // Pure QML Blur Trick
-            ShaderEffectSource {
-                anchors.fill: parent
-                sourceItem: swipeView
-                sourceRect: Qt.rect(nfContainer.x, nfContainer.y, nfContainer.width, nfContainer.height)
-                textureSize: Qt.size(nfContainer.width / 6, nfContainer.height / 6)
-                mipmap: true
-                opacity: notifsPanel.nfOpacity
-            }
-            
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#CC111118"
+                color: "#E6111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
                 opacity: notifsPanel.nfOpacity
