@@ -374,10 +374,27 @@ ApplicationWindow {
     // ==========================================
     // 3. CONTROL CENTER (Sliding Panel from Top Right)
     // ==========================================
+    
+    // --- GLOBAL FULLSCREEN MULTIPASS BLUR ---
+    property real overlayOpacity: Math.max(controlCenter.ccOpacity, notifsPanel.nfOpacity)
+    
+    ShaderEffectSource { id: globalBlur1; sourceItem: swipeView; textureSize: Qt.size(swipeView.width / 2, swipeView.height / 2); mipmap: true; visible: false }
+    ShaderEffectSource { id: globalBlur2; sourceItem: globalBlur1; textureSize: Qt.size(swipeView.width / 4, swipeView.height / 4); mipmap: true; visible: false }
+    ShaderEffectSource { id: globalBlur3; sourceItem: globalBlur2; textureSize: Qt.size(swipeView.width / 8, swipeView.height / 8); mipmap: true; visible: false }
+    ShaderEffectSource { id: globalBlur4; sourceItem: globalBlur3; textureSize: Qt.size(swipeView.width / 16, swipeView.height / 16); mipmap: true; visible: false }
+    ShaderEffectSource {
+        anchors.fill: parent
+        sourceItem: globalBlur4
+        opacity: overlayOpacity
+        visible: overlayOpacity > 0
+        z: 1
+    }
+    
     Item {
         id: controlCenter
         anchors.fill: parent
         visible: ccOpacity > 0
+        z: 2
         property real ccOpacity: 0.0
         
         // Dim overlay when CC is open
@@ -665,6 +682,7 @@ ApplicationWindow {
         id: notifsPanel
         anchors.fill: parent
         visible: nfOpacity > 0
+        z: 2
         property real nfOpacity: 0.0
         
         Rectangle {
