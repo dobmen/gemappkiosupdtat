@@ -15,6 +15,7 @@ Item {
     property color bg: theme === "dark" ? "#121215" : "#EEEEEE"
     property color fg: theme === "dark" ? "white" : "black"
     property color accent: backend ? backend.clockAccentColor : "#3498db"
+    property real previewRadius: 0
 
     Timer {
         interval: 1000
@@ -32,6 +33,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: analogRoot.bg
+        radius: previewRadius
 
         Item {
             anchors.centerIn: parent

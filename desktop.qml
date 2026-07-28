@@ -1035,6 +1035,11 @@ ApplicationWindow {
                                 height: root.height
                                 scale: parent.width / root.width
                                 source: modelData + ".qml"
+                                onLoaded: {
+                                    if (item.hasOwnProperty("previewRadius")) {
+                                        item.previewRadius = 30 / (parent.width / root.width)
+                                    }
+                                }
                             }
                             
                             // A border overlay for the preview bounds

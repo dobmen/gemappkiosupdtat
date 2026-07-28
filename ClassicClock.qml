@@ -24,10 +24,12 @@ Item {
     property string bgType: clockConfig.bgType ? clockConfig.bgType : "solid"
     property string bgValue: clockConfig.bgValue ? clockConfig.bgValue : "transparent"
     property string bgValue2: clockConfig.bgValue2 ? clockConfig.bgValue2 : "#000000"
+    property real previewRadius: 0
 
     Rectangle {
         anchors.fill: parent
         color: bgType === "solid" ? bgValue : "black"
+        radius: previewRadius
         
         Rectangle {
             anchors.fill: parent
