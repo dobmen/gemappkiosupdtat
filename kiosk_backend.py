@@ -403,7 +403,11 @@ class KioskBackend(QObject):
             
             self._min_anim_group = QParallelAnimationGroup()
             
-            geom_anim = QPropertyAnimation(widget, b"windowOpacity")
+            from PyQt6.QtWidgets import QGraphicsOpacityEffect
+            effect = QGraphicsOpacityEffect(widget)
+            widget.setGraphicsEffect(effect)
+            
+            geom_anim = QPropertyAnimation(effect, b"opacity")
             geom_anim.setDuration(250)
             geom_anim.setStartValue(1.0)
             geom_anim.setEndValue(0.0)
@@ -413,7 +417,7 @@ class KioskBackend(QObject):
             
             def on_finished():
                 widget.hide()
-                widget.setWindowOpacity(1.0)
+                widget.setGraphicsEffect(None)
                 self._is_animating = False
             
             self._min_anim_group.finished.connect(on_finished)
@@ -510,13 +514,17 @@ class KioskBackend(QObject):
         
         if target_rect:
             widget.setGeometry(screen_rect)
-            widget.setWindowOpacity(0.0)
             widget.showFullScreen()
             widget.raise_()
             widget.activateWindow()
             
             self._launch_anim_group = QParallelAnimationGroup()
-            geom_anim = QPropertyAnimation(widget, b"windowOpacity")
+            
+            from PyQt6.QtWidgets import QGraphicsOpacityEffect
+            effect = QGraphicsOpacityEffect(widget)
+            widget.setGraphicsEffect(effect)
+            
+            geom_anim = QPropertyAnimation(effect, b"opacity")
             geom_anim.setDuration(400)
             geom_anim.setStartValue(0.0)
             geom_anim.setEndValue(1.0)
@@ -525,6 +533,7 @@ class KioskBackend(QObject):
             self._launch_anim_group.addAnimation(geom_anim)
             
             def on_launch_finished():
+                widget.setGraphicsEffect(None)
                 self._is_animating = False
             
             self._launch_anim_group.finished.connect(on_launch_finished)
