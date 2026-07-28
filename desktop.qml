@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
 
 
 ApplicationWindow {
@@ -376,13 +375,12 @@ ApplicationWindow {
     // 3. CONTROL CENTER (Sliding Panel from Top Right)
     // ==========================================
     
-    // --- TRUE GAUSSIAN FULLSCREEN BLUR ---
+    // --- TRANSLUCENT OVERLAY FALLBACK ---
     property real overlayOpacity: Math.max(controlCenter.ccOpacity, notifsPanel.nfOpacity)
     
-    FastBlur {
-        source: swipeView
+    Rectangle {
         anchors.fill: parent
-        radius: 32
+        color: "#E6111118"
         opacity: overlayOpacity
         visible: overlayOpacity > 0
         z: 1
