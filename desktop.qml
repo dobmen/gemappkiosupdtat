@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 
 
 ApplicationWindow {
@@ -379,12 +379,10 @@ ApplicationWindow {
     // --- TRUE GAUSSIAN FULLSCREEN BLUR ---
     property real overlayOpacity: Math.max(controlCenter.ccOpacity, notifsPanel.nfOpacity)
     
-    MultiEffect {
+    FastBlur {
         source: swipeView
         anchors.fill: parent
-        blurEnabled: true
-        blurMax: 64
-        blur: 1.0
+        radius: 32
         opacity: overlayOpacity
         visible: overlayOpacity > 0
         z: 1
