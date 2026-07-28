@@ -12,7 +12,8 @@ class KioskOS extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
+      theme: ThemeData(
+        brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
         fontFamily: 'Inter',
       ),
@@ -90,7 +91,7 @@ class _DesktopScreenState extends State<DesktopScreen> {
                       
                       // Notification Trigger
                       GestureDetector(
-                        onTap: (e) {
+                        onTap: () {
                           _toggleNotificationCenter();
                         },
                         child: Container(
