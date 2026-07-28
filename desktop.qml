@@ -1095,6 +1095,7 @@ ApplicationWindow {
                         onClicked: clockSelector.showCustomizer = true 
                     }
                 }
+            }
         }
         
         Loader {
