@@ -329,37 +329,13 @@ ApplicationWindow {
                         visible: (appIcon.status === Image.Error || appIcon.status === Image.Null)
                     }
                     
-                    // Mask source for MultiEffect
-                    Rectangle {
-                        id: maskRect
-                        anchors.fill: parent
-                        radius: 65
-                        visible: false
-                    }
-                    
-                    ShaderEffectSource {
-                        id: maskSource
-                        sourceItem: maskRect
-                        visible: false
-                    }
-                    
                     Image {
                         id: appIcon
                         anchors.fill: parent
                         source: modelData.icon
                         fillMode: Image.PreserveAspectCrop
-                        visible: false
-                    }
-                    
-                    // True GPU circular clipping mask for square icons!
-                    MultiEffect {
-                        source: appIcon
-                        anchors.fill: parent
-                        maskEnabled: true
-                        maskSource: maskSource
                         visible: (appIcon.status === Image.Ready)
                     }
-                }
                 
                 Text {
                     anchors.top: appBg.bottom
