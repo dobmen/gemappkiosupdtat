@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Web Kiosk OS Prototype</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts for premium typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Background wallpaper -->
+    <div class="wallpaper"></div>
+
+    <!-- Main OS Container -->
+    <div class="kiosk-container">
+        
+        <!-- Top Status Bar -->
+        <header class="status-bar">
+            <div class="status-left">
+                <span class="icon">🌤️</span> 72° Sunny
+            </div>
+            <div class="status-right">
+                <span class="icon">📶</span>
+                <span class="icon">🔋 100%</span>
+            </div>
+        </header>
+
+        <!-- Center Clock Widget -->
+        <main class="desktop">
+            <div class="clock-widget glass-panel">
+                <h1 id="time">12:00</h1>
+                <p id="date">Monday, January 1</p>
+            </div>
+
+            <!-- App Dock -->
+            <div class="dock glass-panel">
+                <div class="app-icon" style="background: linear-gradient(135deg, #1DB954, #128039);">🎵</div>
+                <div class="app-icon" style="background: linear-gradient(135deg, #FF0000, #990000);">▶️</div>
+                <div class="app-icon" style="background: linear-gradient(135deg, #2D9CDB, #1F6B99);">🌤️</div>
+                <div class="app-icon" style="background: linear-gradient(135deg, #F2994A, #F2C94C);">⚙️</div>
+            </div>
+        </main>
+        
+        <!-- App Overlay (Hidden by default) -->
+        <div id="app-overlay" class="app-overlay">
+            <div class="app-header">
+                <button id="close-btn" class="close-btn">✕ Close</button>
+                <h2 id="app-title">App Name</h2>
+            </div>
+            <div class="app-content glass-panel" style="margin: 20px; height: calc(100% - 120px);">
+                <!-- App content goes here -->
+                <p style="color: white; text-align: center; margin-top: 100px; font-size: 24px;">Fluid 60fps Web UI!</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Update Time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('time').innerText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('date').innerText = now.toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'});
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // App Launch Animation
+        const icons = document.querySelectorAll('.app-icon');
+        const overlay = document.getElementById('app-overlay');
+        const closeBtn = document.getElementById('close-btn');
+
+        icons.forEach(icon => {
+            icon.addEventListener('click', () => {
+                overlay.classList.add('active');
+            });
+        });
+
+        closeBtn.addEventListener('click', () => {
+            overlay.classList.remove('active');
+        });
+    </script>
+</body>
+</html>
