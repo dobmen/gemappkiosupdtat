@@ -329,12 +329,26 @@ ApplicationWindow {
                         visible: (appIcon.status === Image.Error || appIcon.status === Image.Null)
                     }
                     
+                    Canvas {
+                        id: iconCanvas
+                        anchors.fill: parent
+                        onPaint: {
+                            var ctx = getContext("2d");
+                            ctx.reset();
+                            ctx.beginPath();
+                            ctx.arc(width/2, height/2, width/2, 0, 2 * Math.PI);
+                            ctx.clip();
+                            ctx.drawImage(appIcon, 0, 0, width, height);
+                        }
+                    }
+                    
                     Image {
                         id: appIcon
                         anchors.fill: parent
                         source: modelData.icon
                         fillMode: Image.PreserveAspectCrop
-                        visible: (appIcon.status === Image.Ready)
+                        visible: false
+                        onStatusChanged: if (status === Image.Ready) iconCanvas.requestPaint()
                     }
                 }
                 
@@ -410,7 +424,7 @@ ApplicationWindow {
         Rectangle {
             id: ccPanel
             width: parent.width * 0.45
-            height: parent.height * 0.65
+            height: Math.min(parent.height * 0.9, 850)
             anchors.top: parent.top
             anchors.right: parent.right
             anchors.topMargin: 20
@@ -424,14 +438,14 @@ ApplicationWindow {
                 anchors.fill: parent
                 sourceItem: swipeView
                 sourceRect: Qt.rect(ccPanel.x, ccPanel.y, ccPanel.width, ccPanel.height)
-                textureSize: Qt.size(ccPanel.width / 32, ccPanel.height / 32)
+                textureSize: Qt.size(ccPanel.width / 6, ccPanel.height / 6)
                 mipmap: true
             }
             
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#AA111118"
+                color: "#CC111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
             }
@@ -698,7 +712,7 @@ ApplicationWindow {
         Item {
             id: nfContainer
             width: parent.width * 0.45
-            height: parent.height * 0.65
+            height: Math.min(parent.height * 0.9, 850)
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.topMargin: 20
@@ -710,7 +724,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 sourceItem: swipeView
                 sourceRect: Qt.rect(nfContainer.x, nfContainer.y, nfContainer.width, nfContainer.height)
-                textureSize: Qt.size(nfContainer.width / 32, nfContainer.height / 32)
+                textureSize: Qt.size(nfContainer.width / 6, nfContainer.height / 6)
                 mipmap: true
                 opacity: notifsPanel.nfOpacity
             }
@@ -718,7 +732,7 @@ ApplicationWindow {
             Rectangle {
                 anchors.fill: parent
                 radius: 40
-                color: "#AA111118"
+                color: "#CC111118"
                 border.color: "#19FFFFFF"
                 border.width: 1
                 opacity: notifsPanel.nfOpacity

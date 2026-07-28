@@ -25,7 +25,7 @@ Item {
         // One UI Style Card at the bottom
         Rectangle {
             width: parent.width
-            height: parent.height * 0.6
+            height: Math.min(parent.height * 0.9, 700)
             anchors.bottom: parent.bottom
             color: "#18181A"
             radius: 40

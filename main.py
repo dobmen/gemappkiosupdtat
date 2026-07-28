@@ -82,28 +82,38 @@ class GestureOverlay(QWidget):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.resize(100, 100)
+        
+        from PyQt6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen().geometry()
+        self.resize(screen.width(), screen.height())
+        self.move(0, 0)
+        
         self.dx = 0
         self.y_pos = 0
         
     def update_pos(self, dx, y):
         self.dx = dx
         self.y_pos = y
-        self.move(int(min(dx, 150) - 50), int(y - 50))
         self.update()
         
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        x_pos = int(min(self.dx, 150) - 50)
+        y_pos = int(self.y_pos - 50)
+        
         if self.dx > 100:
             painter.setBrush(QColor(255, 255, 255, 200))
         else:
             painter.setBrush(QColor(255, 255, 255, 100))
+            
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(20, 20, 60, 60)
+        painter.drawEllipse(x_pos + 20, y_pos + 20, 60, 60)
+        
         painter.setPen(QPen(QColor(0, 0, 0), 4))
-        painter.drawLine(55, 35, 45, 50)
-        painter.drawLine(45, 50, 55, 65)
+        painter.drawLine(x_pos + 55, y_pos + 35, x_pos + 45, y_pos + 50)
+        painter.drawLine(x_pos + 45, y_pos + 50, x_pos + 55, y_pos + 65)
 
 def main():
     # Enforce Wayland natively for QML hardware acceleration
