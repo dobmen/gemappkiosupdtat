@@ -361,8 +361,8 @@ ApplicationWindow {
                     anchors.fill: parent
                     onClicked: {
                         if (backend) {
-                            let pt = appIcon.mapToItem(null, 0, 0) // root/global coords
-                            backend.launchAppFromIcon(modelData.name, pt.x, pt.y, appIcon.width, appIcon.height)
+                            let pt = iconCanvas.mapToItem(null, 0, 0) // root/global coords
+                            backend.launchAppFromIcon(modelData.name, pt.x, pt.y, iconCanvas.width, iconCanvas.height)
                         }
                     }
                 }

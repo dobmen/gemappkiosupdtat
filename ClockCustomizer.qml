@@ -254,10 +254,10 @@ Item {
                         }
                     }
                 }
+                }
             }
         }
     }
-    
     Timer {
         id: hideTimer
         interval: 300
