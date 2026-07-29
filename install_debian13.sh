@@ -39,7 +39,8 @@ apt-get install -y \
     qt6-wayland \
     qt6-shadertools-dev \
     libxkbcommon-dev \
-    greetd
+    greetd \
+    cage
 
 echo "[4/5] Building the C++ Wayland Compositor..."
 cd "$(dirname "$0")/os_compositor"
@@ -60,8 +61,8 @@ cat <<EOF > /etc/greetd/config.toml
 vt = 1
 
 [default_session]
-# Launch the compositor directly on DRM/KMS hardware
-command = "QT_QPA_PLATFORM=eglfs $COMPOSITOR_PATH"
+# Launch Cage (Micro-Compositor) to handle DRM resizing, and nest our OS inside it using the Wayland plugin!
+command = "cage -s -- env QT_QPA_PLATFORM=wayland $COMPOSITOR_PATH"
 user = "$TARGET_USER"
 EOF
 
