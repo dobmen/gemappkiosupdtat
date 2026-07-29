@@ -3,6 +3,7 @@ project(kiosk_os VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_AUTORCC ON)
 
 # Find Qt modules
 find_package(Qt6 REQUIRED COMPONENTS 
@@ -16,7 +17,7 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 qt_add_executable(kiosk_os
     main.cpp
-    compositor.qml
+    resources.qrc
 )
 
 qt6_add_shaders(kiosk_os "shaders"
