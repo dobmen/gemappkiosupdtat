@@ -24,7 +24,9 @@ apt-get install -y \
     qml6-module-qtquick-layouts \
     qml6-module-qtquick-window \
     qml6-module-qtwayland-compositor \
-    qt6-wayland
+    qt6-wayland \
+    qt6-shadertools-dev \
+    libxkbcommon-dev
 
 echo "[3/3] Building the C++ Wayland Compositor..."
 cd "$(dirname "$0")/os_compositor"
