@@ -26,12 +26,15 @@ apt-get install -y \
     qml6-module-qtwayland-compositor \
     qt6-wayland
 
+echo "[3/3] Building the C++ Wayland Compositor..."
+cd "$(dirname "$0")/os_compositor"
+mkdir -p build
+cd build
+cmake ..
+make -j$(nproc)
+
 echo "===================================================="
-echo " Dependencies Installed Successfully!"
-echo " Next Steps:"
-echo " 1. cd os_compositor"
-echo " 2. mkdir build && cd build"
-echo " 3. cmake .."
-echo " 4. make"
-echo " 5. ./kiosk_os"
+echo " Installation and Build Complete!"
+echo " The OS is ready. To launch it, run:"
+echo " cd os_compositor/build && ./kiosk_os"
 echo "===================================================="
