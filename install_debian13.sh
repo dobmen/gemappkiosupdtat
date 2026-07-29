@@ -20,7 +20,6 @@ apt-get install -y \
     qt6-base-dev \
     qt6-declarative-dev \
     qt6-wayland-dev \
-    libqt6waylandcompositor6-dev \
     qml6-module-qtquick-controls \
     qml6-module-qtquick-layouts \
     qml6-module-qtquick-window \
