@@ -10,15 +10,20 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Detect the user who owns the current directory (the one who cloned the repo)
-TARGET_USER=$(stat -c '%U' .)
+# Detect the primary user of the system (usually UID 1000)
+TARGET_USER=$(id -un 1000 2>/dev/null || echo "root")
 
 echo "[1/5] Updating package repositories & installing sudo..."
 apt-get update
 apt-get install -y sudo
 
-echo "[2/5] Adding $TARGET_USER to sudo group..."
-usermod -aG sudo $TARGET_USER
+echo "[2/5] Adding $TARGET_USER to sudo group with NOPASSWD..."
+if [ "$TARGET_USER" != "root" ]; then
+    /usr/sbin/usermod -aG sudo $TARGET_USER
+    # Allow the user to run any sudo command (like reboot or apt update) without a password
+    echo "$TARGET_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$TARGET_USER
+    chmod 0440 /etc/sudoers.d/$TARGET_USER
+fi
 
 echo "[3/5] Installing C++ Qt6 Wayland Compositor dependencies & greetd..."
 apt-get install -y \
