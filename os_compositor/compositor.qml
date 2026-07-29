@@ -13,8 +13,7 @@ WaylandCompositor {
         sizeFollowsWindow: true
         window: Window {
             id: surfaceWindow
-            width: 1280
-            height: 720
+            visibility: Window.FullScreen
             visible: true
             title: "Custom OS Wayland Compositor"
             color: "#000000"
@@ -85,8 +84,16 @@ WaylandCompositor {
                 
                 Text {
                     anchors.centerIn: parent
-                    text: "App Dock Placeholder"
+                    text: "App Dock (Click Me!)"
                     color: "white"
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        console.log("Dock was clicked!");
+                        parent.color = "#bb202020"; // Flash color when clicked
+                    }
                 }
             }
         }

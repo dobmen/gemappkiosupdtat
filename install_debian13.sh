@@ -17,9 +17,9 @@ echo "[1/5] Updating package repositories & installing sudo..."
 apt-get update
 apt-get install -y sudo
 
-echo "[2/5] Adding $TARGET_USER to sudo group with NOPASSWD..."
+echo "[2/5] Adding $TARGET_USER to system groups (sudo, input, video, render)..."
 if [ "$TARGET_USER" != "root" ]; then
-    /usr/sbin/usermod -aG sudo $TARGET_USER
+    /usr/sbin/usermod -aG sudo,input,video,render $TARGET_USER
     # Allow the user to run any sudo command (like reboot or apt update) without a password
     echo "$TARGET_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/$TARGET_USER
     chmod 0440 /etc/sudoers.d/$TARGET_USER
